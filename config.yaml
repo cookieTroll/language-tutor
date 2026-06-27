@@ -16,4 +16,4 @@ llm:
   provider: "openai_compat"
   base_url: "http://localhost:1234/v1"  # Default LM Studio local port
   api_key: "lm-studio"                 # Placeholder key for local usage
-  model: "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF"
+  model: "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
