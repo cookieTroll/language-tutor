@@ -1,0 +1,563 @@
+import os
+import sqlite3
+import yaml
+from datetime import datetime
+from memory.protocols import (
+    StorageProtocol,
+    SessionLog,
+    BtwEntry,
+    VocabFlag,
+    UserProfile,
+    SessionFileContent,
+)
+
+class SQLiteSessionStore(StorageProtocol):
+    def __init__(self, data_root: str):
+        self.data_root = data_root
+        os.makedirs(self.data_root, exist_ok=True)
+        # Create subdirectories for sessions, summaries, and checkpoints
+        os.makedirs(os.path.join(self.data_root, "sessions"), exist_ok=True)
+        os.makedirs(os.path.join(self.data_root, "summaries"), exist_ok=True)
+        os.makedirs(os.path.join(self.data_root, "checkpoints"), exist_ok=True)
+        
+        self.db_path = os.path.join(self.data_root, "tutor.db")
+        self._init_db()
+
+    def _init_db(self):
+        # Read and run memory/schema.sql
+        schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
+        with open(schema_path, "r", encoding="utf-8") as f:
+            schema_sql = f.read()
+            
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.executescript(schema_sql)
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _get_conn(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    # Helper to convert datetime to ISO string and vice versa
+    def _dt_to_str(self, dt: datetime | None) -> str | None:
+        if dt is None:
+            return None
+        return dt.isoformat()
+
+    def _str_to_dt(self, dt_str: str | None) -> datetime | None:
+        if not dt_str:
+            return None
+        # Handle formats like "YYYY-MM-DD HH:MM:SS" or ISO
+        try:
+            return datetime.fromisoformat(dt_str)
+        except ValueError:
+            # Try parsing typical sqlite datetime string
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+                try:
+                    return datetime.strptime(dt_str, fmt)
+                except ValueError:
+                    continue
+            raise
+
+    # 1. write_session(self, log: SessionLog) -> None
+    def write_session(self, log: SessionLog) -> None:
+        conn = self._get_conn()
+        try:
+            # Check if session already exists
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM sessions WHERE session_id = ?", (log.session_id,))
+            exists = cursor.fetchone() is not None
+            
+            if exists:
+                conn.execute(
+                    """
+                    UPDATE sessions SET
+                        user_id = ?, language = ?, module = ?, task_label = ?, task_description = ?,
+                        comment = ?, level = ?, date = ?, file_path = ?, status = ?,
+                        started_at = ?, completed_at = ?, duration_minutes = ?
+                    WHERE session_id = ?
+                    """,
+                    (
+                        log.user_id, log.language, log.module, log.task_label, log.task_description,
+                        log.comment, log.level, self._dt_to_str(log.date), log.file_path, log.status,
+                        self._dt_to_str(log.started_at), self._dt_to_str(log.completed_at), log.duration_minutes,
+                        log.session_id
+                    )
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO sessions (
+                        session_id, user_id, language, module, task_label, task_description,
+                        comment, level, date, file_path, status, started_at, completed_at, duration_minutes
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        log.session_id, log.user_id, log.language, log.module, log.task_label, log.task_description,
+                        log.comment, log.level, self._dt_to_str(log.date), log.file_path, log.status,
+                        self._dt_to_str(log.started_at), self._dt_to_str(log.completed_at), log.duration_minutes
+                    )
+                )
+                
+            # Insert or replace errors in errors table
+            conn.execute("DELETE FROM errors WHERE session_id = ?", (log.session_id,))
+            for err in log.errors:
+                import uuid
+                error_id = str(uuid.uuid4())
+                conn.execute(
+                    """
+                    INSERT INTO errors (error_id, session_id, language, error_tag, error_detail, source_text)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        error_id, log.session_id, log.language, err["error_tag"],
+                        err.get("error_detail") or err.get("explanation"),
+                        err.get("source_text") or err.get("fragment")
+                    )
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    # 2. update_session_status(self, session_id: str, status: str) -> None
+    def update_session_status(self, session_id: str, status: str) -> None:
+        allowed_status = {"in_progress", "completed", "abandoned", "interrupted"}
+        if status not in allowed_status:
+            raise ValueError(f"Invalid status: '{status}'. Allowed: {allowed_status}")
+            
+        conn = self._get_conn()
+        try:
+            conn.execute("UPDATE sessions SET status = ? WHERE session_id = ?", (status, session_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+    # 3. write_file(self, content: SessionFileContent, base_dir: str) -> str
+    def write_file(self, content: SessionFileContent, base_dir: str) -> str:
+        # Determine paths
+        # Relative file_path schema: sessions/{user_id}/{language}/{session_id}.yaml
+        rel_dir = os.path.join("sessions", content.user_id, content.language)
+        abs_dir = os.path.join(base_dir, rel_dir)
+        os.makedirs(abs_dir, exist_ok=True)
+        
+        filename = f"{content.session_id}.yaml"
+        tmp_filename = f"{content.session_id}.yaml.tmp"
+        
+        abs_path = os.path.join(abs_dir, filename)
+        tmp_path = os.path.join(abs_dir, tmp_filename)
+        
+        yaml_content = yaml.dump(content.to_dict(), sort_keys=False, allow_unicode=True)
+        
+        # Write to tmp, then atomic rename
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(yaml_content)
+            
+        # Atomic rename
+        if os.path.exists(abs_path):
+            os.remove(abs_path)
+        os.rename(tmp_path, abs_path)
+        
+        return os.path.join(rel_dir, filename).replace("\\", "/")
+
+    # 4. get_recent_sessions
+    def get_recent_sessions(self, user_id: str, language: str, n: int = 10) -> list[SessionLog]:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                """
+                SELECT * FROM sessions 
+                WHERE user_id = ? AND language = ?
+                ORDER BY date DESC LIMIT ?
+                """,
+                (user_id, language, n)
+            ).fetchall()
+            
+            result = []
+            for r in rows:
+                err_rows = conn.execute("SELECT * FROM errors WHERE session_id = ?", (r["session_id"],)).fetchall()
+                errors = [
+                    {"error_tag": er["error_tag"], "fragment": er["source_text"], "correction": "", "explanation": er["error_detail"]}
+                    for er in err_rows
+                ]
+                result.append(
+                    SessionLog(
+                        user_id=r["user_id"],
+                        session_id=r["session_id"],
+                        language=r["language"],
+                        module=r["module"],
+                        task_label=r["task_label"],
+                        task_description=r["task_description"],
+                        comment=r["comment"],
+                        errors=errors,
+                        level=r["level"],
+                        date=self._str_to_dt(r["date"]),
+                        file_path=r["file_path"],
+                        status=r["status"],
+                        started_at=self._str_to_dt(r["started_at"]),
+                        completed_at=self._str_to_dt(r["completed_at"]),
+                        duration_minutes=r["duration_minutes"]
+                    )
+                )
+            return result
+        finally:
+            conn.close()
+
+    # 5. get_sessions_by_module
+    def get_sessions_by_module(self, user_id: str, language: str, module: str) -> list[SessionLog]:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                """
+                SELECT * FROM sessions 
+                WHERE user_id = ? AND language = ? AND module = ?
+                ORDER BY date DESC
+                """,
+                (user_id, language, module)
+            ).fetchall()
+            
+            result = []
+            for r in rows:
+                err_rows = conn.execute("SELECT * FROM errors WHERE session_id = ?", (r["session_id"],)).fetchall()
+                errors = [
+                    {"error_tag": er["error_tag"], "fragment": er["source_text"], "correction": "", "explanation": er["error_detail"]}
+                    for er in err_rows
+                ]
+                result.append(
+                    SessionLog(
+                        user_id=r["user_id"],
+                        session_id=r["session_id"],
+                        language=r["language"],
+                        module=r["module"],
+                        task_label=r["task_label"],
+                        task_description=r["task_description"],
+                        comment=r["comment"],
+                        errors=errors,
+                        level=r["level"],
+                        date=self._str_to_dt(r["date"]),
+                        file_path=r["file_path"],
+                        status=r["status"],
+                        started_at=self._str_to_dt(r["started_at"]),
+                        completed_at=self._str_to_dt(r["completed_at"]),
+                        duration_minutes=r["duration_minutes"]
+                    )
+                )
+            return result
+        finally:
+            conn.close()
+
+    # 6. get_error_frequency
+    def get_error_frequency(self, user_id: str, language: str, module: str | None = None) -> dict[str, int]:
+        conn = self._get_conn()
+        try:
+            if module:
+                rows = conn.execute(
+                    """
+                    SELECT e.error_tag, COUNT(*) as freq 
+                    FROM errors e
+                    JOIN sessions s ON e.session_id = s.session_id
+                    WHERE s.user_id = ? AND s.language = ? AND s.module = ?
+                    GROUP BY e.error_tag
+                    """,
+                    (user_id, language, module)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT e.error_tag, COUNT(*) as freq 
+                    FROM errors e
+                    JOIN sessions s ON e.session_id = s.session_id
+                    WHERE s.user_id = ? AND s.language = ?
+                    GROUP BY e.error_tag
+                    """,
+                    (user_id, language)
+                ).fetchall()
+            return {r["error_tag"]: r["freq"] for r in rows}
+        finally:
+            conn.close()
+
+    # 7. get_recent_topics
+    def get_recent_topics(self, user_id: str, language: str, module: str, n: int = 5) -> list[str]:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                """
+                SELECT task_label FROM sessions
+                WHERE user_id = ? AND language = ? AND module = ? AND status = 'completed'
+                ORDER BY date DESC LIMIT ?
+                """,
+                (user_id, language, module, n)
+            ).fetchall()
+            return [r["task_label"] for r in rows]
+        finally:
+            conn.close()
+
+    # 8. get_interrupted_sessions
+    def get_interrupted_sessions(self, user_id: str, timeout_minutes: int) -> list[SessionLog]:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM sessions WHERE user_id = ? AND status = 'in_progress'",
+                (user_id,)
+            ).fetchall()
+            
+            result = []
+            now = datetime.now()
+            for r in rows:
+                started_at = self._str_to_dt(r["started_at"])
+                if started_at:
+                    elapsed = (now - started_at).total_seconds() / 60.0
+                    if elapsed > timeout_minutes:
+                        err_rows = conn.execute("SELECT * FROM errors WHERE session_id = ?", (r["session_id"],)).fetchall()
+                        errors = [
+                            {"error_tag": er["error_tag"], "fragment": er["source_text"], "correction": "", "explanation": er["error_detail"]}
+                            for er in err_rows
+                        ]
+                        result.append(
+                            SessionLog(
+                                user_id=r["user_id"],
+                                session_id=r["session_id"],
+                                language=r["language"],
+                                module=r["module"],
+                                task_label=r["task_label"],
+                                task_description=r["task_description"],
+                                comment=r["comment"],
+                                errors=errors,
+                                level=r["level"],
+                                date=self._str_to_dt(r["date"]),
+                                file_path=r["file_path"],
+                                status="interrupted",
+                                started_at=started_at,
+                                completed_at=self._str_to_dt(r["completed_at"]),
+                                duration_minutes=r["duration_minutes"]
+                            )
+                        )
+            return result
+        finally:
+            conn.close()
+
+    # 9. get_current_level
+    def get_current_level(self, user_id: str) -> str:
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT level FROM user_profiles WHERE user_id = ? AND active = 1",
+                (user_id,)
+            ).fetchone()
+            if row:
+                return row["level"]
+            row_fallback = conn.execute(
+                "SELECT level FROM user_profiles WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
+                (user_id,)
+            ).fetchone()
+            if row_fallback:
+                return row_fallback["level"]
+            return "a1"
+        finally:
+            conn.close()
+
+    # 10. write_level
+    def write_level(self, user_id: str, level: str, source: str) -> None:
+        active_lang = self.get_active_language(user_id)
+        if not active_lang:
+            raise ValueError(f"No active language profile found for user {user_id} to write level to.")
+            
+        conn = self._get_conn()
+        try:
+            now_str = self._dt_to_str(datetime.now())
+            conn.execute(
+                """
+                UPDATE user_profiles SET level = ?, level_source = ?, updated_at = ?
+                WHERE user_id = ? AND language = ?
+                """,
+                (level, source, now_str, user_id, active_lang)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    # 11. write_btw
+    def write_btw(self, entry: BtwEntry) -> None:
+        conn = self._get_conn()
+        try:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO btw_log (btw_id, session_id, user_id, language, question, answer, flagged_word, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entry.btw_id, entry.session_id, entry.user_id, entry.language,
+                    entry.question, entry.answer, entry.flagged_word, self._dt_to_str(entry.timestamp)
+                )
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    # 12. get_btw_log
+    def get_btw_log(self, user_id: str, language: str, session_id: str | None = None) -> list[BtwEntry]:
+        conn = self._get_conn()
+        try:
+            if session_id:
+                rows = conn.execute(
+                    "SELECT * FROM btw_log WHERE user_id = ? AND language = ? AND session_id = ? ORDER BY timestamp ASC",
+                    (user_id, language, session_id)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM btw_log WHERE user_id = ? AND language = ? ORDER BY timestamp ASC",
+                    (user_id, language)
+                ).fetchall()
+                
+            return [
+                BtwEntry(
+                    btw_id=r["btw_id"],
+                    session_id=r["session_id"],
+                    user_id=r["user_id"],
+                    language=r["language"],
+                    question=r["question"],
+                    answer=r["answer"],
+                    flagged_word=r["flagged_word"],
+                    timestamp=self._str_to_dt(r["timestamp"])
+                )
+                for r in rows
+            ]
+        finally:
+            conn.close()
+
+    # 13. get_vocab_flags
+    def get_vocab_flags(self, user_id: str, language: str) -> list[VocabFlag]:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM vocab_flags WHERE user_id = ? AND language = ? ORDER BY word ASC",
+                (user_id, language)
+            ).fetchall()
+            
+            return [
+                VocabFlag(
+                    flag_id=r["flag_id"],
+                    user_id=r["user_id"],
+                    language=r["language"],
+                    word=r["word"],
+                    translation=r["translation"],
+                    source=r["source"],
+                    first_seen=self._str_to_dt(r["first_seen"]),
+                    last_seen=self._str_to_dt(r["last_seen"]),
+                    occurrence_count=r["occurrence_count"]
+                )
+                for r in rows
+            ]
+        finally:
+            conn.close()
+
+    # 14. write_vocab_flag
+    def write_vocab_flag(self, flag: VocabFlag) -> None:
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT flag_id, occurrence_count, first_seen FROM vocab_flags WHERE user_id = ? AND language = ? AND word = ?",
+                (flag.user_id, flag.language, flag.word)
+            )
+            row = cursor.fetchone()
+            
+            now_str = self._dt_to_str(datetime.now())
+            if row:
+                new_count = row["occurrence_count"] + 1
+                conn.execute(
+                    """
+                    UPDATE vocab_flags SET occurrence_count = ?, last_seen = ?, source = ?, translation = COALESCE(?, translation)
+                    WHERE flag_id = ?
+                    """,
+                    (new_count, now_str, flag.source, flag.translation, row["flag_id"])
+                )
+            else:
+                import uuid
+                flag_id = flag.flag_id or str(uuid.uuid4())
+                conn.execute(
+                    """
+                    INSERT INTO vocab_flags (flag_id, user_id, language, word, translation, source, first_seen, last_seen, occurrence_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        flag_id, flag.user_id, flag.language, flag.word, flag.translation,
+                        flag.source, self._dt_to_str(flag.first_seen), self._dt_to_str(flag.last_seen), flag.occurrence_count
+                    )
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    # 15. get_user_profile
+    def get_user_profile(self, user_id: str, language: str) -> UserProfile | None:
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM user_profiles WHERE user_id = ? AND language = ?",
+                (user_id, language)
+            ).fetchone()
+            if row:
+                return UserProfile(
+                    user_id=row["user_id"],
+                    language=row["language"],
+                    level=row["level"],
+                    level_source=row["level_source"],
+                    active=bool(row["active"]),
+                    created_at=self._str_to_dt(row["created_at"]),
+                    updated_at=self._str_to_dt(row["updated_at"])
+                )
+            return None
+        finally:
+            conn.close()
+
+    # 16. write_user_profile
+    def write_user_profile(self, profile: UserProfile) -> None:
+        conn = self._get_conn()
+        try:
+            if profile.active:
+                conn.execute("UPDATE user_profiles SET active = 0 WHERE user_id = ?", (profile.user_id,))
+                
+            conn.execute(
+                """
+                INSERT INTO user_profiles (user_id, language, level, level_source, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, language) DO UPDATE SET
+                    level = excluded.level,
+                    level_source = excluded.level_source,
+                    active = excluded.active,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    profile.user_id, profile.language, profile.level, profile.level_source,
+                    1 if profile.active else 0, self._dt_to_str(profile.created_at), self._dt_to_str(profile.updated_at)
+                )
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    # 17. get_user_languages
+    def get_user_languages(self, user_id: str) -> list[str]:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute("SELECT language FROM user_profiles WHERE user_id = ?", (user_id,)).fetchall()
+            return [r["language"] for r in rows]
+        finally:
+            conn.close()
+
+    # 18. get_active_language
+    def get_active_language(self, user_id: str) -> str | None:
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT language FROM user_profiles WHERE user_id = ? AND active = 1",
+                (user_id,)
+            ).fetchone()
+            if row:
+                return row["language"]
+            return None
+        finally:
+            conn.close()
