@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
+class LLMError(Exception):
+    """Custom exception raised when an LLM completion fails."""
+    pass
+
 @dataclass
 class LLMMessage:
     role: str        # system | user | assistant
