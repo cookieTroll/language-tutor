@@ -49,6 +49,7 @@ Detailed specs for each component live in `docs/`. This document is the human-fa
 | **3a** | Vocab module |
 | **3b** | Level progression tracking |
 | **3c** | Anki export |
+| **3d** | MCP Server |
 
 Frontend (1c) may be moved earlier without architectural impact.
 
@@ -269,7 +270,8 @@ language-tutor/
 │
 ├── ui/
 │   ├── cli.py              # PoC
-│   └── app.py              # Layer 1c
+│   ├── app.py              # Layer 1c
+│   └── mcp_server.py       # Layer 3d
 │
 ├── tests/
 │   ├── test_storage.py

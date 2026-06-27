@@ -52,4 +52,4 @@ Items that arose during design discussion but are deferred decisions, known risk
 
 - [ ] **Kaggle writeup** — document architecture decisions, not just setup. Reference `DESIGN.md`. Explain the skill registry pattern, storage abstraction, evaluator decomposition, and testing approach. Frame the PoC scope honestly.
 - [ ] **Demo video** — walk through one complete session end-to-end: startup → orchestrator default recommendation → writing session → feedback → session file written → DB entry visible. Keep under 5 minutes.
-- [ ] **Submission checklist** — writeup, video, rationale, code link. Deadline: June 30, 11:59 PM PT.
+- [ ] **Submission checklist** — writeup, video, rationale, code link. Deadline: July 7, 11:59 PM PT.

@@ -268,10 +268,19 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 
 ---
 
+## Layer 3d — MCP Server
+
+- [ ] Create `ui/mcp_server.py` using `mcp` / `FastMCP`
+- [ ] Implement `explain_grammar` tool (instantiates and runs the `explain_grammar` skill)
+- [ ] Implement `get_vocab_drill` tool (instantiates and runs the `drill_vocab` skill)
+- [ ] Document running and testing the MCP server in the README.md
+
+---
+
 ## Capstone Submission
 
 - [ ] README — setup instructions, architecture overview, layer status, known limitations
 - [ ] Kaggle writeup — architecture decisions, design rationale, testing approach, honest PoC scope statement
 - [ ] Demo video — one complete end-to-end session (≤5 min): startup → recommendation → writing → feedback → file written
 - [ ] Verify code link is accessible
-- [ ] Submit before June 30, 11:59 PM PT
+- [ ] Submit before July 7, 11:59 PM PT

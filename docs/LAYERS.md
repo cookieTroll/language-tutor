@@ -152,3 +152,13 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 - `memory/protocols.py` — `get_vocab_flags()` used as export source
 - Export function: `data/exports/{user_id}_anki_{date}.txt`
 - CLI and UI export option surfaced
+
+---
+
+## Layer 3d — MCP Server
+
+- `ui/mcp_server.py` — MCP server implementation (FastMCP)
+- Exposes tools wrapping pure skills:
+  - `explain_grammar(topic, level)` (wraps `explain_grammar` skill)
+  - `get_vocab_drill(topic, level)` (wraps vocab generation skill)
+- CLI/UI instructions for connecting to local MCP server
