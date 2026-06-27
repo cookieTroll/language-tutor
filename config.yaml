@@ -1,0 +1,19 @@
+# LanguageTutor Configuration
+
+# Paths & Directories
+data_root: "data"
+
+# Tutor Logic Settings
+default_level: "a1"
+cold_start_threshold: 3
+interruption_timeout_minutes: 15
+
+# Storage settings: 'sqlite' for production, 'json' for dev/testing
+storage_backend: "sqlite"
+
+# LLM Backend configurations
+llm:
+  provider: "openai_compat"
+  base_url: "http://localhost:1234/v1"  # Default LM Studio local port
+  api_key: "lm-studio"                 # Placeholder key for local usage
+  model: "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF"
