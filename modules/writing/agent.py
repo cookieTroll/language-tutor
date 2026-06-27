@@ -1,10 +1,43 @@
 import uuid
+import time
+import threading
+import sys
 from datetime import datetime
 from modules.protocols import ModuleProtocol, ContextRequest, ModuleContext, ModuleResult
 from memory.protocols import WritingSessionContent, BtwEntry
 from llm.base import BaseLLM
 from skills.protocols import SkillInput
 from modules.writing.skills import get_writing_skills
+
+class SessionTimer:
+    def __init__(self):
+        self._running = False
+        self._thread = None
+        self._start_time = None
+
+    def start(self):
+        self._running = True
+        self._start_time = time.time()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=1.0)
+        # Reset window title
+        sys.stdout.write("\x1b]2;LanguageTutor\x07")
+        sys.stdout.flush()
+
+    def _run(self):
+        while self._running:
+            elapsed = time.time() - self._start_time
+            minutes = int(elapsed // 60)
+            seconds = int(elapsed % 60)
+            title = f"LanguageTutor - [{minutes:02d}:{seconds:02d} elapsed]"
+            sys.stdout.write(f"\x1b]2;{title}\x07")
+            sys.stdout.flush()
+            time.sleep(1.0)
 
 class WritingModule(ModuleProtocol):
     name = "writing"
@@ -49,6 +82,9 @@ class WritingModule(ModuleProtocol):
         vocab_signals = []
 
         first_interaction = True
+
+        timer = SessionTimer()
+        timer.start()
 
         while True:
             try:
@@ -111,6 +147,7 @@ class WritingModule(ModuleProtocol):
 
             user_lines.append(line)
 
+        timer.stop()
         user_text = "\n".join(user_lines)
         print("\n[*] Evaluating your text. Please wait...")
 
