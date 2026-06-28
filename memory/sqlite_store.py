@@ -3,7 +3,7 @@ import sqlite3
 import yaml
 from datetime import datetime
 from memory.protocols import (
-    StorageProtocol,
+    BaseSessionStore,
     SessionLog,
     BtwEntry,
     VocabFlag,
@@ -11,9 +11,9 @@ from memory.protocols import (
     SessionFileContent,
 )
 
-class SQLiteSessionStore(StorageProtocol):
+class SQLiteSessionStore(BaseSessionStore):
     def __init__(self, data_root: str):
-        self.data_root = data_root
+        super().__init__(data_root)
         os.makedirs(self.data_root, exist_ok=True)
         # Create subdirectories for sessions, summaries, and checkpoints
         os.makedirs(os.path.join(self.data_root, "sessions"), exist_ok=True)
@@ -40,27 +40,6 @@ class SQLiteSessionStore(StorageProtocol):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
-
-    # Helper to convert datetime to ISO string and vice versa
-    def _dt_to_str(self, dt: datetime | None) -> str | None:
-        if dt is None:
-            return None
-        return dt.isoformat()
-
-    def _str_to_dt(self, dt_str: str | None) -> datetime | None:
-        if not dt_str:
-            return None
-        # Handle formats like "YYYY-MM-DD HH:MM:SS" or ISO
-        try:
-            return datetime.fromisoformat(dt_str)
-        except ValueError:
-            # Try parsing typical sqlite datetime string
-            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
-                try:
-                    return datetime.strptime(dt_str, fmt)
-                except ValueError:
-                    continue
-            raise
 
     # 1. write_session(self, log: SessionLog) -> None
     def write_session(self, log: SessionLog) -> None:
@@ -122,45 +101,13 @@ class SQLiteSessionStore(StorageProtocol):
         finally:
             conn.close()
 
-    # 2. update_session_status(self, session_id: str, status: str) -> None
-    def update_session_status(self, session_id: str, status: str) -> None:
-        allowed_status = {"in_progress", "completed", "abandoned", "interrupted"}
-        if status not in allowed_status:
-            raise ValueError(f"Invalid status: '{status}'. Allowed: {allowed_status}")
-            
+    def _update_session_status(self, session_id: str, status: str) -> None:
         conn = self._get_conn()
         try:
             conn.execute("UPDATE sessions SET status = ? WHERE session_id = ?", (status, session_id))
             conn.commit()
         finally:
             conn.close()
-
-    # 3. write_file(self, content: SessionFileContent, base_dir: str) -> str
-    def write_file(self, content: SessionFileContent, base_dir: str) -> str:
-        # Determine paths
-        # Relative file_path schema: sessions/{user_id}/{language}/{session_id}.yaml
-        rel_dir = os.path.join("sessions", content.user_id, content.language)
-        abs_dir = os.path.join(base_dir, rel_dir)
-        os.makedirs(abs_dir, exist_ok=True)
-        
-        filename = f"{content.session_id}.yaml"
-        tmp_filename = f"{content.session_id}.yaml.tmp"
-        
-        abs_path = os.path.join(abs_dir, filename)
-        tmp_path = os.path.join(abs_dir, tmp_filename)
-        
-        yaml_content = yaml.dump(content.to_dict(), sort_keys=False, allow_unicode=True)
-        
-        # Write to tmp, then atomic rename
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(yaml_content)
-            
-        # Atomic rename
-        if os.path.exists(abs_path):
-            os.remove(abs_path)
-        os.rename(tmp_path, abs_path)
-        
-        return os.path.join(rel_dir, filename).replace("\\", "/")
 
     # 4. get_recent_sessions
     def get_recent_sessions(self, user_id: str, language: str, n: int = 10) -> list[SessionLog]:

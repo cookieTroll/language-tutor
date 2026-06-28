@@ -1,16 +1,22 @@
 from typing import Protocol, Literal
-from dataclasses import dataclass
+from pydantic import BaseModel, field_validator
 from llm.base import BaseLLM
 
-@dataclass
-class SkillInput:
+class SkillInput(BaseModel):
     """Base input for all skills. Each skill defines a typed subclass."""
     user_id: str
     level: str
     parameters: dict                      # skill-specific inputs
 
-@dataclass
-class SkillOutput:
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
+
+class SkillOutput(BaseModel):
     """Base output for all skills. Each skill defines a typed subclass."""
     skill_name: str
     success: bool

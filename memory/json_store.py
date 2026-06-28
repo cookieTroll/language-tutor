@@ -3,7 +3,7 @@ import json
 import yaml
 from datetime import datetime
 from memory.protocols import (
-    StorageProtocol,
+    BaseSessionStore,
     SessionLog,
     BtwEntry,
     VocabFlag,
@@ -11,9 +11,9 @@ from memory.protocols import (
     SessionFileContent,
 )
 
-class JSONSessionStore(StorageProtocol):
+class JSONSessionStore(BaseSessionStore):
     def __init__(self, data_root: str):
-        self.data_root = data_root
+        super().__init__(data_root)
         self.store_dir = os.path.join(self.data_root, "json_store")
         os.makedirs(self.store_dir, exist_ok=True)
         os.makedirs(os.path.join(self.data_root, "sessions"), exist_ok=True)
@@ -41,12 +41,6 @@ class JSONSessionStore(StorageProtocol):
     def _write(self, path: str, data: dict):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-
-    def _dt_to_str(self, dt: datetime | None) -> str | None:
-        return dt.isoformat() if dt else None
-
-    def _str_to_dt(self, dt_str: str | None) -> datetime | None:
-        return datetime.fromisoformat(dt_str) if dt_str else None
 
     # 1. write_session
     def write_session(self, log: SessionLog) -> None:
@@ -89,39 +83,11 @@ class JSONSessionStore(StorageProtocol):
             }
         self._write(self.errors_file, errors)
 
-    # 2. update_session_status
-    def update_session_status(self, session_id: str, status: str) -> None:
-        allowed_status = {"in_progress", "completed", "abandoned", "interrupted"}
-        if status not in allowed_status:
-            raise ValueError(f"Invalid status: '{status}'. Allowed: {allowed_status}")
-            
+    def _update_session_status(self, session_id: str, status: str) -> None:
         sessions = self._read(self.sessions_file)
         if session_id in sessions:
             sessions[session_id]["status"] = status
             self._write(self.sessions_file, sessions)
-
-    # 3. write_file
-    def write_file(self, content: SessionFileContent, base_dir: str) -> str:
-        rel_dir = os.path.join("sessions", content.user_id, content.language)
-        abs_dir = os.path.join(base_dir, rel_dir)
-        os.makedirs(abs_dir, exist_ok=True)
-        
-        filename = f"{content.session_id}.yaml"
-        tmp_filename = f"{content.session_id}.yaml.tmp"
-        
-        abs_path = os.path.join(abs_dir, filename)
-        tmp_path = os.path.join(abs_dir, tmp_filename)
-        
-        yaml_content = yaml.dump(content.to_dict(), sort_keys=False, allow_unicode=True)
-        
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(yaml_content)
-            
-        if os.path.exists(abs_path):
-            os.remove(abs_path)
-        os.rename(tmp_path, abs_path)
-        
-        return os.path.join(rel_dir, filename).replace("\\", "/")
 
     # 4. get_recent_sessions
     def get_recent_sessions(self, user_id: str, language: str, n: int = 10) -> list[SessionLog]:

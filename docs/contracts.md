@@ -12,18 +12,23 @@ Skills are the lowest grain — atomic, pure, no storage access.
 
 ```python
 from typing import Protocol, Literal
-from dataclasses import dataclass
-from datetime import datetime
+from pydantic import BaseModel, field_validator
 
-@dataclass
-class SkillInput:
+class SkillInput(BaseModel):
     """Base input for all skills. Each skill defines a typed subclass."""
     user_id: str
     level: str
     parameters: dict                      # skill-specific inputs
 
-@dataclass
-class SkillOutput:
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
+
+class SkillOutput(BaseModel):
     """Base output for all skills. Each skill defines a typed subclass."""
     skill_name: str
     success: bool
@@ -56,8 +61,9 @@ from typing import Protocol
 from dataclasses import dataclass
 from datetime import datetime
 
-@dataclass
-class ContextRequest:
+from pydantic import BaseModel
+
+class ContextRequest(BaseModel):
     """Declares what a module needs from memory. Orchestrator fulfills it."""
     recent_sessions_n: int = 5
     module_filter: str | None = None      # restrict to sessions of this module
@@ -66,8 +72,7 @@ class ContextRequest:
     include_vocab_flags: bool = False
     # language is always required — not optional, always passed from orchestrator
 
-@dataclass
-class ModuleContext:
+class ModuleContext(BaseModel):
     """Fulfilled by orchestrator from storage before module.run() is called."""
     user_id: str
     language: str                         # target language for this session
@@ -78,8 +83,7 @@ class ModuleContext:
     vocab_flags: list[dict]               # scoped to (user_id, language)
     parameters: dict                      # user overrides from confirmation step
 
-@dataclass
-class ModuleResult:
+class ModuleResult(BaseModel):
     session_id: str
     module: str
     task_label: str
@@ -123,11 +127,11 @@ class ModuleProtocol(Protocol):
 ## Session File Contracts (`memory/protocols.py`)
 
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel, field_validator
 from abc import ABC, abstractmethod
+from typing import Literal
 
-@dataclass
-class SessionFileContent(ABC):
+class SessionFileContent(BaseModel, ABC):
     """Abstract base. Each module defines a typed subclass."""
     session_id: str
     user_id: str
@@ -136,14 +140,20 @@ class SessionFileContent(ABC):
     task_label: str
     date: str
     level: str
-    status: str                           # completed | interrupted
+    status: Literal["completed", "interrupted"]
 
-    @abstractmethod
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
+
     def to_dict(self) -> dict:
         """Serialize to dict for YAML write. Storage calls this — modules don't."""
-        ...
+        return self.model_dump()
 
-@dataclass
 class WritingSessionContent(SessionFileContent):
     topic: str
     requirements: str
@@ -154,19 +164,14 @@ class WritingSessionContent(SessionFileContent):
     comment: str
     btw_log: list[dict]       # [{question, answer, flagged_word, timestamp}]
     vocab_updates: list[dict] # [{word, source, occurrence_count}]
-    suggested_focus: str | None
+    suggested_focus: str | None = None
 
-    def to_dict(self) -> dict: ...
-
-@dataclass
 class GrammarSessionContent(SessionFileContent):  # Layer 2a
     topic: str
     exercise_type: str
     items: list[dict]         # [{prompt, user_answer, correct, correction, error_tag}]
     score: float
     btw_log: list[dict]
-
-    def to_dict(self) -> dict: ...
 ```
 
 ---
@@ -174,12 +179,11 @@ class GrammarSessionContent(SessionFileContent):  # Layer 2a
 ## Storage Contracts (`memory/protocols.py`)
 
 ```python
-from typing import Protocol
-from dataclasses import dataclass
+from typing import Protocol, Literal
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 
-@dataclass
-class SessionLog:
+class SessionLog(BaseModel):
     user_id: str
     session_id: str
     language: str                         # target language for this session
@@ -191,43 +195,56 @@ class SessionLog:
     level: str
     date: datetime
     file_path: str                        # relative to data_root
-    status: str                           # in_progress|completed|abandoned|interrupted
+    status: Literal["in_progress", "completed", "abandoned", "interrupted"]
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_minutes: float | None = None
 
-@dataclass
-class BtwEntry:
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
+
+class BtwEntry(BaseModel):
     btw_id: str
     session_id: str
     user_id: str
     language: str                         # denormalized from session
     question: str
     answer: str
-    flagged_word: str | None
+    flagged_word: str | None = None
     timestamp: datetime
 
-@dataclass
-class VocabFlag:
+class VocabFlag(BaseModel):
     flag_id: str
     user_id: str
     language: str                         # which language this word belongs to
     word: str
-    translation: str | None
-    source: str                           # btw | evaluator | manual
+    translation: str | None = None
+    source: Literal["btw", "evaluator", "manual"]
     first_seen: datetime
     last_seen: datetime
     occurrence_count: int
 
-@dataclass
-class UserProfile:
+class UserProfile(BaseModel):
     user_id: str
     language: str
     level: str
-    level_source: str                     # stated | estimated | cefr_module
+    level_source: Literal["stated", "estimated", "cefr_module"]
     active: bool                          # last language selected by user
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
 
 class StorageProtocol(Protocol):
     # Session lifecycle
@@ -282,10 +299,9 @@ class StorageProtocol(Protocol):
 
 ```python
 from typing import Protocol
-from dataclasses import dataclass
+from pydantic import BaseModel
 
-@dataclass
-class ProgressSummary:
+class ProgressSummary(BaseModel):
     language: str                            # which language this summary covers
     sessions_by_module: dict[str, int]
     days_since_module: dict[str, int]
@@ -296,11 +312,10 @@ class ProgressSummary:
     weakest_module: str                      # validated against MODULE_REGISTRY
     recommendation_reason: str
 
-@dataclass
-class ExerciseRecommendation:
+class ExerciseRecommendation(BaseModel):
     module: str                              # validated against MODULE_REGISTRY
     reason: str
-    suggested_focus: str | None
+    suggested_focus: str | None = None
 
 class OrchestratorProtocol(Protocol):
     def summarize_progress(self, user_id: str, language: str) -> ProgressSummary | None:

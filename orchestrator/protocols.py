@@ -1,8 +1,7 @@
 from typing import Protocol
-from dataclasses import dataclass
+from pydantic import BaseModel
 
-@dataclass
-class ProgressSummary:
+class ProgressSummary(BaseModel):
     language: str                            # which language this summary covers
     sessions_by_module: dict[str, int]
     days_since_module: dict[str, int]
@@ -13,11 +12,10 @@ class ProgressSummary:
     weakest_module: str                      # validated against MODULE_REGISTRY
     recommendation_reason: str
 
-@dataclass
-class ExerciseRecommendation:
+class ExerciseRecommendation(BaseModel):
     module: str                              # validated against MODULE_REGISTRY
     reason: str
-    suggested_focus: str | None
+    suggested_focus: str | None = None
 
 class OrchestratorProtocol(Protocol):
     def summarize_progress(self, user_id: str, language: str) -> ProgressSummary | None:

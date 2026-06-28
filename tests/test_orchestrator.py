@@ -33,19 +33,75 @@ def test_cold_start_threshold(store_and_llm):
     # Write profile
     date_now = datetime.now()
     store.write_user_profile(
-        UserProfile("user1", "german", "a1", "stated", True, date_now, date_now)
+        UserProfile(
+            user_id="user1",
+            language="german",
+            level="a1",
+            level_source="stated",
+            active=True,
+            created_at=date_now,
+            updated_at=date_now
+        )
     )
 
     # 2 completed sessions -> still cold start (threshold is 3)
-    s1 = SessionLog("user1", "s1", "german", "writing", "t1", "desc", "", [], "a1", date_now, "path1", "completed", date_now, date_now, 5.0)
-    s2 = SessionLog("user1", "s2", "german", "writing", "t2", "desc", "", [], "a1", date_now, "path2", "completed", date_now, date_now, 5.0)
+    s1 = SessionLog(
+        user_id="user1",
+        session_id="s1",
+        language="german",
+        module="writing",
+        task_label="t1",
+        task_description="desc",
+        comment="",
+        errors=[],
+        level="a1",
+        date=date_now,
+        file_path="path1",
+        status="completed",
+        started_at=date_now,
+        completed_at=date_now,
+        duration_minutes=5.0
+    )
+    s2 = SessionLog(
+        user_id="user1",
+        session_id="s2",
+        language="german",
+        module="writing",
+        task_label="t2",
+        task_description="desc",
+        comment="",
+        errors=[],
+        level="a1",
+        date=date_now,
+        file_path="path2",
+        status="completed",
+        started_at=date_now,
+        completed_at=date_now,
+        duration_minutes=5.0
+    )
     store.write_session(s1)
     store.write_session(s2)
     
     assert orchestrator.summarize_progress("user1", "german") is None
 
     # 3 completed sessions -> threshold reached, not cold start
-    s3 = SessionLog("user1", "s3", "german", "writing", "t3", "desc", "", [], "a1", date_now, "path3", "completed", date_now, date_now, 5.0)
+    s3 = SessionLog(
+        user_id="user1",
+        session_id="s3",
+        language="german",
+        module="writing",
+        task_label="t3",
+        task_description="desc",
+        comment="",
+        errors=[],
+        level="a1",
+        date=date_now,
+        file_path="path3",
+        status="completed",
+        started_at=date_now,
+        completed_at=date_now,
+        duration_minutes=5.0
+    )
     store.write_session(s3)
     
     summary = orchestrator.summarize_progress("user1", "german")
@@ -64,10 +120,32 @@ def test_interrupted_session_discard(mock_input, store_and_llm):
     # Setup an interrupted session log
     date_now = datetime.now()
     store.write_user_profile(
-        UserProfile("user1", "german", "a1", "stated", True, date_now, date_now)
+        UserProfile(
+            user_id="user1",
+            language="german",
+            level="a1",
+            level_source="stated",
+            active=True,
+            created_at=date_now,
+            updated_at=date_now
+        )
     )
     # started 20 minutes ago (timeout is 15)
-    log = SessionLog("user1", "sess_int", "german", "writing", "t1", "d1", "", [], "a1", date_now - timedelta(minutes=20), "path", "in_progress", date_now - timedelta(minutes=20))
+    log = SessionLog(
+        user_id="user1",
+        session_id="sess_int",
+        language="german",
+        module="writing",
+        task_label="t1",
+        task_description="d1",
+        comment="",
+        errors=[],
+        level="a1",
+        date=date_now - timedelta(minutes=20),
+        file_path="path",
+        status="in_progress",
+        started_at=date_now - timedelta(minutes=20)
+    )
     store.write_session(log)
 
     # Setup checkpoint file
@@ -96,9 +174,31 @@ def test_interrupted_session_log(mock_input, store_and_llm):
     # Setup an interrupted session log
     date_now = datetime.now()
     store.write_user_profile(
-        UserProfile("user1", "german", "a1", "stated", True, date_now, date_now)
+        UserProfile(
+            user_id="user1",
+            language="german",
+            level="a1",
+            level_source="stated",
+            active=True,
+            created_at=date_now,
+            updated_at=date_now
+        )
     )
-    log = SessionLog("user1", "sess_int", "german", "writing", "t1", "d1", "", [], "a1", date_now - timedelta(minutes=20), "path", "in_progress", date_now - timedelta(minutes=20))
+    log = SessionLog(
+        user_id="user1",
+        session_id="sess_int",
+        language="german",
+        module="writing",
+        task_label="t1",
+        task_description="d1",
+        comment="",
+        errors=[],
+        level="a1",
+        date=date_now - timedelta(minutes=20),
+        file_path="path",
+        status="in_progress",
+        started_at=date_now - timedelta(minutes=20)
+    )
     store.write_session(log)
 
     # Setup checkpoint file

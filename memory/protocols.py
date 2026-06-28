@@ -1,10 +1,11 @@
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import Protocol
+import os
+from typing import Protocol, Literal
 from datetime import datetime
+import yaml
+from pydantic import BaseModel, Field, field_validator
 
-@dataclass
-class SessionFileContent(ABC):
+class SessionFileContent(BaseModel, ABC):
     """Abstract base. Each module defines a typed subclass."""
     session_id: str
     user_id: str
@@ -13,14 +14,20 @@ class SessionFileContent(ABC):
     task_label: str
     date: str
     level: str
-    status: str                           # completed | interrupted
+    status: Literal["completed", "interrupted"]
 
-    @abstractmethod
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
+
     def to_dict(self) -> dict:
         """Serialize to dict for YAML write. Storage calls this — modules don't."""
-        ...
+        return self.model_dump()
 
-@dataclass
 class WritingSessionContent(SessionFileContent):
     topic: str
     requirements: str
@@ -31,31 +38,8 @@ class WritingSessionContent(SessionFileContent):
     comment: str
     btw_log: list[dict]       # [{question, answer, flagged_word, timestamp}]
     vocab_updates: list[dict] # [{word, source, occurrence_count}]
-    suggested_focus: str | None
+    suggested_focus: str | None = None
 
-    def to_dict(self) -> dict:
-        return {
-            "session_id": self.session_id,
-            "user_id": self.user_id,
-            "language": self.language,
-            "module": self.module,
-            "task_label": self.task_label,
-            "date": self.date,
-            "level": self.level,
-            "status": self.status,
-            "topic": self.topic,
-            "requirements": self.requirements,
-            "user_text": self.user_text,
-            "mistakes": self.mistakes,
-            "recommendations": self.recommendations,
-            "corrected_text": self.corrected_text,
-            "comment": self.comment,
-            "btw_log": self.btw_log,
-            "vocab_updates": self.vocab_updates,
-            "suggested_focus": self.suggested_focus,
-        }
-
-@dataclass
 class GrammarSessionContent(SessionFileContent):  # Layer 2a
     topic: str
     exercise_type: str
@@ -63,25 +47,7 @@ class GrammarSessionContent(SessionFileContent):  # Layer 2a
     score: float
     btw_log: list[dict]
 
-    def to_dict(self) -> dict:
-        return {
-            "session_id": self.session_id,
-            "user_id": self.user_id,
-            "language": self.language,
-            "module": self.module,
-            "task_label": self.task_label,
-            "date": self.date,
-            "level": self.level,
-            "status": self.status,
-            "topic": self.topic,
-            "exercise_type": self.exercise_type,
-            "items": self.items,
-            "score": self.score,
-            "btw_log": self.btw_log,
-        }
-
-@dataclass
-class SessionLog:
+class SessionLog(BaseModel):
     user_id: str
     session_id: str
     language: str                         # target language for this session
@@ -93,43 +59,56 @@ class SessionLog:
     level: str
     date: datetime
     file_path: str                        # relative to data_root
-    status: str                           # in_progress|completed|abandoned|interrupted
+    status: Literal["in_progress", "completed", "abandoned", "interrupted"]
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_minutes: float | None = None
 
-@dataclass
-class BtwEntry:
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
+
+class BtwEntry(BaseModel):
     btw_id: str
     session_id: str
     user_id: str
     language: str                         # denormalized from session
     question: str
     answer: str
-    flagged_word: str | None
+    flagged_word: str | None = None
     timestamp: datetime
 
-@dataclass
-class VocabFlag:
+class VocabFlag(BaseModel):
     flag_id: str
     user_id: str
     language: str                         # which language this word belongs to
     word: str
-    translation: str | None
-    source: str                           # btw | evaluator | manual
+    translation: str | None = None
+    source: Literal["btw", "evaluator", "manual"]
     first_seen: datetime
     last_seen: datetime
     occurrence_count: int
 
-@dataclass
-class UserProfile:
+class UserProfile(BaseModel):
     user_id: str
     language: str
     level: str
-    level_source: str                     # stated | estimated | cefr_module
+    level_source: Literal["stated", "estimated", "cefr_module"]
     active: bool                          # last language selected by user
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
 
 class StorageProtocol(Protocol):
     # Session lifecycle
@@ -176,3 +155,60 @@ class StorageProtocol(Protocol):
     def get_active_language(self, user_id: str) -> str | None:
         """Return the language where active=True, or None if no profile exists."""
         ...
+
+class BaseSessionStore(StorageProtocol, ABC):
+    def __init__(self, data_root: str):
+        self.data_root = data_root
+
+    def write_file(self, content: SessionFileContent, base_dir: str) -> str:
+        # Determine paths
+        # Relative file_path schema: sessions/{user_id}/{language}/{session_id}.yaml
+        rel_dir = os.path.join("sessions", content.user_id, content.language)
+        abs_dir = os.path.join(base_dir, rel_dir)
+        os.makedirs(abs_dir, exist_ok=True)
+        
+        filename = f"{content.session_id}.yaml"
+        tmp_filename = f"{content.session_id}.yaml.tmp"
+        
+        abs_path = os.path.join(abs_dir, filename)
+        tmp_path = os.path.join(abs_dir, tmp_filename)
+        
+        yaml_content = yaml.dump(content.to_dict(), sort_keys=False, allow_unicode=True)
+        
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(yaml_content)
+            
+        if os.path.exists(abs_path):
+            os.remove(abs_path)
+        os.rename(tmp_path, abs_path)
+        
+        return os.path.join(rel_dir, filename).replace("\\", "/")
+
+    def update_session_status(self, session_id: str, status: str) -> None:
+        allowed_status = {"in_progress", "completed", "abandoned", "interrupted"}
+        if status not in allowed_status:
+            raise ValueError(f"Invalid status: '{status}'. Allowed: {allowed_status}")
+        self._update_session_status(session_id, status)
+
+    @abstractmethod
+    def _update_session_status(self, session_id: str, status: str) -> None:
+        """Subclasses implement backend-specific write of session status."""
+        pass
+
+    def _dt_to_str(self, dt: datetime | None) -> str | None:
+        if dt is None:
+            return None
+        return dt.isoformat()
+
+    def _str_to_dt(self, dt_str: str | None) -> datetime | None:
+        if not dt_str:
+            return None
+        try:
+            return datetime.fromisoformat(dt_str)
+        except ValueError:
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+                try:
+                    return datetime.strptime(dt_str, fmt)
+                except ValueError:
+                    continue
+            raise

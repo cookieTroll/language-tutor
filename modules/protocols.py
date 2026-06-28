@@ -1,11 +1,10 @@
 from typing import Protocol
-from dataclasses import dataclass
 from datetime import datetime
+from pydantic import BaseModel
 from llm.base import BaseLLM
 from memory.protocols import SessionFileContent
 
-@dataclass
-class ContextRequest:
+class ContextRequest(BaseModel):
     """Declares what a module needs from memory. Orchestrator fulfills it."""
     recent_sessions_n: int = 5
     module_filter: str | None = None      # restrict to sessions of this module
@@ -14,8 +13,7 @@ class ContextRequest:
     include_vocab_flags: bool = False
     # language is always required — not optional, always passed from orchestrator
 
-@dataclass
-class ModuleContext:
+class ModuleContext(BaseModel):
     """Fulfilled by orchestrator from storage before module.run() is called."""
     user_id: str
     language: str                         # target language for this session
@@ -26,8 +24,7 @@ class ModuleContext:
     vocab_flags: list[dict]               # scoped to (user_id, language)
     parameters: dict                      # user overrides from confirmation step
 
-@dataclass
-class ModuleResult:
+class ModuleResult(BaseModel):
     session_id: str
     module: str
     task_label: str

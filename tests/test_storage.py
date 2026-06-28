@@ -282,3 +282,40 @@ def test_write_file_atomic(storage):
         data = yaml.safe_load(f)
     assert data["session_id"] == "sess_f1"
     assert data["user_id"] == "user1"
+
+def test_pydantic_contract_validation():
+    from pydantic import ValidationError
+    
+    # Invalid level raises ValidationError
+    with pytest.raises(ValidationError):
+        UserProfile(
+            user_id="u1",
+            language="german",
+            level="z1", # Invalid CEFR level
+            level_source="stated",
+            active=True,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+
+    # Invalid status raises ValidationError
+    with pytest.raises(ValidationError):
+        SessionLog(
+            user_id="user1", session_id="sess1", language="german", module="writing",
+            task_label="t1", task_description="d1", comment="", errors=[],
+            level="a1", date=datetime.now(), file_path="path1", status="invalid_status"
+        )
+
+    # Invalid vocab source raises ValidationError
+    with pytest.raises(ValidationError):
+        VocabFlag(
+            flag_id="flag1",
+            user_id="user1",
+            language="german",
+            word="buch",
+            translation="book",
+            source="invalid_source", # type: ignore
+            first_seen=datetime.now(),
+            last_seen=datetime.now(),
+            occurrence_count=1
+        )
