@@ -98,6 +98,7 @@ def test_detect_mistakes_self_correction_retry():
     llm.config = MagicMock()
     llm.config.show_incomplete_responses = True
     llm.config.show_cut_by_limit_tag = True
+    llm.config.max_skill_retries = 2
     
     # 1st response: malformed JSON
     resp_bad = LLMResponse(text='{"mistakes": [{"fragment": "Ich aufstehen"', model="test-model")

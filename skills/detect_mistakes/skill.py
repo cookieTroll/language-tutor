@@ -34,58 +34,44 @@ class DetectMistakesSkill(SkillProtocol):
             LLMMessage(role="user", content=prompt)
         ]
 
-        current_messages = list(messages)
-        max_attempts = 3
-        
-        for attempt in range(1, max_attempts + 1):
-            try:
-                response = llm.complete(current_messages, temperature=0.1)
-                text = response.text.strip()
+        def parse_mistakes(text: str) -> list[dict]:
+            if text.startswith("```"):
+                text = re.sub(r"^```(?:json)?\n", "", text)
+                text = re.sub(r"\n```$", "", text)
+                text = text.strip()
                 
-                # Clean up potential markdown formatting block
-                if text.startswith("```"):
-                    text = re.sub(r"^```(?:json)?\n", "", text)
-                    text = re.sub(r"\n```$", "", text)
-                    text = text.strip()
-                    
-                data = json.loads(text)
-                raw_mistakes = data.get("mistakes", [])
+            data = json.loads(text)
+            raw_mistakes = data.get("mistakes", [])
+            
+            validated = []
+            for item in raw_mistakes:
+                if isinstance(item, dict) and "fragment" in item:
+                    validated.append({
+                        "fragment": str(item["fragment"]),
+                        "error_type_hint": str(item.get("error_type_hint") or "unspecified error")
+                    })
+            return validated
+
+        try:
+            from skills.protocols import call_with_self_correction, SelfCorrectionError
+            validated = call_with_self_correction(llm, messages, parse_mistakes, temperature=0.1)
+            return SkillOutput(
+                skill_name=self.name,
+                success=True,
+                metadata={"raw_mistakes": validated}
+            )
+        except SelfCorrectionError as e:
+            metadata = {"raw_mistakes": []}
+            metadata["error"] = str(e)
+            
+            show_inc = getattr(llm.config, "show_incomplete_responses", False)
+            if not isinstance(show_inc, bool):
+                show_inc = False
+            if e.raw_response and show_inc:
+                metadata["raw_response"] = e.raw_response
                 
-                validated = []
-                for item in raw_mistakes:
-                    if isinstance(item, dict) and "fragment" in item:
-                        validated.append({
-                            "fragment": str(item["fragment"]),
-                            "error_type_hint": str(item.get("error_type_hint") or "unspecified error")
-                        })
-                
-                return SkillOutput(
-                    skill_name=self.name,
-                    success=True,
-                    metadata={"raw_mistakes": validated}
-                )
-            except Exception as e:
-                if attempt == max_attempts:
-                    err_msg = str(e)
-                    if 'response' in locals() and response.truncated and llm.config.show_cut_by_limit_tag:
-                        err_msg += " [TRUNCATED BY LIMIT]"
-                        
-                    metadata = {"raw_mistakes": []}
-                    metadata["error"] = err_msg
-                    
-                    if 'text' in locals() and llm.config.show_incomplete_responses:
-                        metadata["raw_response"] = text
-                        
-                    return SkillOutput(
-                        skill_name=self.name,
-                        success=False,
-                        metadata=metadata
-                    )
-                
-                # If we have attempts left, append self-correction feedback messages
-                if 'text' in locals():
-                    current_messages.append(LLMMessage(role="assistant", content=text))
-                current_messages.append(LLMMessage(
-                    role="user",
-                    content=f"Your previous response failed to parse as valid JSON. Error: {e}. Please output the correct JSON adhering strictly to the schema, and ensure it is fully completed (do not truncate)."
-                ))
+            return SkillOutput(
+                skill_name=self.name,
+                success=False,
+                metadata=metadata
+            )

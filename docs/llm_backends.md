@@ -197,6 +197,7 @@ llm:
   max_tokens: 1000                                    # maximum token response limit
   show_incomplete_responses: false                    # show incomplete text when json fails
   show_cut_by_limit_tag: true                         # append [TRUNCATED BY LIMIT] on truncation
+  max_skill_retries: 3                                # number of self-correction attempts in skills
 ```
 
 **Development workflow:** set `backend: lm_studio` to iterate locally at zero cost. Switch to `backend: gemini` for quality testing and final evaluation.

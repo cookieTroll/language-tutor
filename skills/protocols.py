@@ -1,6 +1,47 @@
-from typing import Protocol, Literal
+from typing import Protocol, Literal, Callable, TypeVar
 from pydantic import BaseModel, field_validator
-from llm.base import BaseLLM
+from llm.base import BaseLLM, LLMMessage
+
+T = TypeVar("T")
+
+class SelfCorrectionError(Exception):
+    def __init__(self, message: str, raw_response: str | None = None):
+        super().__init__(message)
+        self.raw_response = raw_response
+
+def call_with_self_correction(
+    llm: BaseLLM,
+    messages: list[LLMMessage],
+    parse_fn: Callable[[str], T],
+    temperature: float = 0.1
+) -> T:
+    current_messages = list(messages)
+    max_attempts = getattr(llm.config, "max_skill_retries", 3)
+    if not isinstance(max_attempts, int):
+        max_attempts = 3
+        
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = llm.complete(current_messages, temperature=temperature)
+            text = response.text.strip()
+            return parse_fn(text)
+        except Exception as e:
+            if attempt == max_attempts:
+                err_msg = str(e)
+                show_tag = getattr(llm.config, "show_cut_by_limit_tag", True)
+                if not isinstance(show_tag, bool):
+                    show_tag = True
+                if 'response' in locals() and response.truncated and show_tag:
+                    err_msg += " [TRUNCATED BY LIMIT]"
+                raise SelfCorrectionError(err_msg, raw_response=text if 'text' in locals() else None) from e
+            
+            # Append self-correction feedback messages
+            if 'text' in locals():
+                current_messages.append(LLMMessage(role="assistant", content=text))
+            current_messages.append(LLMMessage(
+                role="user",
+                content=f"Your previous response failed to parse correctly. Error: {e}. Please output the correct format adhering strictly to the guidelines, and ensure it is fully completed (do not truncate)."
+            ))
 
 class SkillInput(BaseModel):
     """Base input for all skills. Each skill defines a typed subclass."""

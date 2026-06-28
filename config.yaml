@@ -22,3 +22,4 @@ llm:
   show_cut_by_limit_tag: true
   max_retries: 3
   initial_retry_delay: 1.0
+  max_skill_retries: 3

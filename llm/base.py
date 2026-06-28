@@ -18,6 +18,8 @@ class LLMResponse:
     truncated: bool = False
 
 class BaseLLM(ABC):
+    config: LLMConfig = None  # type: ignore
+
     def __init__(self, config: LLMConfig):
         self.config = config
 

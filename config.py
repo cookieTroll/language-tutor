@@ -13,6 +13,7 @@ class LLMConfig:
     show_cut_by_limit_tag: bool = True
     max_retries: int = 3
     initial_retry_delay: float = 1.0
+    max_skill_retries: int = 3
 
 @dataclass
 class AppConfig:
@@ -67,6 +68,7 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         show_cut_by_limit_tag=bool(llm_data.get("show_cut_by_limit_tag", True)),
         max_retries=int(llm_data.get("max_retries", 3)),
         initial_retry_delay=float(llm_data.get("initial_retry_delay", 1.0)),
+        max_skill_retries=int(llm_data.get("max_skill_retries", 3)),
     )
     
     return AppConfig(

@@ -56,15 +56,24 @@ class BtwHandlerSkill(SkillProtocol):
         try:
             response = llm.complete(messages, temperature=0.2)
             answer = response.text.strip()
-            if response.truncated and llm.config.show_cut_by_limit_tag:
+            show_tag = getattr(llm.config, "show_cut_by_limit_tag", True)
+            if not isinstance(show_tag, bool):
+                show_tag = True
+            if response.truncated and show_tag:
                 answer += "\n[TRUNCATED BY LIMIT]"
         except Exception as e:
             err_msg = f"Error answering question: {e}"
-            if 'response' in locals() and response.truncated and llm.config.show_cut_by_limit_tag:
+            show_tag = getattr(llm.config, "show_cut_by_limit_tag", True)
+            if not isinstance(show_tag, bool):
+                show_tag = True
+            if 'response' in locals() and response.truncated and show_tag:
                 err_msg += " [TRUNCATED BY LIMIT]"
                 
             metadata = {"answer": err_msg, "flagged_word": None}
-            if 'answer' in locals() and llm.config.show_incomplete_responses:
+            show_inc = getattr(llm.config, "show_incomplete_responses", False)
+            if not isinstance(show_inc, bool):
+                show_inc = False
+            if 'answer' in locals() and show_inc:
                 metadata["raw_response"] = answer
                 
             return SkillOutput(
