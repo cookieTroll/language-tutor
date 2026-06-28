@@ -251,3 +251,86 @@ def test_interrupted_session_invalid_choice_retry(mock_print, mock_input, store_
     
     recent = store.get_recent_sessions("user1", "german")
     assert recent[0].status == "abandoned"
+
+def test_finalize_session_success(store_and_llm):
+    from modules.protocols import ModuleResult
+    store, llm, config = store_and_llm
+    orchestrator = Orchestrator(store, llm, config)
+    
+    profile = UserProfile(
+        user_id="user1",
+        language="german",
+        level="a1",
+        level_source="stated",
+        active=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+    store.write_user_profile(profile)
+    
+    result = ModuleResult(
+        session_id="session123",
+        module="writing",
+        task_label="writing_free",
+        task_description="Free writing task",
+        errors=[],
+        comment="Great job",
+        started_at=datetime.now(),
+        completed_at=datetime.now(),
+        duration_minutes=2.5,
+        metadata={}
+    )
+    
+    from memory.protocols import WritingSessionContent
+    file_content = WritingSessionContent(
+        user_id="user1",
+        session_id="session123",
+        language="german",
+        module="writing",
+        level="a1",
+        date=datetime.now().isoformat(),
+        task_label="writing_free",
+        status="completed",
+        topic="My day",
+        requirements="Write about your day.",
+        user_text="Ich bin student.",
+        mistakes=[],
+        recommendations=[],
+        corrected_text="Ich bin Student.",
+        comment="Great job",
+        btw_log=[],
+        vocab_updates=[]
+    )
+    
+    initial_log = SessionLog(
+        user_id="user1",
+        session_id="session123",
+        language="german",
+        module="writing",
+        task_label="writing_free",
+        task_description="Initializing",
+        comment="",
+        errors=[],
+        level="a1",
+        date=datetime.now(),
+        file_path="",
+        status="in_progress",
+        started_at=datetime.now()
+    )
+    store.write_session(initial_log)
+
+    orchestrator._finalize_session(
+        user_id="user1",
+        selected_lang="german",
+        module_key="writing",
+        session_id="session123",
+        profile=profile,
+        result=result,
+        file_content=file_content,
+        checkpoint_path=os.path.join(config.data_root, "checkpoints", "user1", "session123.json")
+    )
+    
+    recent = store.get_recent_sessions("user1", "german")
+    assert recent[0].status == "completed"
+    assert recent[0].file_path != ""
+    assert recent[0].comment == "Great job"
