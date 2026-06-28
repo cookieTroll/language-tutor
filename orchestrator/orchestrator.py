@@ -9,6 +9,7 @@ from llm.base import BaseLLM, LLMMessage
 from orchestrator.protocols import OrchestratorProtocol, ProgressSummary, ExerciseRecommendation
 from orchestrator.prompts import INTERRUPTION_SUMMARY_PROMPT
 from modules.registry import MODULE_REGISTRY, get_registry_description
+from lang.loader import using_defaults
 
 DEFAULT_RECOMMENDATION = ExerciseRecommendation(
     module="writing",
@@ -21,6 +22,7 @@ class Orchestrator(OrchestratorProtocol):
         self.store = store
         self.llm = llm
         self.config = config
+        self._warned_languages: set[str] = set()
 
     def summarize_progress(self, user_id: str, language: str) -> ProgressSummary | None:
         """
@@ -140,15 +142,17 @@ class Orchestrator(OrchestratorProtocol):
             else:
                 print(f"[!] Invalid option '{choice}'. Please enter 'l' to log or 'd' to discard.")
 
-    def run_session(self, user_id: str, language: str) -> None:
+    def run_session(self, user_id: str, language: str, on_language_warning=None) -> None:
         """
         Executes a full interactive session lifecycle.
+        on_language_warning: optional callable(language, missing_maps) for UI to display config warnings.
         """
         # 0. Check interrupted sessions
         self._handle_interruption(user_id)
 
         # 1. Select language and user profile
         selected_lang, profile = self._select_language_and_profile(user_id, language)
+        self._check_language_config(selected_lang, on_warn=on_language_warning)
 
         # 2 & 3. Summarize and recommend
         summary = self.summarize_progress(user_id, selected_lang)
@@ -228,6 +232,15 @@ class Orchestrator(OrchestratorProtocol):
             self.store.write_user_profile(profile)
             
         return selected_lang, profile
+
+    def _check_language_config(self, language: str, on_warn=None) -> None:
+        if language in self._warned_languages:
+            return
+        self._warned_languages.add(language)
+        defaults = using_defaults(language)
+        missing = [k.replace("_", " ") for k, v in defaults.items() if v]
+        if missing and on_warn:
+            on_warn(language, missing)
 
     def _get_confirmed_module(self, recommendation: ExerciseRecommendation) -> str:
         print(f"\n[Recommendation]: We suggest using the '{recommendation.module.upper()}' module.")

@@ -72,5 +72,8 @@ def test_cli_main_flow(mock_print, mock_input, mock_orchestrator_cls, mock_build
     
     # Assert orchestrator instantiation and session execution
     mock_orchestrator_cls.assert_called_once_with(mock_build_storage.return_value, mock_llm, mock_config)
-    mock_orch.run_session.assert_called_once_with("john", language=None)
+    call_kwargs = mock_orch.run_session.call_args
+    assert call_kwargs[0][0] == "john"
+    assert call_kwargs[1]["language"] is None
+    assert callable(call_kwargs[1]["on_language_warning"])
     mock_print.assert_any_call("Goodbye!")

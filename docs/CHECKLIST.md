@@ -59,19 +59,19 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 
 ### Language Maps (`lang/`)
 > Versioned YAML content maps for CEFR hints and error taxonomy. Language configs reference maps by name; the registry cross-validates all references at startup. Default maps provide a language-agnostic fallback for unconfigured languages.
-- [x] [ ] [ ] `lang/models.py` — Pydantic models: `CEFRMap` (per-level hints + default fallback), `TaxonomyMap` (enforces `other` tag, `validate_tag()`, `format_for_prompt()`), `LanguageConfig`
-- [x] [ ] [ ] `lang/loader.py` — `_Registry`: loads all maps and language configs on startup, cross-validates references; exposes `get_cefr_context()`, `get_taxonomy()`, `using_defaults()`
-- [x] [ ] [ ] `lang/maps/cefr/cefr_map1.yaml` — German CEFR pedagogical hints (a1–c2 + default)
-- [x] [ ] [ ] `lang/maps/cefr/default.yaml` — language-agnostic CEFR fallback
-- [x] [ ] [ ] `lang/maps/taxonomy/german_taxonomy_v1.yaml` — 8 German error tags (`noun_declension`, `adjective_declension`, `article`, `verb_conjugation`, `verb_tense`, `vocabulary`, `spelling`, `other`)
-- [x] [ ] [ ] `lang/maps/taxonomy/default.yaml` — 4 language-agnostic tags (`grammar`, `vocabulary`, `spelling`, `other`)
-- [x] [ ] [ ] `lang/languages/german.yaml` — maps `german` → `cefr_map1` + `german_taxonomy_v1`
-- [x] [ ] [ ] `tests/lang/test_lang.py` — 34 tests across `TestCEFRMap`, `TestTaxonomyMap`, `TestLanguageConfig`, `TestRegistry` (tmp_path isolation), `TestIntegration` (real YAML files)
+- [x] [x] [ ] `lang/models.py` — Pydantic models: `CEFRMap` (per-level hints + default fallback), `TaxonomyMap` (enforces `other` tag, `validate_tag()`, `format_for_prompt()`), `LanguageConfig`
+- [x] [x] [ ] `lang/loader.py` — `_Registry`: loads all maps and language configs on startup, cross-validates references; exposes `get_cefr_context()`, `get_taxonomy()`, `using_defaults()`
+- [x] [x] [ ] `lang/maps/cefr/cefr_map1.yaml` — German CEFR pedagogical hints (a1–c2 + default)
+- [x] [x] [ ] `lang/maps/cefr/default.yaml` — language-agnostic CEFR fallback
+- [x] [x] [ ] `lang/maps/taxonomy/german_taxonomy_v1.yaml` — 8 German error tags (`noun_declension`, `adjective_declension`, `article`, `verb_conjugation`, `verb_tense`, `vocabulary`, `spelling`, `other`)
+- [x] [x] [ ] `lang/maps/taxonomy/default.yaml` — 4 language-agnostic tags (`grammar`, `vocabulary`, `spelling`, `other`)
+- [x] [x] [ ] `lang/languages/german.yaml` — maps `german` → `cefr_map1` + `german_taxonomy_v1`
+- [x] [x] [ ] `tests/lang/test_lang.py` — 34 tests across `TestCEFRMap`, `TestTaxonomyMap`, `TestLanguageConfig`, `TestRegistry` (tmp_path isolation), `TestIntegration` (real YAML files)
 
 ### Language Configuration (Session Startup)
 > Startup surfaces both language and level configuration together — same moment, same prompt.
-- [ ] [ ] [ ] On session start, call `using_defaults(language)` — if any map is a fallback, print warning, explain which map is missing, point to `lang/languages/` and `lang/maps/`; user can proceed or exit to configure; choice suppresses warning for remainder of session
-- [ ] [ ] [ ] Unit test: `using_defaults()` returns correct flags for configured vs unconfigured language; warning not re-raised after user confirms
+- [x] [ ] [ ] On session start, call `using_defaults(language)` — if any map is a fallback, print warning, explain which map is missing, point to `lang/languages/` and `lang/maps/`; user can proceed or exit to configure; choice suppresses warning for remainder of session
+- [x] [ ] [ ] Unit test: `using_defaults()` returns correct flags for configured vs unconfigured language; warning not re-raised after user confirms (`test_lang.py` covers flags; suppression is structural — single call per language per orchestrator instance)
 
 ### Orchestrator Skeleton (PoC — cold start only)
 - [x] [x] [ ] `orchestrator/orchestrator.py` — implement `OrchestratorProtocol`:
@@ -104,7 +104,7 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 ### Session Clock (PoC)
 - [x] [x] [ ] `started_at` set after topic is displayed (not before); `completed_at` set immediately after submission — measures pure writing time, excludes evaluation pipeline
 - [x] [x] [ ] `completed_at` and `duration_minutes` propagated through `ModuleResult` to DB
-- [x] [ ] [ ] `shared/timer.py` — `SessionTimer`: background thread updates terminal title with `[MM:SS elapsed]`; wired into `WritingModule.run()` (starts after `_print_exercise_header`, stops at submission)
+- [x] [x] [ ] `shared/timer.py` — `SessionTimer`: background thread updates terminal title with `[MM:SS elapsed]`; wired into `WritingModule.run()` (starts after `_print_exercise_header`, stops at submission)
 - [ ] [ ] [ ] UI timer widget (Layer 1c — deferred, depends on `IOHandler`)
 
 ### Negative Vocab List (PoC)
@@ -136,30 +136,26 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
   - [x] [ ] [ ] Confirm session written (show file path)
 - [x] [ ] [ ] Manual end-to-end test: run one full session, verify DB row and YAML file written correctly
 
-### CI
-- [ ] [ ] [ ] `.github/workflows/ci.yml` — install deps, run `pytest tests/` on every push (unit tests only; exclude `tests/judge/`)
-- [ ] [ ] [ ] Document three test tiers in README: unit (CI, mocked), judge (manual, LLM calls), regression (manual, real fixtures)
-
 ---
 
 ## Layer 1a — Full Evaluator Pipeline
 
 ### Steps 1–4 — Detect, Classify, Explain, Correct
-- [x] [ ] [ ] `skills/detect_mistakes/skill.py` — Step 1: Raw Mistake Detector
-  - [x] [ ] [ ] Prompt in `skills/detect_mistakes/prompts.py`; CEFR context injected via `lang.loader.get_cefr_context(language, level)`
-  - [x] [ ] [ ] Returns `list[dict]` with `fragment` and `error_type_hint` fields
-  - [x] [ ] [ ] Handles empty mistake list and malformed LLM JSON gracefully
-- [x] [ ] [ ] `skills/classify_mistakes/skill.py` — Step 2: Mistake Classifier
-  - [x] [ ] [ ] Classifies each mistake with `error_tag` via `lang.loader.get_taxonomy()`; uses `taxonomy.format_for_prompt()` and `taxonomy.validate_tag()` with `TaxonomyError` → `"other"` fallback
-  - [x] [ ] [ ] Adds `correction` field to each mistake
-- [x] [ ] [ ] `skills/explain_mistakes/skill.py` — Step 3: Explanation Generator
-  - [x] [ ] [ ] Adds `explanation` field pitched to user's level; short-circuits gracefully if mistake list is empty
-- [x] [ ] [ ] `skills/write_correction/skill.py` — Step 4: Correction Writer
-  - [x] [ ] [ ] Returns `corrected_text`, `recommendations[]`, `comment`; correction derived from structured mistakes, not regenerated freeform
-- [x] [ ] [ ] `WritingModule._run_pipeline()` wires Steps 1–4; `_build_results()` assembles full `WritingSessionContent`
-- [x] [ ] [ ] **Writing fixture set** — minimum 3 verified input/output pairs (`tests/fixtures/writing_pairs.json`)
-- [x] [ ] [ ] `tests/writing/test_writing_pipeline.py` — unit tests for Steps 2, 3, 4 (mocked LLM, offline)
-- [x] [ ] [ ] `tests/writing/test_writing.py` — unit tests for `WritingModule` helper methods
+- [x] [x] [ ] `skills/detect_mistakes/skill.py` — Step 1: Raw Mistake Detector
+  - [x] [x] [ ] Prompt in `skills/detect_mistakes/prompts.py`; CEFR context injected via `lang.loader.get_cefr_context(language, level)`
+  - [x] [x] [ ] Returns `list[dict]` with `fragment` and `error_type_hint` fields
+  - [x] [x] [ ] Handles empty mistake list and malformed LLM JSON gracefully
+- [x] [x] [ ] `skills/classify_mistakes/skill.py` — Step 2: Mistake Classifier
+  - [x] [x] [ ] Classifies each mistake with `error_tag` via `lang.loader.get_taxonomy()`; uses `taxonomy.format_for_prompt()` and `taxonomy.validate_tag()` with `TaxonomyError` → `"other"` fallback
+  - [x] [x] [ ] Adds `correction` field to each mistake
+- [x] [x] [ ] `skills/explain_mistakes/skill.py` — Step 3: Explanation Generator
+  - [x] [x] [ ] Adds `explanation` field pitched to user's level; short-circuits gracefully if mistake list is empty
+- [x] [x] [ ] `skills/write_correction/skill.py` — Step 4: Correction Writer
+  - [x] [x] [ ] Returns `corrected_text`, `recommendations[]`, `comment`; correction derived from structured mistakes, not regenerated freeform
+- [x] [x] [ ] `WritingModule._run_pipeline()` wires Steps 1–4; `_build_results()` assembles full `WritingSessionContent`
+- [x] [x] [ ] **Writing fixture set** — minimum 3 verified input/output pairs (`tests/fixtures/writing_pairs.json`)
+- [x] [x] [ ] `tests/writing/test_writing_pipeline.py` — unit tests for Steps 2, 3, 4 (mocked LLM, offline)
+- [x] [x] [ ] `tests/writing/test_writing.py` — unit tests for `WritingModule` helper methods
 - [ ] [ ] [ ] `tests/judge/judge_detector.py` — judge for Step 1 output quality
 - [ ] [ ] [ ] `tests/judge/judge_evaluator.py` — judges for Steps 2, 3, 4 (separate criteria per step)
 - [ ] [ ] [ ] Run each judge 5× on same fixture; verify variance is acceptable; document threshold
@@ -328,6 +324,13 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 - [ ] [ ] [ ] Demo video — one complete end-to-end session (≤5 min): startup → recommendation → writing → feedback → file written
 - [ ] [ ] [ ] Verify code link is accessible
 - [ ] [ ] [ ] Submit before July 7, 11:59 PM PT (= Tuesday July 8, 08:59 AM GMT+2)
+
+---
+
+## CI (post-submission)
+
+- [ ] [ ] [ ] `.github/workflows/ci.yml` — install deps, run `pytest tests/` on every push (unit tests only; exclude `tests/judge/`)
+- [ ] [ ] [ ] Document three test tiers in README: unit (CI, mocked), judge (manual, LLM calls), regression (manual, real fixtures)
 
 ---
 

@@ -11,6 +11,18 @@ from memory.factory import build_storage
 from llm.factory import build_llm
 from orchestrator.orchestrator import Orchestrator
 
+def _language_config_warning(language: str, missing: list) -> None:
+    print(f"\n[!] No language-specific configuration found for '{language.upper()}'.")
+    print(f"    Falling back to generic defaults for: {', '.join(missing)}.")
+    print(f"    To configure: add lang/languages/{language.lower()}.yaml and the referenced maps.")
+    print( "    Feedback quality may be lower than with a language-specific setup.")
+    try:
+        input("\n    Press Enter to continue with defaults, or Ctrl+C to exit: ")
+    except KeyboardInterrupt:
+        print("\nExiting. Configure the language maps and restart.")
+        raise
+
+
 def main():
     if len(sys.argv) > 1:
         cmd = sys.argv[1].strip().lower()
@@ -47,7 +59,7 @@ def main():
     while True:
         try:
             # Run the full session flow (includes startup check, active language selection, etc.)
-            orchestrator.run_session(user_id, language=None)
+            orchestrator.run_session(user_id, language=None, on_language_warning=_language_config_warning)
         except KeyboardInterrupt:
             print("\n\nExiting active tutoring session. Goodbye!")
             break
