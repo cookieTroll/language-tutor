@@ -1,4 +1,11 @@
 import sys
+import os
+
+# Add the project root to sys.path so config and other top-level modules resolve correctly
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from config import load_config
 from memory.factory import build_storage
 from llm.factory import build_llm
