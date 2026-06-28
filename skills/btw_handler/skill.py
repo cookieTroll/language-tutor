@@ -56,7 +56,8 @@ class BtwHandlerSkill(SkillProtocol):
                 content=(
                     f"You are a helpful, brief {lang_cap} tutor. "
                     "You explain grammar and vocabulary concepts to students. "
-                    f"Always write your explanations in English, using {lang_cap} only for translations, vocabulary words, and examples."
+                    f"Always write your explanations in English, using {lang_cap} only for translations, vocabulary words, and examples. "
+                    f"CRITICAL: Never invent or hallucinate words in {lang_cap}. If you do not know the exact translation or grammar rule, state that you do not know."
                 )
             ),
             LLMMessage(role="user", content=prompt)

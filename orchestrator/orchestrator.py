@@ -309,7 +309,6 @@ class Orchestrator(OrchestratorProtocol):
         rel_path = self.store.write_file(file_content, self.config.data_root)
 
         # 9 & 10. Update session state and write final session result
-        result.file_path = rel_path
         self.store.update_session_status(session_id, "completed")
         
         final_log = SessionLog(
