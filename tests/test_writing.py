@@ -90,3 +90,36 @@ def test_btw_handler_llm_fallback_extraction():
     assert output.metadata["answer"] == "Yes, 'aufstehen' is a separable verb."
     assert output.metadata["flagged_word"] == "aufstehen"
     assert llm.complete.call_count == 2
+
+def test_detect_mistakes_self_correction_retry():
+    from skills.detect_mistakes.skill import DetectMistakesSkill
+    
+    llm = MagicMock(spec=BaseLLM)
+    llm.config = MagicMock()
+    llm.config.show_incomplete_responses = True
+    llm.config.show_cut_by_limit_tag = True
+    
+    # 1st response: malformed JSON
+    resp_bad = LLMResponse(text='{"mistakes": [{"fragment": "Ich aufstehen"', model="test-model")
+    # 2nd response: correct JSON
+    resp_good = LLMResponse(text='{"mistakes": [{"fragment": "Ich aufstehen", "error_type_hint": "verb"}]}', model="test-model")
+    
+    llm.complete.side_effect = [resp_bad, resp_good]
+    
+    skill = DetectMistakesSkill()
+    inp = SkillInput(
+        user_id="user1",
+        level="a1",
+        parameters={
+            "user_text": "Ich aufstehen um 7 Uhr.",
+            "writing_prompt": "Describe your morning",
+            "recurring_errors": []
+        }
+    )
+    
+    output = skill.run(inp, llm)
+    
+    assert output.success is True
+    assert len(output.metadata["raw_mistakes"]) == 1
+    assert output.metadata["raw_mistakes"][0]["fragment"] == "Ich aufstehen"
+    assert llm.complete.call_count == 2
