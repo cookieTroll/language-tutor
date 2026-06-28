@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from config import AppConfig
 from memory.protocols import StorageProtocol, SessionLog, BtwEntry, VocabFlag, UserProfile
+from modules.protocols import ModuleContext
 from llm.base import BaseLLM, LLMMessage
 from orchestrator.protocols import OrchestratorProtocol, ProgressSummary, ExerciseRecommendation
 from orchestrator.prompts import INTERRUPTION_SUMMARY_PROMPT
@@ -142,7 +143,53 @@ class Orchestrator(OrchestratorProtocol):
         # 0. Check interrupted sessions
         self._handle_interruption(user_id)
 
-        # 1. Language Selection Flow
+        # 1. Select language and user profile
+        selected_lang, profile = self._select_language_and_profile(user_id, language)
+
+        # 2 & 3. Summarize and recommend
+        summary = self.summarize_progress(user_id, selected_lang)
+        recommendation = self.recommend_exercise(summary)
+
+        # 4. Present recommendation, confirm or override
+        module_key = self._get_confirmed_module(recommendation)
+        module = MODULE_REGISTRY[module_key]
+
+        # 5. Write-ahead session initialization
+        session_id = self._init_write_ahead_log(user_id, selected_lang, module_key, profile)
+
+        # 6. ContextRequest fulfillment
+        ctx = self._build_module_context(user_id, selected_lang, module_key, profile, module.context_request())
+
+        # Create checkpoint directory & initial checkpoint setup
+        checkpoint_dir = os.path.join(self.config.data_root, "checkpoints", user_id)
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        checkpoint_path = os.path.join(checkpoint_dir, f"{session_id}.json")
+        
+        # Write initial empty checkpoint file
+        with open(checkpoint_path, "w", encoding="utf-8") as f:
+            json.dump([], f)
+
+        # 7. Run module
+        try:
+            # We pass checkpoint path in ctx parameters for module to write if needed
+            ctx.parameters["checkpoint_path"] = checkpoint_path
+            
+            result, file_content = module.run(ctx, self.llm)
+            
+            # Update result with actual session_id assigned by orchestrator write-ahead
+            result.session_id = session_id
+            file_content.session_id = session_id
+            
+        except KeyboardInterrupt:
+            # Mark session as interrupted if aborted
+            self.store.update_session_status(session_id, "in_progress") # Keep as in_progress to trigger step 0 check
+            print("\n[!] Session interrupted. You can resume or log it next time.")
+            return
+
+        # 8-13. Finalize session (write YAML file, update DB log, BTW logs, vocab flags, delete checkpoint)
+        self._finalize_session(user_id, selected_lang, module_key, session_id, profile, result, file_content, checkpoint_path)
+
+    def _select_language_and_profile(self, user_id: str, language: str) -> tuple[str, UserProfile]:
         active_lang = self.store.get_active_language(user_id)
         selected_lang = language
         
@@ -173,12 +220,10 @@ class Orchestrator(OrchestratorProtocol):
             profile.active = True
             profile.updated_at = datetime.now()
             self.store.write_user_profile(profile)
+            
+        return selected_lang, profile
 
-        # 2 & 3. Summarize and recommend
-        summary = self.summarize_progress(user_id, selected_lang)
-        recommendation = self.recommend_exercise(summary)
-
-        # 4. Present recommendation, confirm or override
+    def _get_confirmed_module(self, recommendation: ExerciseRecommendation) -> str:
         print(f"\n[Recommendation]: We suggest using the '{recommendation.module.upper()}' module.")
         print(f"Reason: {recommendation.reason}")
         
@@ -192,10 +237,10 @@ class Orchestrator(OrchestratorProtocol):
                 module_key = override
             else:
                 print(f"[!] Invalid module. Falling back to suggested module '{module_key}'.")
+                
+        return module_key
 
-        module = MODULE_REGISTRY[module_key]
-
-        # 5. Write-ahead session initialization
+    def _init_write_ahead_log(self, user_id: str, selected_lang: str, module_key: str, profile: UserProfile) -> str:
         session_id = str(uuid.uuid4())
         initial_log = SessionLog(
             user_id=user_id,
@@ -213,10 +258,11 @@ class Orchestrator(OrchestratorProtocol):
             started_at=datetime.now()
         )
         self.store.write_session(initial_log)
+        return session_id
 
-        # 6. ContextRequest fulfillment
-        req = module.context_request()
-        
+    def _build_module_context(
+        self, user_id: str, selected_lang: str, module_key: str, profile: UserProfile, req
+    ) -> ModuleContext:
         recent_sessions = []
         if req.recent_sessions_n > 0:
             recent_sessions = self.store.get_recent_sessions(user_id, selected_lang, req.recent_sessions_n)
@@ -238,7 +284,7 @@ class Orchestrator(OrchestratorProtocol):
                 for f in self.store.get_vocab_flags(user_id, selected_lang)
             ]
 
-        ctx = ModuleContext(
+        return ModuleContext(
             user_id=user_id,
             language=selected_lang,
             level=profile.level,
@@ -249,32 +295,10 @@ class Orchestrator(OrchestratorProtocol):
             parameters={}
         )
 
-        # Create checkpoint directory & initial checkpoint setup (stub/placeholder for actual run loop)
-        checkpoint_dir = os.path.join(self.config.data_root, "checkpoints", user_id)
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_path = os.path.join(checkpoint_dir, f"{session_id}.json")
-        
-        # Write initial empty checkpoint file
-        with open(checkpoint_path, "w", encoding="utf-8") as f:
-            json.dump([], f)
-
-        # 7. Run module
-        try:
-            # We pass checkpoint path in ctx parameters for module to write if needed
-            ctx.parameters["checkpoint_path"] = checkpoint_path
-            
-            result, file_content = module.run(ctx, self.llm)
-            
-            # Update result with actual session_id assigned by orchestrator write-ahead
-            result.session_id = session_id
-            file_content.session_id = session_id
-            
-        except KeyboardInterrupt:
-            # Mark session as interrupted if aborted
-            self.store.update_session_status(session_id, "in_progress") # Keep as in_progress to trigger step 0 check
-            print("\n[!] Session interrupted. You can resume or log it next time.")
-            return
-
+    def _finalize_session(
+        self, user_id: str, selected_lang: str, module_key: str, session_id: str,
+        profile: UserProfile, result, file_content, checkpoint_path: str
+    ) -> None:
         # 8. Write YAML session file
         rel_path = self.store.write_file(file_content, self.config.data_root)
 

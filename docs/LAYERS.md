@@ -74,6 +74,7 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 
 ### Skills
 - `skills/pick_topic/` — Topic Picker skill
+- `skills/summarize_progress/` — Progress Summary skill
 
 ### Module
 - `modules/writing/agent.py` — updated: topic picker wired, context request expanded

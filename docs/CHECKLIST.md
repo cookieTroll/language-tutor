@@ -108,13 +108,14 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 - [x] [ ] [ ] Unit test: `write_vocab_flag()` increments count on duplicate, does not insert new row
 
 ### Session History Aggregation (Layer 1b)
-- [x] [ ] [ ] `storage.get_session_aggregate()` or equivalent — returns structured profile (sessions by skill, recency, time, recurring errors, recent topics, vocab flag count)
-- [x] [ ] [ ] Orchestrator uses aggregate as input to progress summary LLM prompt
-- [x] [ ] [ ] Writing skill `ContextRequest` requests error_frequency, recent_topics, vocab_flags
-- [x] [ ] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
-- [x] [ ] [ ] Evaluator Step 1 prompt primed with recurring errors from context
-- [x] [ ] [ ] `suggested_focus` recorded in session file for traceability
-- [x] [ ] [ ] Unit test: aggregate computed correctly from mixed session history
+- [ ] [ ] [ ] `storage.get_session_aggregate()` or equivalent — returns structured profile (sessions by skill, recency, time, recurring errors, recent topics, vocab flag count)
+- [ ] [ ] [ ] Convert progress summary logic into a dedicated skill `skills/summarize_progress` (LLM-driven aggregation & analysis)
+- [ ] [ ] [ ] Orchestrator uses `summarize_progress` skill to build progress summary
+- [ ] [ ] [ ] Writing skill `ContextRequest` requests error_frequency, recent_topics, vocab_flags
+- [ ] [ ] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
+- [ ] [ ] [ ] Evaluator Step 1 prompt primed with recurring errors from context
+- [ ] [ ] [ ] `suggested_focus` recorded in session file for traceability
+- [ ] [ ] [ ] Unit test: aggregate computed correctly from mixed session history
 
 ### Interruption — Resume/Log/Discard (PoC)
 - [x] [ ] [ ] Checkpoint file written incrementally during `skill.run()` — each turn appended to `data/checkpoints/{user_id}/{session_id}.json`
