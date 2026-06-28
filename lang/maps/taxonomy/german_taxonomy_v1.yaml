@@ -1,0 +1,15 @@
+# German error classification taxonomy — version 1
+# Used by: lang/languages/german.yaml (taxonomy: german_taxonomy_v1)
+# Descriptions are injected verbatim into the classifier prompt (skills/classify_mistakes).
+# To revise without breaking language configs, create german_taxonomy_v2.yaml
+# and update the language config to point to the new version.
+
+tags:
+  noun_declension: "Noun case endings — nominative, accusative, dative, or genitive inflection"
+  adjective_declension: "Adjective endings — strong, weak, or mixed inflection after articles"
+  article: "Article error — wrong gender, wrong case, or missing article"
+  verb_conjugation: "Verb conjugation error — person/number agreement, separable verb splitting, modal verb usage"
+  verb_tense: "Wrong tense selection — e.g. Perfekt vs Präteritum, Konjunktiv, Futur"
+  vocabulary: "Wrong word choice, false friend, or register mismatch"
+  spelling: "Spelling error — capitalisation, umlauts, compound words"
+  other: "Error does not clearly fit any category above — use as last resort"

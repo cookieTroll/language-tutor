@@ -18,4 +18,7 @@ dependencies = [
 ltut = "ui.cli:main"
 
 [tool.setuptools]
-packages = ["ui", "llm", "memory", "skills", "modules", "orchestrator"]
+packages = ["ui", "llm", "memory", "skills", "modules", "orchestrator", "shared", "lang"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

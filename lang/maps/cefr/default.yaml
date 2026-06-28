@@ -1,0 +1,12 @@
+# Default CEFR pedagogical hints — language-agnostic fallback
+# Used automatically when no language-specific CEFR map is configured.
+# If this map is active for your language, consider adding a dedicated map
+# in lang/maps/cefr/ and wiring it in lang/languages/{language}.yaml.
+
+a1: "Focus on basic grammar, spelling, and vocabulary."
+a2: "Focus on grammar accuracy, spelling, and vocabulary range."
+b1: "Focus on grammar, tense usage, vocabulary, and sentence structure."
+b2: "Focus on grammar precision, vocabulary, complex structures, and style."
+c1: "Focus on idiomatic usage, register, complex grammar, and vocabulary precision."
+c2: "Focus on near-native precision, register, style, and idiomatic expression."
+default: "Identify all grammatical, lexical, and spelling errors."

@@ -3,6 +3,7 @@ import re
 from skills.protocols import SkillProtocol, SkillInput, SkillOutput
 from llm.base import BaseLLM, LLMMessage
 from skills.detect_mistakes.prompts import DETECT_MISTAKES_PROMPT
+from lang.loader import get_cefr_context
 
 class DetectMistakesSkill(SkillProtocol):
     name = "detect_mistakes"
@@ -24,12 +25,16 @@ class DetectMistakesSkill(SkillProtocol):
 
         language = input.parameters.get("language", "German").capitalize()
 
+        recurring_errors_text = (
+            ", ".join(recurring_errors) if recurring_errors else "none identified yet"
+        )
         prompt = DETECT_MISTAKES_PROMPT.format(
             level=input.level,
             language=language,
+            cefr_context=get_cefr_context(language, input.level),
             writing_prompt=writing_prompt,
-            recurring_errors=str(recurring_errors),
-            user_text=user_text
+            recurring_errors=recurring_errors_text,
+            user_text=user_text,
         )
 
         messages = [

@@ -1,0 +1,12 @@
+# Default error taxonomy — language-agnostic fallback
+# Used automatically when no language-specific taxonomy is configured.
+# Categories are intentionally broad; language-specific maps should
+# replace these with finer-grained tags (see e.g. german_taxonomy_v1.yaml).
+# If this taxonomy is active for your language, consider adding a dedicated
+# map in lang/maps/taxonomy/ and wiring it in lang/languages/{language}.yaml.
+
+tags:
+  grammar: "General grammatical error — morphology, syntax, or agreement"
+  vocabulary: "Wrong word choice, false friend, or register mismatch"
+  spelling: "Spelling error"
+  other: "Error does not clearly fit any category above — use as last resort"

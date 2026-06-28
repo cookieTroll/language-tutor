@@ -1,4 +1,6 @@
-DETECT_MISTAKES_PROMPT = """You are a German language teacher evaluating a {level} learner's writing.
+DETECT_MISTAKES_PROMPT = """You are evaluating a {level} {language} learner's writing.
+
+Level guidance: {cefr_context}
 
 Task given to the student:
 {writing_prompt}

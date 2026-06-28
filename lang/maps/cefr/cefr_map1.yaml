@@ -1,0 +1,13 @@
+# CEFR pedagogical focus hints — map version 1
+# Used by: lang/languages/german.yaml (cefr_hints: cefr_map1)
+# Hint strings reference error tags from skills/detect_mistakes/taxonomy.py.
+# To revise content without breaking existing language configs, create cefr_map2.yaml
+# and update the language config to point to the new version.
+
+a1: "Focus on verb_conjugation, article, spelling, and basic vocabulary."
+a2: "Focus on verb_conjugation, article, basic noun_declension, and spelling."
+b1: "Focus on noun_declension, adjective_declension, verb_tense, and verb_conjugation (separable and modal verbs)."
+b2: "Focus on noun_declension, adjective_declension, verb_tense, complex sentence structure, and vocabulary precision."
+c1: "Focus on subtle vocabulary choices, register, idiomatic usage, and complex subordinate clause structure."
+c2: "Focus on register, stylistic nuance, idiomatic precision, and near-native correctness."
+default: "Identify all grammatical, lexical, and spelling errors appropriate to the learner's level."
