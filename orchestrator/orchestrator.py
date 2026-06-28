@@ -294,7 +294,7 @@ class Orchestrator(OrchestratorProtocol):
             error_frequency=error_frequency,
             recent_topics=recent_topics,
             vocab_flags=vocab_flags,
-            parameters={}
+            parameters={"ui_mode": "cli"}
         )
 
     def _finalize_session(

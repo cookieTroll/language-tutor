@@ -73,8 +73,11 @@ class WritingModule(ModuleProtocol):
         print(f"Topic: {topic}")
         print(f"Requirements: {requirements}")
         print("--------------------------------------------------")
-        print("Type your text below. To submit, type an empty line.")
-        print("To ask a question mid-writing, type it on a new line prefixed with '/btw ' (e.g. /btw what does aufstehen mean?).")
+        ui_mode = ctx.parameters.get("ui_mode", "cli")
+        print("Type your text below. To submit, press Enter on an empty line.")
+        if ui_mode == "cli":
+            print("To ask a question mid-writing, type it on a new line prefixed with '/btw ' (e.g. /btw what does aufstehen mean?).")
+            print("To quit or interrupt the session at any point, press Ctrl + C.")
         print("==================================================\n")
 
         user_lines = []
