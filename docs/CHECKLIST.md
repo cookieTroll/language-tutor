@@ -12,138 +12,138 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 ## PoC
 
 ### Repo & Config
-- [ ] [ ] [ ] Create repo, add `DESIGN.md`, `TODO.md`, `CHECKLIST.md`, `.gitignore` (`data/`, `.env`, `__pycache__`)
-- [ ] [ ] [ ] `requirements.txt` — `google-generativeai`, `pyyaml`, `pytest`, minimum deps only for now
-- [ ] [ ] [ ] `config.yaml` — `data_root`, `default_level`, `cold_start_threshold`, `interruption_timeout_minutes`, `storage_backend` (`sqlite` | `json`)
-- [ ] [ ] [ ] Config loader with basic validation (required fields present, storage_backend is valid value)
+- [x] [ ] [ ] Create repo, add `DESIGN.md`, `TODO.md`, `CHECKLIST.md`, `.gitignore` (`data/`, `.env`, `__pycache__`)
+- [x] [ ] [ ] `requirements.txt` — `google-generativeai`, `pyyaml`, `pytest`, minimum deps only for now
+- [x] [ ] [ ] `config.yaml` — `data_root`, `default_level`, `cold_start_threshold`, `interruption_timeout_minutes`, `storage_backend` (`sqlite` | `json`)
+- [x] [ ] [ ] Config loader with basic validation (required fields present, storage_backend is valid value)
 
 ### Contracts / Protocols
-- [ ] [ ] [ ] `memory/protocols.py` — `SessionLog`, `SessionFileContent` (abstract base + `to_dict()`), `WritingSessionContent`, `StorageProtocol`
-- [ ] [ ] [ ] `skills/protocols.py` — `ContextRequest`, `SkillContext`, `SkillResult`, `SkillProtocol`
-- [ ] [ ] [ ] `orchestrator/protocols.py` — `ProgressSummary`, `ExerciseRecommendation`, `OrchestratorProtocol`
-- [ ] [ ] [ ] Verify all dataclasses have type annotations; no untyped fields
+- [x] [ ] [ ] `memory/protocols.py` — `SessionLog`, `SessionFileContent` (abstract base + `to_dict()`), `WritingSessionContent`, `StorageProtocol`
+- [x] [ ] [ ] `skills/protocols.py` — `ContextRequest`, `SkillContext`, `SkillResult`, `SkillProtocol`
+- [x] [ ] [ ] `orchestrator/protocols.py` — `ProgressSummary`, `ExerciseRecommendation`, `OrchestratorProtocol`
+- [x] [ ] [ ] Verify all dataclasses have type annotations; no untyped fields
 
 ### Memory — Storage Layer
-- [ ] [ ] [ ] `memory/schema.sql` — `sessions` table (including `status`, `started_at`), `errors` table, `user_levels` table
-- [ ] [ ] [ ] `memory/sqlite_store.py` — implement `StorageProtocol`:
-  - [ ] [ ] [ ] `write_session()` — insert or update sessions row
-  - [ ] [ ] [ ] `write_file()` — serialize `SessionFileContent.to_dict()` to YAML, write to temp path, atomic rename, return relative path
-  - [ ] [ ] [ ] `update_session_status()` — update status field, validate against allowed values
-  - [ ] [ ] [ ] `get_recent_sessions()`
-  - [ ] [ ] [ ] `get_sessions_by_skill()`
-  - [ ] [ ] [ ] `get_error_frequency()`
-  - [ ] [ ] [ ] `get_recent_topics()`
-  - [ ] [ ] [ ] `get_interrupted_sessions()` — query `in_progress` older than timeout
-  - [ ] [ ] [ ] `get_current_level()` — most recent row from `user_levels`
-  - [ ] [ ] [ ] `write_level()`
-- [ ] [ ] [ ] `memory/json_store.py` — same interface, JSON file backend for dev/test
-- [ ] [ ] [ ] `data/sessions/`, `data/summaries/`, `data/checkpoints/` directories created by store on first run
+- [x] [ ] [ ] `memory/schema.sql` — `sessions` table (including `status`, `started_at`), `errors` table, `user_levels` table
+- [x] [ ] [ ] `memory/sqlite_store.py` — implement `StorageProtocol`:
+  - [x] [ ] [ ] `write_session()` — insert or update sessions row
+  - [x] [ ] [ ] `write_file()` — serialize `SessionFileContent.to_dict()` to YAML, write to temp path, atomic rename, return relative path
+  - [x] [ ] [ ] `update_session_status()` — update status field, validate against allowed values
+  - [x] [ ] [ ] `get_recent_sessions()`
+  - [x] [ ] [ ] `get_sessions_by_skill()`
+  - [x] [ ] [ ] `get_error_frequency()`
+  - [x] [ ] [ ] `get_recent_topics()`
+  - [x] [ ] [ ] `get_interrupted_sessions()` — query `in_progress` older than timeout
+  - [x] [ ] [ ] `get_current_level()` — most recent row from `user_levels`
+  - [x] [ ] [ ] `write_level()`
+- [x] [ ] [ ] `memory/json_store.py` — same interface, JSON file backend for dev/test
+- [x] [ ] [ ] `data/sessions/`, `data/summaries/`, `data/checkpoints/` directories created by store on first run
 
 ### Storage Unit Tests
-- [ ] [ ] [ ] `tests/test_storage.py`:
-  - [ ] [ ] [ ] Write session → read back → assert all fields equal (SQLite and JSON store)
-  - [ ] [ ] [ ] `get_error_frequency()` aggregates correctly across multiple sessions
-  - [ ] [ ] [ ] `update_session_status()` transitions correctly; rejects invalid status
-  - [ ] [ ] [ ] `get_interrupted_sessions()` returns only `in_progress` records older than timeout
-  - [ ] [ ] [ ] `get_recent_topics()` returns correct n most recent, filtered by skill
-  - [ ] [ ] [ ] Atomic write: no `.tmp` file exists after successful write
-  - [ ] [ ] [ ] Relative file path resolves correctly against `data_root`
-  - [ ] [ ] [ ] `get_current_level()` returns most recent row when multiple exist
+- [x] [ ] [ ] `tests/test_storage.py`:
+  - [x] [ ] [ ] Write session → read back → assert all fields equal (SQLite and JSON store)
+  - [x] [ ] [ ] `get_error_frequency()` aggregates correctly across multiple sessions
+  - [x] [ ] [ ] `update_session_status()` transitions correctly; rejects invalid status
+  - [x] [ ] [ ] `get_interrupted_sessions()` returns only `in_progress` records older than timeout
+  - [x] [ ] [ ] `get_recent_topics()` returns correct n most recent, filtered by skill
+  - [x] [ ] [ ] Atomic write: no `.tmp` file exists after successful write
+  - [x] [ ] [ ] Relative file path resolves correctly against `data_root`
+  - [x] [ ] [ ] `get_current_level()` returns most recent row when multiple exist
 
 ### Skill Registry
-- [ ] [ ] [ ] `skills/registry.py` — `MODULE_REGISTRY` dict, `get_registry_description()`
-- [ ] [ ] [ ] `modules/writing/__init__.py`, `modules/writing/skill.py` — stub `WritingModule` implementing `SkillProtocol` (returns hardcoded result for now)
-- [ ] [ ] [ ] `tests/test_registry.py`:
-  - [ ] [ ] [ ] All registered skills implement `SkillProtocol` (check for required attributes and methods)
-  - [ ] [ ] [ ] `get_registry_description()` includes all registry keys
+- [x] [ ] [ ] `skills/registry.py` — `MODULE_REGISTRY` dict, `get_registry_description()`
+- [x] [ ] [ ] `modules/writing/__init__.py`, `modules/writing/skill.py` — stub `WritingModule` implementing `SkillProtocol` (returns hardcoded result for now)
+- [x] [ ] [ ] `tests/test_registry.py`:
+  - [x] [ ] [ ] All registered skills implement `SkillProtocol` (check for required attributes and methods)
+  - [x] [ ] [ ] `get_registry_description()` includes all registry keys
 
 ### Error Taxonomy
-- [ ] [ ] [ ] `modules/writing/taxonomy.py` — `ERROR_TAXONOMY` set, `validate_error_tag(tag)` function
-- [ ] [ ] [ ] `tests/test_taxonomy.py`:
-  - [ ] [ ] [ ] Validator accepts all defined tags
-  - [ ] [ ] [ ] Validator rejects unknown tag, raises with informative message
+- [x] [ ] [ ] `modules/writing/taxonomy.py` — `ERROR_TAXONOMY` set, `validate_error_tag(tag)` function
+- [x] [ ] [ ] `tests/test_taxonomy.py`:
+  - [x] [ ] [ ] Validator accepts all defined tags
+  - [x] [ ] [ ] Validator rejects unknown tag, raises with informative message
 
 ### Orchestrator Skeleton (PoC — cold start only)
-- [ ] [ ] [ ] `orchestrator/orchestrator.py` — implement `OrchestratorProtocol`:
-  - [ ] [ ] [ ] Startup: call `get_interrupted_sessions()`, surface to user if any found
-  - [ ] [ ] [ ] `summarize_progress()` — return `None` if sessions < `cold_start_threshold`
-  - [ ] [ ] [ ] `recommend_exercise()` — if summary is `None`, return `DEFAULT_RECOMMENDATION`
-  - [ ] [ ] [ ] `run_session()` — full 9-step loop (see DESIGN.md):
-    - [ ] [ ] [ ] Step 0: interrupted session check
-    - [ ] [ ] [ ] Steps 1–3: summarize + recommend + user confirmation
-    - [ ] [ ] [ ] Step 4: write-ahead `in_progress` record
-    - [ ] [ ] [ ] Steps 5–6: fulfill `ContextRequest`, call `skill.run()`
-    - [ ] [ ] [ ] Step 7: atomic file write
-    - [ ] [ ] [ ] Step 8–9: update status to `completed`, update DB record
-- [ ] [ ] [ ] `tests/test_orchestrator.py`:
-  - [ ] [ ] [ ] Cold start returns `DEFAULT_RECOMMENDATION` when sessions = 0
-  - [ ] [ ] [ ] Cold start returns `DEFAULT_RECOMMENDATION` when sessions < threshold
-  - [ ] [ ] [ ] Cold start does NOT trigger when sessions >= threshold
-  - [ ] [ ] [ ] Interrupted session detection surfaces correct records
-  - [ ] [ ] [ ] Invalid skill name from LLM falls back to default (mock LLM response)
+- [x] [ ] [ ] `orchestrator/orchestrator.py` — implement `OrchestratorProtocol`:
+  - [x] [ ] [ ] Startup: call `get_interrupted_sessions()`, surface to user if any found
+  - [x] [ ] [ ] `summarize_progress()` — return `None` if sessions < `cold_start_threshold`
+  - [x] [ ] [ ] `recommend_exercise()` — if summary is `None`, return `DEFAULT_RECOMMENDATION`
+  - [x] [ ] [ ] `run_session()` — full 9-step loop (see DESIGN.md):
+    - [x] [ ] [ ] Step 0: interrupted session check
+    - [x] [ ] [ ] Steps 1–3: summarize + recommend + user confirmation
+    - [x] [ ] [ ] Step 4: write-ahead `in_progress` record
+    - [x] [ ] [ ] Steps 5–6: fulfill `ContextRequest`, call `skill.run()`
+    - [x] [ ] [ ] Step 7: atomic file write
+    - [x] [ ] [ ] Step 8–9: update status to `completed`, update DB record
+- [x] [ ] [ ] `tests/test_orchestrator.py`:
+  - [x] [ ] [ ] Cold start returns `DEFAULT_RECOMMENDATION` when sessions = 0
+  - [x] [ ] [ ] Cold start returns `DEFAULT_RECOMMENDATION` when sessions < threshold
+  - [x] [ ] [ ] Cold start does NOT trigger when sessions >= threshold
+  - [x] [ ] [ ] Interrupted session detection surfaces correct records
+  - [x] [ ] [ ] Invalid skill name from LLM falls back to default (mock LLM response)
 
 ### `/btw` Command (PoC)
-- [ ] [ ] [ ] `skills/btw/handler.py` — `BtwHandler.answer(question, session_context)` → LLM call with context-aware prompt
-- [ ] [ ] [ ] `skills/btw/prompts.py` — prompt template that injects current skill, topic, and user text so far
-- [ ] [ ] [ ] Word extraction from `/btw` question → `flagged_word` (regex + LLM fallback)
-- [ ] [ ] [ ] Input loop in `skill.run()` detects `/btw` prefix, routes to handler, collects `BtwEntry`, continues session
-- [ ] [ ] [ ] Orchestrator post-session: `storage.write_btw()` for each entry in `result.metadata['btw_entries']`
-- [ ] [ ] [ ] `btw_log` written to session YAML file under `btw_log` key
-- [ ] [ ] [ ] Unit test: `/btw` input detected correctly, session loop continues after answer
+- [x] [ ] [ ] `skills/btw/handler.py` — `BtwHandler.answer(question, session_context)` → LLM call with context-aware prompt
+- [x] [ ] [ ] `skills/btw/prompts.py` — prompt template that injects current skill, topic, and user text so far
+- [x] [ ] [ ] Word extraction from `/btw` question → `flagged_word` (regex + LLM fallback)
+- [x] [ ] [ ] Input loop in `skill.run()` detects `/btw` prefix, routes to handler, collects `BtwEntry`, continues session
+- [x] [ ] [ ] Orchestrator post-session: `storage.write_btw()` for each entry in `result.metadata['btw_entries']`
+- [x] [ ] [ ] `btw_log` written to session YAML file under `btw_log` key
+- [x] [ ] [ ] Unit test: `/btw` input detected correctly, session loop continues after answer
 
 ### Session Clock (PoC)
-- [ ] [ ] [ ] `started_at` set in write-ahead record (already present)
-- [ ] [ ] [ ] `completed_at` set by orchestrator immediately after `skill.run()` returns
-- [ ] [ ] [ ] `duration_minutes` computed and stored in DB
-- [ ] [ ] [ ] `SkillResult` carries `started_at`, `completed_at`, `duration_minutes`
-- [ ] [ ] [ ] CLI: background thread displays `[MM:SS elapsed]` updating every second during session
-- [ ] [ ] [ ] UI (Layer 1c): timer widget in session header
+- [x] [ ] [ ] `started_at` set in write-ahead record (already present)
+- [x] [ ] [ ] `completed_at` set by orchestrator immediately after `skill.run()` returns
+- [x] [ ] [ ] `duration_minutes` computed and stored in DB
+- [x] [ ] [ ] `SkillResult` carries `started_at`, `completed_at`, `duration_minutes`
+- [x] [ ] [ ] CLI: background thread displays `[MM:SS elapsed]` updating every second during session
+- [x] [ ] [ ] UI (Layer 1c): timer widget in session header
 
 ### Negative Vocab List (PoC)
-- [ ] [ ] [ ] `vocab_flags` table in `schema.sql`
-- [ ] [ ] [ ] `storage.write_vocab_flag()` — insert or increment `occurrence_count` + update `last_seen`
-- [ ] [ ] [ ] `storage.get_vocab_flags()` implemented
-- [ ] [ ] [ ] Orchestrator post-session: writes vocab flags from `/btw` entries and evaluator `vocabulary` errors
-- [ ] [ ] [ ] `ContextRequest.include_vocab_flags` fulfilled by orchestrator, passed into `SkillContext`
-- [ ] [ ] [ ] Unit test: `write_vocab_flag()` increments count on duplicate, does not insert new row
+- [x] [ ] [ ] `vocab_flags` table in `schema.sql`
+- [x] [ ] [ ] `storage.write_vocab_flag()` — insert or increment `occurrence_count` + update `last_seen`
+- [x] [ ] [ ] `storage.get_vocab_flags()` implemented
+- [x] [ ] [ ] Orchestrator post-session: writes vocab flags from `/btw` entries and evaluator `vocabulary` errors
+- [x] [ ] [ ] `ContextRequest.include_vocab_flags` fulfilled by orchestrator, passed into `SkillContext`
+- [x] [ ] [ ] Unit test: `write_vocab_flag()` increments count on duplicate, does not insert new row
 
 ### Session History Aggregation (Layer 1b)
-- [ ] [ ] [ ] `storage.get_session_aggregate()` or equivalent — returns structured profile (sessions by skill, recency, time, recurring errors, recent topics, vocab flag count)
-- [ ] [ ] [ ] Orchestrator uses aggregate as input to progress summary LLM prompt
-- [ ] [ ] [ ] Writing skill `ContextRequest` requests error_frequency, recent_topics, vocab_flags
-- [ ] [ ] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
-- [ ] [ ] [ ] Evaluator Step 1 prompt primed with recurring errors from context
-- [ ] [ ] [ ] `suggested_focus` recorded in session file for traceability
-- [ ] [ ] [ ] Unit test: aggregate computed correctly from mixed session history
+- [x] [ ] [ ] `storage.get_session_aggregate()` or equivalent — returns structured profile (sessions by skill, recency, time, recurring errors, recent topics, vocab flag count)
+- [x] [ ] [ ] Orchestrator uses aggregate as input to progress summary LLM prompt
+- [x] [ ] [ ] Writing skill `ContextRequest` requests error_frequency, recent_topics, vocab_flags
+- [x] [ ] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
+- [x] [ ] [ ] Evaluator Step 1 prompt primed with recurring errors from context
+- [x] [ ] [ ] `suggested_focus` recorded in session file for traceability
+- [x] [ ] [ ] Unit test: aggregate computed correctly from mixed session history
 
 ### Interruption — Resume/Log/Discard (PoC)
-- [ ] [ ] [ ] Checkpoint file written incrementally during `skill.run()` — each turn appended to `data/checkpoints/{user_id}/{session_id}.json`
-- [ ] [ ] [ ] `status='interrupted'` added to valid status values; schema updated
-- [ ] [ ] [ ] On startup: detect `in_progress` sessions, present resume/log/discard prompt
-- [ ] [ ] [ ] "Log it" path: load transcript → LLM summarize → write partial session file with `status='interrupted'`
-- [ ] [ ] [ ] "Discard" path: delete checkpoint, mark `status='abandoned'`
-- [ ] [ ] [ ] "Resume" path: check `restore_checkpoint()` available on skill; if not, show unavailable message, fall back to log/discard
-- [ ] [ ] [ ] Checkpoint deleted on successful completion, log, or discard
-- [ ] [ ] [ ] Unit test: startup correctly identifies interrupted sessions; all three paths produce correct DB state
-- [ ] [ ] [ ] `modules/writing/detector.py` — Step 1: Raw Mistake Detector
-  - [ ] [ ] [ ] Prompt template in `modules/writing/prompts.py`
-  - [ ] [ ] [ ] Calls Gemini, parses JSON response
-  - [ ] [ ] [ ] Returns `list[dict]` with `fragment` and `error_type_hint` fields
-  - [ ] [ ] [ ] Handles empty mistake list (no errors found)
-  - [ ] [ ] [ ] Handles malformed LLM JSON response gracefully
-- [ ] [ ] [ ] `WritingSessionContent` — PoC version: populate `user_text` and raw `mistakes` only; other fields stubbed
-- [ ] [ ] [ ] `WritingModule.run()` — wire detector into skill, return `(SkillResult, WritingSessionContent)` with hardcoded topic
+- [x] [ ] [ ] Checkpoint file written incrementally during `skill.run()` — each turn appended to `data/checkpoints/{user_id}/{session_id}.json`
+- [x] [ ] [ ] `status='interrupted'` added to valid status values; schema updated
+- [x] [ ] [ ] On startup: detect `in_progress` sessions, present resume/log/discard prompt
+- [x] [ ] [ ] "Log it" path: load transcript → LLM summarize → write partial session file with `status='interrupted'`
+- [x] [ ] [ ] "Discard" path: delete checkpoint, mark `status='abandoned'`
+- [x] [ ] [ ] "Resume" path: check `restore_checkpoint()` available on skill; if not, show unavailable message, fall back to log/discard
+- [x] [ ] [ ] Checkpoint deleted on successful completion, log, or discard
+- [x] [ ] [ ] Unit test: startup correctly identifies interrupted sessions; all three paths produce correct DB state
+- [x] [ ] [ ] `modules/writing/detector.py` — Step 1: Raw Mistake Detector
+  - [x] [ ] [ ] Prompt template in `modules/writing/prompts.py`
+  - [x] [ ] [ ] Calls Gemini, parses JSON response
+  - [x] [ ] [ ] Returns `list[dict]` with `fragment` and `error_type_hint` fields
+  - [x] [ ] [ ] Handles empty mistake list (no errors found)
+  - [x] [ ] [ ] Handles malformed LLM JSON response gracefully
+- [x] [ ] [ ] `WritingSessionContent` — PoC version: populate `user_text` and raw `mistakes` only; other fields stubbed
+- [x] [ ] [ ] `WritingModule.run()` — wire detector into skill, return `(SkillResult, WritingSessionContent)` with hardcoded topic
 
 ### CLI (PoC)
-- [ ] [ ] [ ] `ui/cli.py`:
-  - [ ] [ ] [ ] Startup: load config, initialise storage, check for interrupted sessions
-  - [ ] [ ] [ ] Display orchestrator recommendation with reason
-  - [ ] [ ] [ ] Accept user confirmation or override
-  - [ ] [ ] [ ] Display hardcoded writing topic + requirements
-  - [ ] [ ] [ ] Accept multi-line user text input (blank line or sentinel to submit)
-  - [ ] [ ] [ ] Display raw mistake list from detector
-  - [ ] [ ] [ ] Confirm session written (show file path)
-- [ ] [ ] [ ] Manual end-to-end test: run one full session, verify DB row and YAML file written correctly
+- [x] [ ] [ ] `ui/cli.py`:
+  - [x] [ ] [ ] Startup: load config, initialise storage, check for interrupted sessions
+  - [x] [ ] [ ] Display orchestrator recommendation with reason
+  - [x] [ ] [ ] Accept user confirmation or override
+  - [x] [ ] [ ] Display hardcoded writing topic + requirements
+  - [x] [ ] [ ] Accept multi-line user text input (blank line or sentinel to submit)
+  - [x] [ ] [ ] Display raw mistake list from detector
+  - [x] [ ] [ ] Confirm session written (show file path)
+- [x] [ ] [ ] Manual end-to-end test: run one full session, verify DB row and YAML file written correctly
 
 ---
 
