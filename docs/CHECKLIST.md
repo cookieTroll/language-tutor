@@ -150,26 +150,26 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 
 ## Layer 1a — Full Evaluator Pipeline
 
-- [ ] [ ] [ ] `modules/writing/processor.py` — Step 2: Mistake Processor
-  - [ ] [ ] [ ] Takes raw mistakes from Step 1
-  - [ ] [ ] [ ] Classifies each with `error_tag` from `ERROR_TAXONOMY`
-  - [ ] [ ] [ ] Calls `validate_error_tag()` on each output tag; rejects/flags unknowns
-  - [ ] [ ] [ ] Adds `correction` field to each mistake
-- [ ] [ ] [ ] `modules/writing/feedback.py` — Step 3: Feedback Generator
-  - [ ] [ ] [ ] Takes classified mistakes from Step 2
-  - [ ] [ ] [ ] Adds `explanation` field pitched to user's level
-  - [ ] [ ] [ ] Short-circuits gracefully if mistake list is empty
-- [ ] [ ] [ ] `modules/writing/corrector.py` — Step 4: Correction Writer
-  - [ ] [ ] [ ] Takes user text + classified mistakes from Step 2
-  - [ ] [ ] [ ] Returns `corrected_text`, `recommendations[]`, `comment`
-  - [ ] [ ] [ ] Correction derived from structured mistakes, not regenerated freeform
-- [ ] [ ] [ ] Wire all four steps in `WritingModule.run()`, populate full `WritingSessionContent`
-- [ ] [ ] [ ] Update CLI to display full structured feedback (mistakes with explanations, corrected text, recommendations)
-- [ ] [ ] [ ] **Create writing fixture set** (see TODO.md) — minimum 3 verified pairs before judge testing
+- [x] [ ] [ ] `skills/classify_mistakes/` — Step 2: Mistake Classifier
+  - [x] [ ] [ ] Takes raw mistakes from Step 1
+  - [x] [ ] [ ] Classifies each with `error_tag` from `ERROR_TAXONOMY`
+  - [x] [ ] [ ] Calls `validate_error_tag()` on each output tag; rejects/drops unknowns
+  - [x] [ ] [ ] Adds `correction` field to each mistake
+- [x] [ ] [ ] `skills/explain_mistakes/` — Step 3: Explanation Generator
+  - [x] [ ] [ ] Takes classified mistakes from Step 2
+  - [x] [ ] [ ] Adds `explanation` field pitched to user's level
+  - [x] [ ] [ ] Short-circuits gracefully if mistake list is empty
+- [x] [ ] [ ] `skills/write_correction/` — Step 4: Correction Writer
+  - [x] [ ] [ ] Takes user text + explained mistakes from Step 3
+  - [x] [ ] [ ] Returns `corrected_text`, `recommendations[]`, `comment`
+  - [x] [ ] [ ] Correction derived from structured mistakes, not regenerated freeform
+- [x] [ ] [ ] Wire all four steps in `WritingModule.run()`, populate full `WritingSessionContent`
+- [ ] [ ] [ ] Move evaluation result rendering out of `agent.py` into `ui/cli.py` — module returns structured data only; CLI owns all `print()` for evaluation output
+- [x] [ ] [ ] **Create writing fixture set** — minimum 3 verified pairs (`tests/fixtures/writing_pairs.json`)
+- [x] [ ] [ ] `tests/test_writing_pipeline.py` — unit tests for Steps 2, 3, 4 (all mocked, offline)
 - [ ] [ ] [ ] `tests/judge/judge_detector.py` — judge for Step 1 output
 - [ ] [ ] [ ] `tests/judge/judge_evaluator.py` — judges for Steps 2, 3, 4 (separate criteria per step)
 - [ ] [ ] [ ] Run each judge 5x on same fixture; verify variance is acceptable; document threshold
-- [ ] [ ] [ ] `tests/fixtures/writing_pairs.json` — at least 3 manually verified pairs
 
 ---
 
@@ -203,6 +203,10 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
   - [ ] [ ] [ ] `/sessions` — session file browser: lists past sessions by date/skill, renders YAML as readable HTML (not raw YAML)
   - [ ] [ ] [ ] `/session/{session_id}` — individual session view
   - [ ] [ ] [ ] Thin JS for multi-line text input and streaming display if possible
+- [ ] [ ] [ ] `IOHandler` protocol — `prompt()`, `output()`, `confirm()` — decouples module I/O from terminal/web
+  - [ ] [ ] [ ] CLI passes `TerminalIOHandler` (wraps `input()` / `print()`)
+  - [ ] [ ] [ ] Web layer passes its own implementation (WebSocket or HTTP streaming)
+  - [ ] [ ] [ ] `WritingModule.run()` accepts `IOHandler`; all `input()` / `print()` calls replaced
 - [ ] [ ] [ ] Verify runs locally on `localhost` with no external dependencies
 - [ ] [ ] [ ] Manual test: complete full session via browser, verify session file renders correctly
 
