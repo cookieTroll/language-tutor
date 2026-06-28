@@ -74,7 +74,7 @@ class WritingModule(ModuleProtocol):
         print(f"Requirements: {requirements}")
         print("--------------------------------------------------")
         print("Type your text below. To submit, type an empty line.")
-        print("To ask a question mid-writing, prefix it with '/btw ' (e.g. /btw what does aufstehen mean?).")
+        print("To ask a question mid-writing, type it on a new line prefixed with '/btw ' (e.g. /btw what does aufstehen mean?).")
         print("==================================================\n")
 
         user_lines = []
