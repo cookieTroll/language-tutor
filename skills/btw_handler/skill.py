@@ -49,8 +49,16 @@ class BtwHandlerSkill(SkillProtocol):
             question=question
         )
         
+        lang_cap = session_context.get("language", "German").capitalize()
         messages = [
-            LLMMessage(role="system", content=f"You are a helpful, brief {session_context.get('language', 'German').capitalize()} tutor assistant."),
+            LLMMessage(
+                role="system",
+                content=(
+                    f"You are a helpful, brief {lang_cap} tutor. "
+                    "You explain grammar and vocabulary concepts to students. "
+                    f"Always write your explanations in English, using {lang_cap} only for translations, vocabulary words, and examples."
+                )
+            ),
             LLMMessage(role="user", content=prompt)
         ]
         

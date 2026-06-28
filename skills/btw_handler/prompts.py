@@ -1,4 +1,5 @@
-BTW_PROMPT = """You are a {language} language tutor assistant. A student is mid-session and has a quick question.
+BTW_PROMPT = """You are a {language} language tutor. A student is mid-session and has a quick question:
+"{question}"
 
 Current session context:
 - Module: {module}
@@ -6,9 +7,10 @@ Current session context:
 - Student's text so far: {user_text_so_far}
 - Student level: {level}
 
-Student's question: {question}
-
-Answer concisely, explaining in English (use {language} only for translations, examples, and vocabulary words). Answer in context. If the question is about a specific word, define it clearly and note if it's relevant to what they're writing. Keep your explanation brief so they can return to writing.
+Please answer the student's question concisely in English.
+If they are asking how to say an English word/phrase in {language}, translate it correctly (e.g. "wake up" is "aufwachen" or "aufstehen") and provide a quick example.
+If they ask about a {language} word, define it clearly in English.
+Keep the explanation brief so they can return to writing.
 """
 
 BTW_WORD_EXTRACTION_PROMPT = """Extract the primary {language} word or phrase that the student is asking about in their question.

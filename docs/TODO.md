@@ -31,6 +31,11 @@ Items that arose during design discussion but are deferred decisions, known risk
 
 ## Testing Backlog
 
+- [ ] **LLM-as-judge setup for BTW Questions** — Set up an LLM-as-judge evaluation pipeline to run automated regression checks on mid-session side-questions (`/btw`). Introduce tests that assert both explanation language (English by default) and translation accuracy (no hallucinations).
+  * **Test case backlog**:
+    - **Query**: "How is wake up in German?"
+    - **Expected correct behavior**: Suggests "aufwachen" or "aufstehen" and explains the difference in English.
+    - **Hallucination regression pattern**: Must not output "Die Wachstunde" or equate it to a greeting like "Good morning".
 - [ ] **Create writing fixture set** — 3–5 input/output pairs per evaluator step, manually verified. Cover: dative case errors, word order errors, verb conjugation errors, separable verbs, mixed error text. At least one fixture with no errors (to test false positive rate).
 - [ ] **Create orchestrator fixture set** — 3–5 session history scenarios with expected recommendations. Cover: cold start, single skill overuse, recurring error pattern, balanced history.
 - [ ] **Validate judge prompts** — run each judge 5x on same fixture, record variance, tighten if needed.
