@@ -10,7 +10,7 @@ Student's text:
 {user_text}
 
 Identify all grammatical, vocabulary, and spelling errors.
-Return JSON only. Format the response exactly as:
+Return JSON only. Provide the `error_type_hint` in English (e.g. "incorrect verb conjugation", "word order"). Format the response exactly as:
 {{
   "mistakes": [
     {{"fragment": "user_fragment_here", "error_type_hint": "brief_description_here"}}

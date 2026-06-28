@@ -108,7 +108,8 @@ class WritingModule(ModuleProtocol):
                     "module": self.name,
                     "topic": topic,
                     "user_text_so_far": "\n".join(user_lines),
-                    "level": ctx.level
+                    "level": ctx.level,
+                    "language": ctx.language
                 }
                 
                 btw_skill = self.skills["btw_handler"]
@@ -162,7 +163,8 @@ class WritingModule(ModuleProtocol):
             parameters={
                 "user_text": user_text,
                 "writing_prompt": writing_prompt,
-                "recurring_errors": list(ctx.error_frequency.keys())
+                "recurring_errors": list(ctx.error_frequency.keys()),
+                "language": ctx.language
             }
         )
         detector_output = detector.run(detector_input, llm)

@@ -25,6 +25,7 @@ Items that arose during design discussion but are deferred decisions, known risk
 - [ ] **Summary files format** — defined as markdown in design but content structure not fully specified. When implementing Layer 1b, define the exact sections (skill frequency, error patterns, suggested focus, writing comparison placeholder).
 - [ ] **Progress summary storage** — currently generated on demand. If generation becomes slow (large log), consider caching the most recent summary as a file and invalidating on new session write. Defer until performance is a real problem.
 - [ ] **Anki export format** — basic format agreed (`word\ttranslation\texample`). Decide whether to export per-session or accumulated across sessions. AnkiConnect integration (Layer 3c) requires user to have Anki + AnkiConnect plugin running — document this dependency clearly.
+- [ ] **Base vs Target language communication** — Define a base language (defaults to English) and a target language (configurable per user/session, e.g. German). Allow the user to select whether tutoring explanations, error hints, and the entire conversation are conducted in the base language or the target language (typically preferred for higher CEFR levels). For now, the base language is fixed as English and the target language is configurable.
 
 ---
 

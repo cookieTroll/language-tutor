@@ -45,11 +45,12 @@ class BtwHandlerSkill(SkillProtocol):
             topic=session_context.get("topic", "unknown"),
             user_text_so_far=session_context.get("user_text_so_far", ""),
             level=input.level,
+            language=session_context.get("language", "German").capitalize(),
             question=question
         )
         
         messages = [
-            LLMMessage(role="system", content="You are a helpful, brief German tutor assistant."),
+            LLMMessage(role="system", content=f"You are a helpful, brief {session_context.get('language', 'German').capitalize()} tutor assistant."),
             LLMMessage(role="user", content=prompt)
         ]
         
@@ -87,7 +88,10 @@ class BtwHandlerSkill(SkillProtocol):
         
         if not flagged_word:
             # Fall back to LLM-based extraction
-            extraction_prompt = BTW_WORD_EXTRACTION_PROMPT.format(question=question)
+            extraction_prompt = BTW_WORD_EXTRACTION_PROMPT.format(
+                question=question,
+                language=session_context.get("language", "German").capitalize()
+            )
             extract_messages = [
                 LLMMessage(role="system", content="You are a linguistic extraction utility."),
                 LLMMessage(role="user", content=extraction_prompt)

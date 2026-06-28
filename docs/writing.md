@@ -122,7 +122,7 @@ raw_mistakes: list[dict]  # [{fragment: str, error_type_hint: str}]
 
 **Prompt template:**
 ```
-You are a German language teacher evaluating a {level} learner's writing.
+You are a {language} language teacher evaluating a {level} learner's writing.
 
 Task given to the student:
 {writing_prompt}
@@ -216,7 +216,7 @@ feedback: list[dict]      # [{error_tag, fragment, correction, explanation}]
 
 **Prompt template:**
 ```
-You are a German language teacher explaining errors to a {level} learner.
+You are a {language} language teacher explaining errors to a {level} learner.
 
 For each mistake, write a clear, concise explanation appropriate for this level.
 Do not over-explain. Be specific about the rule.
@@ -354,7 +354,7 @@ flagged_word: str | None  # extracted if vocabulary question
 
 **Prompt template:**
 ```
-You are a German language tutor assistant. A student is mid-session and has a quick question.
+You are a {language} language tutor assistant. A student is mid-session and has a quick question.
 
 Current session context:
 - Module: {module}
@@ -364,11 +364,10 @@ Current session context:
 
 Student's question: {question}
 
-Answer concisely and in context. If the question is about a specific word,
-define it clearly and note if it's relevant to what they're writing.
+Answer concisely, explaining in English (use {language} only for translations, examples, and vocabulary words). Answer in context. If the question is about a specific word, define it clearly and note if it's relevant to what they're writing.
 ```
 
-**Word extraction:** After answering, attempt to extract a single German word from the question if it's vocabulary-related (regex pattern: quoted word, or "what does X mean", "how do I say X"). Fall back to LLM extraction if regex fails.
+**Word extraction:** After answering, attempt to extract a single target language word from the question if it's vocabulary-related (regex pattern: quoted word, or "what does X mean", "how do I say X"). Fall back to LLM extraction if regex fails.
 
 **Inline loop integration:**
 ```python

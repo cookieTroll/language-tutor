@@ -22,15 +22,18 @@ class DetectMistakesSkill(SkillProtocol):
                 metadata={"raw_mistakes": []}
             )
 
+        language = input.parameters.get("language", "German").capitalize()
+
         prompt = DETECT_MISTAKES_PROMPT.format(
             level=input.level,
+            language=language,
             writing_prompt=writing_prompt,
             recurring_errors=str(recurring_errors),
             user_text=user_text
         )
 
         messages = [
-            LLMMessage(role="system", content="You are a strict, helpful German language teacher."),
+            LLMMessage(role="system", content=f"You are a strict, helpful {language} language teacher."),
             LLMMessage(role="user", content=prompt)
         ]
 
