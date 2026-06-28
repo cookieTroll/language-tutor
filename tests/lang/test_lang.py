@@ -7,8 +7,8 @@ import yaml
 from pathlib import Path
 from pydantic import ValidationError
 
-from lang.models import CEFRMap, TaxonomyMap, TaxonomyError, LanguageConfig
-from lang.loader import _Registry, get_cefr_context, get_taxonomy, using_defaults
+from lang.models import CEFRMap, CEFRDescriptorMap, TaxonomyMap, TaxonomyError, LanguageConfig
+from lang.loader import _Registry, get_cefr_context, get_taxonomy, get_cefr_descriptors, using_defaults
 
 
 # ---------------------------------------------------------------------------
@@ -33,6 +33,9 @@ def _minimal_registry(tmp_path: Path) -> _Registry:
     })
     _write_yaml(tmp_path / "maps/taxonomy/default.yaml", {
         "tags": {"grammar": "General grammar error.", "other": "Catch-all."}
+    })
+    _write_yaml(tmp_path / "maps/cefr_descriptors/default.yaml", {
+        "a1": "Very basic phrases.", "b1": "Connected text.", "default": "Assess writing."
     })
     _write_yaml(tmp_path / "languages/testlang.yaml", {
         "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1"
@@ -66,6 +69,35 @@ class TestCEFRMap:
     def test_rejects_non_string_field(self):
         with pytest.raises(ValidationError):
             CEFRMap.model_validate({"a1": 42})
+
+
+# ---------------------------------------------------------------------------
+# CEFRDescriptorMap model
+# ---------------------------------------------------------------------------
+
+class TestCEFRDescriptorMap:
+
+    def test_format_for_prompt_includes_all_levels(self):
+        m = CEFRDescriptorMap(
+            a1="Very basic.", a2="Simple.", b1="Connected.", b2="Clear.",
+            c1="Fluent.", c2="Near-native."
+        )
+        result = m.format_for_prompt()
+        for level in ("A1", "A2", "B1", "B2", "C1", "C2"):
+            assert level in result
+
+    def test_format_for_prompt_skips_empty_levels(self):
+        m = CEFRDescriptorMap(b1="Connected text.", default="Assess writing.")
+        result = m.format_for_prompt()
+        assert "B1" in result
+        assert "A1" not in result  # empty — skipped
+
+    def test_loads_from_yaml_dict(self):
+        m = CEFRDescriptorMap.model_validate({
+            "a1": "Very basic.", "default": "Assess writing."
+        })
+        assert m.a1 == "Very basic."
+        assert m.default == "Assess writing."
 
 
 # ---------------------------------------------------------------------------
@@ -278,3 +310,12 @@ class TestIntegration:
         flags = using_defaults("french")
         assert flags["cefr_hints"] is True
         assert flags["taxonomy"] is True
+
+    def test_german_cefr_descriptors_format_includes_all_levels(self):
+        result = get_cefr_descriptors("german")
+        for level in ("A1", "A2", "B1", "B2", "C1", "C2"):
+            assert level in result
+
+    def test_unknown_language_cefr_descriptors_falls_back_to_default(self):
+        result = get_cefr_descriptors("french")
+        assert result  # non-empty — served by default map

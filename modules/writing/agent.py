@@ -17,6 +17,7 @@ class _PipelineResult:
     corrected_text: str
     recommendations: list[str]
     comment: str
+    text_level_estimate: str | None = None
 
 
 class WritingModule(ModuleProtocol):
@@ -63,7 +64,7 @@ class WritingModule(ModuleProtocol):
 
         print("\n[*] Evaluating your text. Please wait...")
         pipeline = self._run_pipeline(ctx, user_lines, writing_prompt, llm)
-        self._print_evaluation(pipeline)
+        self._print_evaluation(pipeline, stated_level=ctx.level)
 
         return self._build_results(
             ctx, session_id, topic, requirements, writing_prompt,
@@ -176,6 +177,21 @@ class WritingModule(ModuleProtocol):
     ) -> _PipelineResult:
         user_text = "\n".join(user_lines)
 
+        # Step 5: estimate text CEFR level — independent of error pipeline, run first
+        level_output = self.skills["estimate_text_level"].run(
+            SkillInput(
+                user_id=ctx.user_id,
+                level=ctx.level,
+                parameters={
+                    "user_text": user_text,
+                    "writing_prompt": writing_prompt,
+                    "language": ctx.language,
+                },
+            ),
+            llm,
+        )
+        text_level_estimate = level_output.metadata.get("text_level_estimate")
+
         # Step 1: detect raw mistakes
         detector_output = self.skills["detect_mistakes"].run(
             SkillInput(
@@ -198,6 +214,7 @@ class WritingModule(ModuleProtocol):
                 corrected_text=user_text,
                 recommendations=[],
                 comment="",
+                text_level_estimate=text_level_estimate,
             )
         raw_mistakes = detector_output.metadata.get("raw_mistakes", [])
 
@@ -243,9 +260,10 @@ class WritingModule(ModuleProtocol):
             corrected_text=correction_output.metadata.get("corrected_text", user_text),
             recommendations=correction_output.metadata.get("recommendations", []),
             comment=correction_output.metadata.get("comment", ""),
+            text_level_estimate=text_level_estimate,
         )
 
-    def _print_evaluation(self, pipeline: _PipelineResult) -> None:
+    def _print_evaluation(self, pipeline: _PipelineResult, stated_level: str = "") -> None:
         # NOTE: rendering will move to ui/cli.py (Layer 1a checklist item).
         # This method is the extraction point for that future migration.
         print("\n==================================================")
@@ -279,6 +297,14 @@ class WritingModule(ModuleProtocol):
         if pipeline.comment:
             print("── Comment ───────────────────────────────────────")
             print(f"  {pipeline.comment}")
+
+        if pipeline.text_level_estimate:
+            estimate = pipeline.text_level_estimate.upper()
+            print("── Text level ────────────────────────────────────")
+            line = f"  Estimated: {estimate}"
+            if stated_level:
+                line += f"  (your stated level: {stated_level.upper()})"
+            print(line)
 
         print("==================================================\n")
 
@@ -333,6 +359,7 @@ class WritingModule(ModuleProtocol):
                 for word in vocab_signals
             ],
             suggested_focus=None,
+            text_level_estimate=pipeline.text_level_estimate,
         )
 
         result = ModuleResult(

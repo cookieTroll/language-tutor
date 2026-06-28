@@ -39,6 +39,7 @@ class WritingSessionContent(SessionFileContent):
     btw_log: list[dict]       # [{question, answer, flagged_word, timestamp}]
     vocab_updates: list[dict] # [{word, source, occurrence_count}]
     suggested_focus: str | None = None
+    text_level_estimate: str | None = None
 
 class GrammarSessionContent(SessionFileContent):  # Layer 2a
     topic: str

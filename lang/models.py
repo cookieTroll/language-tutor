@@ -58,6 +58,34 @@ class TaxonomyMap(BaseModel):
         return frozenset(self.tags.keys())
 
 
+class CEFRDescriptorMap(BaseModel):
+    """CEFR level descriptions for text-level estimation.
+
+    Loaded from lang/maps/cefr_descriptors/*.yaml.
+    Descriptions characterise what writing at each level looks like — used by
+    estimate_text_level to ground the LLM's assessment. The default map is
+    language-agnostic (CEFR is an international standard); language-specific
+    files can override for additional nuance.
+    """
+
+    a1: str = ""
+    a2: str = ""
+    b1: str = ""
+    b2: str = ""
+    c1: str = ""
+    c2: str = ""
+    default: str = "Assess overall text complexity, vocabulary range, grammatical accuracy, and coherence."
+
+    def format_for_prompt(self) -> str:
+        """Format all levels as a reference table for prompt injection."""
+        lines = []
+        for level in ("a1", "a2", "b1", "b2", "c1", "c2"):
+            desc = getattr(self, level, "")
+            if desc:
+                lines.append(f"  {level.upper()}: {desc}")
+        return "\n".join(lines)
+
+
 class LanguageConfig(BaseModel):
     """Top-level language config — maps learning concepts to versioned content maps.
 
@@ -67,5 +95,6 @@ class LanguageConfig(BaseModel):
     """
 
     name: str
-    cefr_hints: str   # → lang/maps/cefr/{cefr_hints}.yaml
-    taxonomy: str     # → lang/maps/taxonomy/{taxonomy}.yaml
+    cefr_hints: str              # → lang/maps/cefr/{cefr_hints}.yaml
+    taxonomy: str                # → lang/maps/taxonomy/{taxonomy}.yaml
+    cefr_descriptors: str = "default"  # → lang/maps/cefr_descriptors/{cefr_descriptors}.yaml

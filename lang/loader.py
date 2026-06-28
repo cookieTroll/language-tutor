@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from lang.models import CEFRMap, LanguageConfig, TaxonomyMap
+from lang.models import CEFRDescriptorMap, CEFRMap, LanguageConfig, TaxonomyMap
 
 _LANG_DIR = Path(__file__).parent
 _MAPS_DIR = _LANG_DIR / "maps"
@@ -23,6 +23,7 @@ class _Registry:
         self._languages_dir = languages_dir or _LANGUAGES_DIR
         self._cefr_maps: dict[str, CEFRMap] = {}
         self._taxonomy_maps: dict[str, TaxonomyMap] = {}
+        self._cefr_descriptor_maps: dict[str, CEFRDescriptorMap] = {}
         self._languages: dict[str, LanguageConfig] = {}
         self._load()
 
@@ -34,6 +35,10 @@ class _Registry:
         for path in (self._maps_dir / "taxonomy").glob("*.yaml"):
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
             self._taxonomy_maps[path.stem] = TaxonomyMap.model_validate(data)
+
+        for path in (self._maps_dir / "cefr_descriptors").glob("*.yaml"):
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            self._cefr_descriptor_maps[path.stem] = CEFRDescriptorMap.model_validate(data)
 
         for path in self._languages_dir.glob("*.yaml"):
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -51,6 +56,11 @@ class _Registry:
             raise ValueError(
                 f"Language '{config.name}' references unknown taxonomy map "
                 f"'{config.taxonomy}'. Available: {sorted(self._taxonomy_maps)}"
+            )
+        if config.cefr_descriptors not in self._cefr_descriptor_maps:
+            raise ValueError(
+                f"Language '{config.name}' references unknown cefr_descriptors map "
+                f"'{config.cefr_descriptors}'. Available: {sorted(self._cefr_descriptor_maps)}"
             )
 
     def is_default(self, language: str) -> dict[str, bool]:
@@ -76,6 +86,17 @@ class _Registry:
         map_name = config.taxonomy if config else "default"
         return self._taxonomy_maps.get(map_name) or self._taxonomy_maps.get("default")
 
+    def get_cefr_descriptors(self, language: str) -> str:
+        config = self._languages.get(language.lower())
+        map_name = config.cefr_descriptors if config else "default"
+        descriptor_map = (
+            self._cefr_descriptor_maps.get(map_name)
+            or self._cefr_descriptor_maps.get("default")
+        )
+        if descriptor_map is None:
+            return ""
+        return descriptor_map.format_for_prompt()
+
 
 _registry = _Registry()
 
@@ -88,6 +109,11 @@ def get_cefr_context(language: str, level: str) -> str:
 def get_taxonomy(language: str) -> TaxonomyMap | None:
     """Return the TaxonomyMap for the given language, falling back to the default map."""
     return _registry.get_taxonomy(language)
+
+
+def get_cefr_descriptors(language: str) -> str:
+    """Return formatted CEFR level descriptions for the given language, for prompt injection."""
+    return _registry.get_cefr_descriptors(language)
 
 
 def using_defaults(language: str) -> dict[str, bool]:

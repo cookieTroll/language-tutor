@@ -70,8 +70,8 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 
 ### Language Configuration (Session Startup)
 > Startup surfaces both language and level configuration together — same moment, same prompt.
-- [x] [ ] [ ] On session start, call `using_defaults(language)` — if any map is a fallback, print warning, explain which map is missing, point to `lang/languages/` and `lang/maps/`; user can proceed or exit to configure; choice suppresses warning for remainder of session
-- [x] [ ] [ ] Unit test: `using_defaults()` returns correct flags for configured vs unconfigured language; warning not re-raised after user confirms (`test_lang.py` covers flags; suppression is structural — single call per language per orchestrator instance)
+- [x] [x] [ ] On session start, call `using_defaults(language)` — if any map is a fallback, print warning, explain which map is missing, point to `lang/languages/` and `lang/maps/`; user can proceed or exit to configure; choice suppresses warning for remainder of session
+- [x] [x] [ ] Unit test: `using_defaults()` returns correct flags for configured vs unconfigured language; warning not re-raised after user confirms (`test_lang.py` covers flags; suppression is structural — single call per language per orchestrator instance)
 
 ### Orchestrator Skeleton (PoC — cold start only)
 - [x] [x] [ ] `orchestrator/orchestrator.py` — implement `OrchestratorProtocol`:
@@ -161,14 +161,15 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 - [ ] [ ] [ ] Run each judge 5× on same fixture; verify variance is acceptable; document threshold
 
 ### Design Research — Error Taxonomy & Feedback Rubrics
-> Prerequisite for Steps 5–6: severity logic in Step 6 depends on per-tag CEFR mastery levels defined here. Outputs also feed into `lang/maps/taxonomy/` and evaluator prompts.
-- [ ] [ ] [ ] Research established error taxonomies (CEFR descriptors, Weir's framework, SLA error classification) — identify what maps well to automated detection
-- [ ] [ ] [ ] Decide taxonomy granularity per CEFR band — coarser at A1/A2, finer at B2/C1 (e.g. `verb_conjugation` at A1 vs `konjunktiv_ii` at C1)
-- [ ] [ ] [ ] Define per-tag CEFR mastery level — the level at which that error type is expected to be mastered; drives Step 6 severity (`critical` / `expected` / `minor` relative to user level)
+> Outputs feed into `lang/maps/taxonomy/`, `lang/maps/cefr_descriptors/`, and evaluator prompts.
+- [ ] [ ] [ ] Enrich CEFR descriptor maps — add `lang/maps/cefr_descriptors/german_v1.yaml` with German-specific level descriptions for more accurate text-level estimation (infrastructure in place, content missing)
+- [ ] [ ] [ ] Vary error taxonomy by progression level — different tag granularity per CEFR band: coarser at A1/A2 (e.g. `verb_conjugation`), finer at B2/C1 (e.g. `konjunktiv_ii`); implement as additional versioned taxonomy maps
 - [ ] [ ] [ ] Define feedback rubrics: dimensions to comment on per session (accuracy, fluency, vocabulary range, task completion, coherence) and at which CEFR levels each becomes relevant
 - [ ] [ ] [ ] Decide which rubric dimensions map to `tips[]` vs `session_summary` vs a future `rubric_scores` field
-- [ ] [ ] [ ] Evaluate whether taxonomy tags surface to the user directly or are mapped to learner-friendly labels in the UI layer
 - [ ] [ ] [ ] Document decisions in `docs/writing.md`; propagate to taxonomy maps and evaluator prompts
+- [ ] [ ] [ ] Research alternative error taxonomies — compare Weir's framework and SLA classification against current German taxonomy; identify gaps or tags worth adding
+- [ ] [ ] [ ] Define per-tag CEFR mastery level — the level at which each error type is expected to be mastered; drives Step 6 severity (`critical` / `expected` / `minor`)
+- [ ] [ ] [ ] Evaluate whether taxonomy tags surface to the user directly or are mapped to learner-friendly labels in the UI layer
 
 ### Steps 5–6 — Text-Level Estimation & Session Summary
 - [ ] [ ] [ ] `skills/estimate_text_level/skill.py` — Step 5: Text CEFR Estimator

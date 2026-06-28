@@ -1,0 +1,13 @@
+# CEFR level descriptors for text-level estimation
+# Universal — these are CEFR standard descriptions, not language-specific.
+# Used by: estimate_text_level skill to ground the LLM's assessment.
+# To provide language-specific nuance, create a new file (e.g. german_v1.yaml)
+# and reference it from lang/languages/{language}.yaml under cefr_descriptors.
+
+a1: "Very basic isolated phrases, extremely limited vocabulary, frequent fundamental errors."
+a2: "Simple sentences on familiar topics, common everyday vocabulary, recurring systematic errors."
+b1: "Connected text on familiar topics, reasonable accuracy on routine structures, errors on complex structures."
+b2: "Clear detailed text, broad active vocabulary, good grammatical control, occasional errors in complex structures."
+c1: "Well-structured fluent text, wide precise vocabulary, flexible language use, minor infrequent errors."
+c2: "Near-native fluency, idiomatic precision, stylistically appropriate, virtually no errors."
+default: "Assess overall text complexity, vocabulary range, grammatical accuracy, and coherence."

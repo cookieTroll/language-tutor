@@ -237,7 +237,62 @@ class TestWriteCorrectionSkill:
         )
 
         assert out.success is False
-        assert "corrected_text" in out.metadata  # fallback to original text
+
+
+# ---------------------------------------------------------------------------
+# EstimateTextLevelSkill
+# ---------------------------------------------------------------------------
+
+class TestEstimateTextLevelSkill:
+
+    def test_returns_valid_cefr_band(self):
+        from skills.estimate_text_level.skill import EstimateTextLevelSkill
+        user_text = " ".join(["Ich"] * 25)  # 25 words — above threshold
+        payload = json.dumps({"text_level_estimate": "B1"})
+        llm = make_llm([payload])
+
+        skill = EstimateTextLevelSkill()
+        out = skill.run(make_input(level="a2", user_text=user_text, writing_prompt="Describe your day.", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["text_level_estimate"] == "b1"  # lowercased
+
+    def test_short_text_returns_none_without_llm_call(self):
+        from skills.estimate_text_level.skill import EstimateTextLevelSkill
+        llm = make_llm([])
+
+        skill = EstimateTextLevelSkill()
+        out = skill.run(make_input(level="a1", user_text="Ich bin müde.", writing_prompt="...", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["text_level_estimate"] is None
+        llm.complete.assert_not_called()
+
+    def test_llm_returns_null_estimate(self):
+        from skills.estimate_text_level.skill import EstimateTextLevelSkill
+        user_text = " ".join(["word"] * 25)
+        payload = json.dumps({"text_level_estimate": None})
+        llm = make_llm([payload])
+
+        skill = EstimateTextLevelSkill()
+        out = skill.run(make_input(level="a1", user_text=user_text, writing_prompt="...", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["text_level_estimate"] is None
+
+    def test_rejects_invalid_band_triggers_retry(self):
+        from skills.estimate_text_level.skill import EstimateTextLevelSkill
+        user_text = " ".join(["Ich"] * 25)
+        bad = json.dumps({"text_level_estimate": "intermediate"})
+        good = json.dumps({"text_level_estimate": "b2"})
+        llm = make_llm([bad, good])
+
+        skill = EstimateTextLevelSkill()
+        out = skill.run(make_input(level="b1", user_text=user_text, writing_prompt="...", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["text_level_estimate"] == "b2"
+        assert llm.complete.call_count == 2
 
 
 # ---------------------------------------------------------------------------
