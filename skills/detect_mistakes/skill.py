@@ -61,8 +61,18 @@ class DetectMistakesSkill(SkillProtocol):
                 metadata={"raw_mistakes": validated}
             )
         except Exception as e:
+            err_msg = str(e)
+            if 'response' in locals() and response.truncated and llm.config.show_cut_by_limit_tag:
+                err_msg += " [TRUNCATED BY LIMIT]"
+                
+            metadata = {"raw_mistakes": []}
+            metadata["error"] = err_msg
+            
+            if 'text' in locals() and llm.config.show_incomplete_responses:
+                metadata["raw_response"] = text
+                
             return SkillOutput(
                 skill_name=self.name,
                 success=False,
-                metadata={"raw_mistakes": [], "error": str(e)}
+                metadata=metadata
             )

@@ -17,3 +17,6 @@ llm:
   base_url: "http://localhost:1234/v1"  # Default LM Studio local port
   api_key: "lm-studio"                 # Placeholder key for local usage
   model: "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+  max_tokens: 1000
+  show_incomplete_responses: false
+  show_cut_by_limit_tag: true

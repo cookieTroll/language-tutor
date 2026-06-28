@@ -8,11 +8,7 @@ def build_llm(config: LLMConfig) -> BaseLLM:
     Supports: 'openai_compat' (local LM Studio/Ollama) and 'gemini' (cloud).
     """
     if config.provider == "openai_compat":
-        return OpenAICompatibleLLM(
-            api_key=config.api_key,
-            base_url=config.base_url,
-            model=config.model,
-        )
+        return OpenAICompatibleLLM(config)
     elif config.provider == "gemini":
         try:
             from llm.gemini import GeminiLLM

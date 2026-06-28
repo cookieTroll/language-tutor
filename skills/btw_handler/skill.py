@@ -56,11 +56,21 @@ class BtwHandlerSkill(SkillProtocol):
         try:
             response = llm.complete(messages, temperature=0.2)
             answer = response.text.strip()
+            if response.truncated and llm.config.show_cut_by_limit_tag:
+                answer += "\n[TRUNCATED BY LIMIT]"
         except Exception as e:
+            err_msg = f"Error answering question: {e}"
+            if 'response' in locals() and response.truncated and llm.config.show_cut_by_limit_tag:
+                err_msg += " [TRUNCATED BY LIMIT]"
+                
+            metadata = {"answer": err_msg, "flagged_word": None}
+            if 'answer' in locals() and llm.config.show_incomplete_responses:
+                metadata["raw_response"] = answer
+                
             return SkillOutput(
                 skill_name=self.name,
                 success=False,
-                metadata={"answer": f"Error answering question: {e}", "flagged_word": None}
+                metadata=metadata
             )
 
         # 2. Extract flagged word

@@ -1,19 +1,21 @@
 from openai import OpenAI
 from llm.base import BaseLLM, LLMMessage, LLMResponse, LLMError
+from config import LLMConfig
 
 class OpenAICompatibleLLM(BaseLLM):
-    def __init__(self, api_key: str | None, base_url: str | None, model: str):
-        self.model = model
+    def __init__(self, config: LLMConfig):
+        super().__init__(config)
+        self.model = config.model
         self.client = OpenAI(
-            api_key=api_key or "lm-studio",
-            base_url=base_url or "http://localhost:1234/v1"
+            api_key=config.api_key or "lm-studio",
+            base_url=config.base_url or "http://localhost:1234/v1"
         )
 
     def complete(
         self,
         messages: list[LLMMessage],
         temperature: float = 0.2,
-        max_tokens: int = 1000,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
         """
         Send messages to the local LM Studio instance (or any OpenAI-compatible API).
@@ -23,14 +25,17 @@ class OpenAICompatibleLLM(BaseLLM):
             {"role": msg.role, "content": msg.content}
             for msg in messages
         ]
+        tokens_limit = max_tokens if max_tokens is not None else self.config.max_tokens
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=formatted_messages,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_tokens=tokens_limit,
             )
-            text = response.choices[0].message.content or ""
-            return LLMResponse(text=text, model=self.model)
+            choice = response.choices[0]
+            text = choice.message.content or ""
+            truncated = (choice.finish_reason == "length")
+            return LLMResponse(text=text, model=self.model, truncated=truncated)
         except Exception as e:
             raise LLMError(f"Local LLM completion failed: {e}") from e

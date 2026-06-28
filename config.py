@@ -8,6 +8,9 @@ class LLMConfig:
     base_url: str | None
     api_key: str | None
     model: str
+    max_tokens: int = 1000
+    show_incomplete_responses: bool = False
+    show_cut_by_limit_tag: bool = True
 
 @dataclass
 class AppConfig:
@@ -57,6 +60,9 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         base_url=llm_data.get("base_url"),
         api_key=llm_data.get("api_key"),
         model=llm_data["model"],
+        max_tokens=int(llm_data.get("max_tokens", 1000)),
+        show_incomplete_responses=bool(llm_data.get("show_incomplete_responses", False)),
+        show_cut_by_limit_tag=bool(llm_data.get("show_cut_by_limit_tag", True)),
     )
     
     return AppConfig(

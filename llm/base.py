@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from config import LLMConfig
 
 class LLMError(Exception):
     """Custom exception raised when an LLM completion fails."""
@@ -14,14 +15,18 @@ class LLMMessage:
 class LLMResponse:
     text: str
     model: str       # actual model used, logged for observability
+    truncated: bool = False
 
 class BaseLLM(ABC):
+    def __init__(self, config: LLMConfig):
+        self.config = config
+
     @abstractmethod
     def complete(
         self,
         messages: list[LLMMessage],
         temperature: float = 0.2,
-        max_tokens: int = 1000,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
         """Send messages, return response. Raises LLMError on failure."""
         ...
