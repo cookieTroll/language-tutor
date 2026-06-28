@@ -11,6 +11,8 @@ class LLMConfig:
     max_tokens: int = 1000
     show_incomplete_responses: bool = False
     show_cut_by_limit_tag: bool = True
+    max_retries: int = 3
+    initial_retry_delay: float = 1.0
 
 @dataclass
 class AppConfig:
@@ -63,6 +65,8 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         max_tokens=int(llm_data.get("max_tokens", 1000)),
         show_incomplete_responses=bool(llm_data.get("show_incomplete_responses", False)),
         show_cut_by_limit_tag=bool(llm_data.get("show_cut_by_limit_tag", True)),
+        max_retries=int(llm_data.get("max_retries", 3)),
+        initial_retry_delay=float(llm_data.get("initial_retry_delay", 1.0)),
     )
     
     return AppConfig(

@@ -20,3 +20,5 @@ llm:
   max_tokens: 1000
   show_incomplete_responses: false
   show_cut_by_limit_tag: true
+  max_retries: 3
+  initial_retry_delay: 1.0

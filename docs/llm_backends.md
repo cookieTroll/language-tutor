@@ -190,11 +190,13 @@ def build_llm(config: dict) -> BaseLLM:
 
 ```yaml
 llm:
-  backend: gemini              # gemini | lm_studio | openai
-  model: gemini-2.0-flash      # overrides per-implementation default
-  temperature: 0.2
-  lm_studio_base_url: http://localhost:1234/v1   # only used if backend: lm_studio
-  openai_base_url: null                          # only used if backend: openai
+  provider: "openai_compat"                           # openai_compat | gemini
+  base_url: "http://localhost:1234/v1"                 # base url for api
+  api_key: "lm-studio"                                # api key
+  model: "qwen2.5-coder-7b-instruct-q4_k_m.gguf"      # LLM model name
+  max_tokens: 1000                                    # maximum token response limit
+  show_incomplete_responses: false                    # show incomplete text when json fails
+  show_cut_by_limit_tag: true                         # append [TRUNCATED BY LIMIT] on truncation
 ```
 
 **Development workflow:** set `backend: lm_studio` to iterate locally at zero cost. Switch to `backend: gemini` for quality testing and final evaluation.

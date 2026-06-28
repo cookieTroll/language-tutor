@@ -101,3 +101,37 @@ def test_openai_compat_truncation_detection(mock_openai):
         temperature=0.2,
         max_tokens=50
     )
+
+@patch("llm.openai_compat.OpenAI")
+def test_openai_compat_completion_retry(mock_openai):
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+    mock_chat = MagicMock()
+    mock_client.chat = mock_chat
+    
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "Hallo Welt!"
+    mock_response.choices[0].finish_reason = "stop"
+    
+    # Fail first, succeed second
+    mock_chat.completions.create.side_effect = [
+        Exception("Transient API Error"),
+        mock_response
+    ]
+
+    config = LLMConfig(
+        provider="openai_compat",
+        base_url="url",
+        api_key="key",
+        model="model",
+        max_retries=2,
+        initial_retry_delay=0.01  # Short delay for fast test
+    )
+    llm = OpenAICompatibleLLM(config)
+    messages = [LLMMessage(role="user", content="Hello")]
+    
+    response = llm.complete(messages)
+    
+    assert response.text == "Hallo Welt!"
+    assert mock_chat.completions.create.call_count == 2
