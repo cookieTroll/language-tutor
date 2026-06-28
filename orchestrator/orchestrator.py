@@ -135,6 +135,10 @@ class Orchestrator(OrchestratorProtocol):
                         os.remove(checkpoint_path)
                     print(f"Discarded session {s.session_id}.")
                 break
+            elif choice == "r":
+                print("[!] Resume option is currently unavailable in PoC mode. Please select 'l' to log or 'd' to discard.")
+            else:
+                print(f"[!] Invalid option '{choice}'. Please enter 'l' to log or 'd' to discard.")
 
     def run_session(self, user_id: str, language: str) -> None:
         """

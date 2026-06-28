@@ -214,3 +214,40 @@ def test_interrupted_session_log(mock_input, store_and_llm):
     assert recent[0].status == "interrupted"
     assert recent[0].comment == "Practiced daily routines and discussed separable verbs."
     assert not os.path.exists(checkpoint_path)
+
+@patch("orchestrator.orchestrator.input")
+@patch("orchestrator.orchestrator.print")
+def test_interrupted_session_invalid_choice_retry(mock_print, mock_input, store_and_llm):
+    store, llm, config = store_and_llm
+    orchestrator = Orchestrator(store, llm, config)
+    
+    # Mock user input choosing 'r' (unsupported), then 'invalid' (invalid), then 'd' (discard)
+    mock_input.side_effect = ["r", "invalid", "d"]
+    
+    # Setup an interrupted session log
+    date_now = datetime.now()
+    log = SessionLog(
+        user_id="user1",
+        session_id="sess_int",
+        language="german",
+        module="writing",
+        task_label="t1",
+        task_description="d1",
+        comment="",
+        errors=[],
+        level="a1",
+        date=date_now - timedelta(minutes=20),
+        file_path="path",
+        status="in_progress",
+        started_at=date_now - timedelta(minutes=20)
+    )
+    store.write_session(log)
+
+    orchestrator._handle_interruption("user1")
+
+    # Assert correct warning prints were outputted
+    mock_print.assert_any_call("[!] Resume option is currently unavailable in PoC mode. Please select 'l' to log or 'd' to discard.")
+    mock_print.assert_any_call("[!] Invalid option 'invalid'. Please enter 'l' to log or 'd' to discard.")
+    
+    recent = store.get_recent_sessions("user1", "german")
+    assert recent[0].status == "abandoned"
