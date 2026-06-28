@@ -32,14 +32,15 @@ class WritingSessionContent(SessionFileContent):
     topic: str
     requirements: str
     user_text: str
-    mistakes: list[dict]      # [{error_tag, fragment, correction, explanation}]
-    recommendations: list[str]
+    mistakes: list[dict]      # [{error_tag, fragment, correction, explanation, severity}]
+    tips: list[str]
     corrected_text: str
-    comment: str
+    session_summary: str
     btw_log: list[dict]       # [{question, answer, flagged_word, timestamp}]
     vocab_updates: list[dict] # [{word, source, occurrence_count}]
     suggested_focus: str | None = None
     text_level_estimate: str | None = None
+    comparison_note: str | None = None
 
 class GrammarSessionContent(SessionFileContent):  # Layer 2a
     topic: str

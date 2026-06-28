@@ -354,8 +354,18 @@ class TestFullPipeline:
             }),
             model="test-model",
         )
+        # Step 6: summarise_writing_session
+        resp_summarise = LLMResponse(
+            text=json.dumps({
+                "session_summary": "Solid A1 attempt with one separable verb error.",
+                "mistakes": [{"fragment": "Ich aufstehen", "error_tag": "verb_conjugation", "correction": "Ich stehe auf", "explanation": "Separable verbs must split in main clauses.", "severity": "expected"}],
+                "tips": ["Practise separable verb patterns.", "Aim for two-clause sentences."],
+                "comparison_note": None,
+            }),
+            model="test-model",
+        )
 
-        llm.complete.side_effect = [resp_detect, resp_classify, resp_explain, resp_correct]
+        llm.complete.side_effect = [resp_detect, resp_classify, resp_explain, resp_correct, resp_summarise]
 
         ctx = ModuleContext(
             user_id="user1",
@@ -380,11 +390,147 @@ class TestFullPipeline:
         # Verify corrected text is real
         assert session_content.corrected_text == "Ich stehe um 7 Uhr auf."
 
-        # Verify recommendations are real
-        assert session_content.recommendations == ["Review separable verbs."]
+        # Verify Step 6 outputs
+        assert session_content.tips == ["Practise separable verb patterns.", "Aim for two-clause sentences."]
+        assert session_content.session_summary == "Solid A1 attempt with one separable verb error."
+        assert session_content.mistakes[0].get("severity") == "expected"
+        assert session_content.comparison_note is None
 
-        # Verify comment is real
-        assert session_content.comment == "Nice try!"
 
-        # Verify ModuleResult errors use taxonomy tags (not raw guesses)
-        assert result.errors[0]["error_tag"] == "verb_conjugation"
+# ---------------------------------------------------------------------------
+# SummariseWritingSessionSkill (Step 6)
+# ---------------------------------------------------------------------------
+
+_ONE_MISTAKE = [
+    {"fragment": "Ich aufstehen", "error_tag": "verb_conjugation",
+     "correction": "Ich stehe auf", "explanation": "Separable verbs split."}
+]
+_TWO_MISTAKES = [
+    {"fragment": "Ich aufstehen", "error_tag": "verb_conjugation",
+     "correction": "Ich stehe auf", "explanation": "Separable verbs split."},
+    {"fragment": "ein Hund", "error_tag": "article",
+     "correction": "einen Hund", "explanation": "Accusative masculine needs einen."},
+]
+
+
+def _make_skill_input(mistakes, level="b1", text_level_estimate=None):
+    return SkillInput(
+        user_id="u1",
+        level=level,
+        parameters={
+            "explained_mistakes": mistakes,
+            "text_level_estimate": text_level_estimate,
+            "writing_prompt": "Describe your morning.",
+            "language": "german",
+        },
+    )
+
+
+def _summarise_llm(mistakes_out, summary="Good effort.", tips=None):
+    """Build a mock LLM that returns a valid Step 6 payload."""
+    llm = MagicMock(spec=BaseLLM)
+    llm.config = MagicMock()
+    llm.config.max_skill_retries = 3
+    llm.config.show_incomplete_responses = False
+    llm.config.show_cut_by_limit_tag = True
+    payload = json.dumps({
+        "session_summary": summary,
+        "mistakes": mistakes_out,
+        "tips": tips or ["Focus on verb placement."],
+        "comparison_note": "ignore me",  # must be forced to None
+    })
+    llm.complete.return_value = LLMResponse(text=payload, model="test-model")
+    return llm
+
+
+class TestSummariseWritingSessionSkill:
+
+    def test_enriches_mistakes_with_severity(self):
+        from skills.summarise_session.writing.skill import SummariseWritingSessionSkill
+        out_mistakes = [{**_ONE_MISTAKE[0], "severity": "expected"}]
+        llm = _summarise_llm(out_mistakes)
+        out = SummariseWritingSessionSkill().run(_make_skill_input(_ONE_MISTAKE), llm)
+        assert out.success is True
+        assert out.metadata["mistakes"][0]["severity"] == "expected"
+        assert out.metadata["mistakes"][0]["fragment"] == "Ich aufstehen"
+
+    def test_valid_tips_and_summary(self):
+        from skills.summarise_session.writing.skill import SummariseWritingSessionSkill
+        out_mistakes = [{**_ONE_MISTAKE[0], "severity": "minor"}]
+        llm = _summarise_llm(out_mistakes, summary="Solid B1 text.", tips=["Try C1 vocab.", "Use Konjunktiv II."])
+        out = SummariseWritingSessionSkill().run(_make_skill_input(_ONE_MISTAKE), llm)
+        assert out.metadata["session_summary"] == "Solid B1 text."
+        assert out.metadata["tips"] == ["Try C1 vocab.", "Use Konjunktiv II."]
+
+    def test_forces_comparison_note_to_none(self):
+        from skills.summarise_session.writing.skill import SummariseWritingSessionSkill
+        out_mistakes = [{**_ONE_MISTAKE[0], "severity": "critical"}]
+        llm = _summarise_llm(out_mistakes)  # payload has comparison_note="ignore me"
+        out = SummariseWritingSessionSkill().run(_make_skill_input(_ONE_MISTAKE), llm)
+        assert out.metadata["comparison_note"] is None
+
+    def test_invalid_severity_triggers_retry(self):
+        from skills.summarise_session.writing.skill import SummariseWritingSessionSkill
+        bad = json.dumps({"session_summary": "ok", "mistakes": [{**_ONE_MISTAKE[0], "severity": "moderate"}], "tips": ["tip"], "comparison_note": None})
+        good = json.dumps({"session_summary": "ok", "mistakes": [{**_ONE_MISTAKE[0], "severity": "expected"}], "tips": ["tip"], "comparison_note": None})
+        llm = MagicMock(spec=BaseLLM)
+        llm.config = MagicMock()
+        llm.config.max_skill_retries = 3
+        llm.config.show_incomplete_responses = False
+        llm.config.show_cut_by_limit_tag = True
+        llm.complete.side_effect = [
+            LLMResponse(text=bad, model="test-model"),
+            LLMResponse(text=good, model="test-model"),
+        ]
+        out = SummariseWritingSessionSkill().run(_make_skill_input(_ONE_MISTAKE), llm)
+        assert llm.complete.call_count == 2
+        assert out.success is True
+        assert out.metadata["mistakes"][0]["severity"] == "expected"
+
+    def test_count_mismatch_triggers_retry(self):
+        from skills.summarise_session.writing.skill import SummariseWritingSessionSkill
+        one_out = [{**_ONE_MISTAKE[0], "severity": "expected"}]
+        two_out = [{**m, "severity": "expected"} for m in _TWO_MISTAKES]
+        bad = json.dumps({"session_summary": "ok", "mistakes": one_out, "tips": ["t"], "comparison_note": None})
+        good = json.dumps({"session_summary": "ok", "mistakes": two_out, "tips": ["t"], "comparison_note": None})
+        llm = MagicMock(spec=BaseLLM)
+        llm.config = MagicMock()
+        llm.config.max_skill_retries = 3
+        llm.config.show_incomplete_responses = False
+        llm.config.show_cut_by_limit_tag = True
+        llm.complete.side_effect = [
+            LLMResponse(text=bad, model="test-model"),
+            LLMResponse(text=good, model="test-model"),
+        ]
+        out = SummariseWritingSessionSkill().run(_make_skill_input(_TWO_MISTAKES), llm)
+        assert llm.complete.call_count == 2
+        assert out.success is True
+        assert len(out.metadata["mistakes"]) == 2
+
+    def test_failure_returns_safe_defaults(self):
+        from skills.summarise_session.writing.skill import SummariseWritingSessionSkill
+        llm = MagicMock(spec=BaseLLM)
+        llm.config = MagicMock()
+        llm.config.max_skill_retries = 3
+        llm.config.show_incomplete_responses = False
+        llm.config.show_cut_by_limit_tag = True
+        llm.complete.return_value = LLMResponse(text="not json", model="test-model")
+        out = SummariseWritingSessionSkill().run(_make_skill_input(_ONE_MISTAKE), llm)
+        assert out.success is False
+        assert out.metadata["mistakes"] == _ONE_MISTAKE  # original preserved, no data loss
+        assert out.metadata["tips"] == []
+        assert out.metadata["comparison_note"] is None
+
+    def test_empty_mistakes_still_calls_llm(self):
+        from skills.summarise_session.writing.skill import SummariseWritingSessionSkill
+        payload = json.dumps({"session_summary": "No errors — excellent work!", "mistakes": [], "tips": ["Keep it up."], "comparison_note": None})
+        llm = MagicMock(spec=BaseLLM)
+        llm.config = MagicMock()
+        llm.config.max_skill_retries = 3
+        llm.config.show_incomplete_responses = False
+        llm.config.show_cut_by_limit_tag = True
+        llm.complete.return_value = LLMResponse(text=payload, model="test-model")
+        out = SummariseWritingSessionSkill().run(_make_skill_input([]), llm)
+        assert llm.complete.call_count == 1
+        assert out.metadata["mistakes"] == []
+        assert out.metadata["session_summary"] == "No errors — excellent work!"

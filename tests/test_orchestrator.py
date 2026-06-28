@@ -295,9 +295,9 @@ def test_finalize_session_success(store_and_llm):
         requirements="Write about your day.",
         user_text="Ich bin student.",
         mistakes=[],
-        recommendations=[],
+        tips=[],
         corrected_text="Ich bin Student.",
-        comment="Great job",
+        session_summary="Great job",
         btw_log=[],
         vocab_updates=[]
     )

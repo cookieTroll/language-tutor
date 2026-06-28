@@ -50,7 +50,18 @@ def test_writing_module_run(mock_input):
         text='{"corrected_text": "Ich stehe um 7 Uhr auf. Ich esse Frühstück.", "recommendations": ["Practice separable verbs."], "comment": "Good attempt!"}',
         model="test-model"
     )
-    llm.complete.side_effect = [resp_btw_ans, resp_detect, resp_classify, resp_explain, resp_correct]
+    # 6. Step 6 — summarise_writing_session
+    import json
+    resp_summarise = LLMResponse(
+        text=json.dumps({
+            "session_summary": "Good attempt with one separable verb error typical for A1.",
+            "mistakes": [{"fragment": "Ich aufstehen", "error_tag": "verb_conjugation", "correction": "Ich stehe auf", "explanation": "Separable verbs split in main clauses; the prefix moves to the end.", "severity": "expected"}],
+            "tips": ["Practice separable verbs daily.", "Build longer connected sentences."],
+            "comparison_note": None,
+        }),
+        model="test-model"
+    )
+    llm.complete.side_effect = [resp_btw_ans, resp_detect, resp_classify, resp_explain, resp_correct, resp_summarise]
 
     ctx = ModuleContext(
         user_id="user1",
@@ -87,8 +98,10 @@ def test_writing_module_run(mock_input):
     assert session_content.mistakes[0]["correction"] == "Ich stehe auf"
     assert session_content.mistakes[0]["explanation"] != ""
     assert session_content.corrected_text == "Ich stehe um 7 Uhr auf. Ich esse Frühstück."
-    assert session_content.recommendations == ["Practice separable verbs."]
-    assert session_content.comment == "Good attempt!"
+    assert session_content.tips == ["Practice separable verbs daily.", "Build longer connected sentences."]
+    assert session_content.session_summary == "Good attempt with one separable verb error typical for A1."
+    assert session_content.mistakes[0].get("severity") == "expected"
+    assert session_content.comparison_note is None
 
     # BTW log in session YAML
     assert len(session_content.btw_log) == 1

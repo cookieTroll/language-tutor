@@ -15,9 +15,10 @@ class _PipelineResult:
     detector_error: str
     explained_mistakes: list[dict]
     corrected_text: str
-    recommendations: list[str]
-    comment: str
+    tips: list[str]
+    session_summary: str
     text_level_estimate: str | None = None
+    comparison_note: str | None = None
 
 
 class WritingModule(ModuleProtocol):
@@ -212,8 +213,8 @@ class WritingModule(ModuleProtocol):
                 detector_error=detector_output.metadata.get("error", "Unknown error"),
                 explained_mistakes=[],
                 corrected_text=user_text,
-                recommendations=[],
-                comment="",
+                tips=[],
+                session_summary="",
                 text_level_estimate=text_level_estimate,
             )
         raw_mistakes = detector_output.metadata.get("raw_mistakes", [])
@@ -240,7 +241,7 @@ class WritingModule(ModuleProtocol):
         )
         explained_mistakes = explain_output.metadata.get("explained_mistakes", [])
 
-        # Step 4: write corrected text + recommendations
+        # Step 4: write corrected text
         correction_output = self.skills["write_correction"].run(
             SkillInput(
                 user_id=ctx.user_id,
@@ -253,14 +254,31 @@ class WritingModule(ModuleProtocol):
             ),
             llm,
         )
+        corrected_text = correction_output.metadata.get("corrected_text", user_text)
+
+        # Step 6: enrich mistakes with severity, generate summary and tips
+        summary_output = self.skills["summarise_writing_session"].run(
+            SkillInput(
+                user_id=ctx.user_id,
+                level=ctx.level,
+                parameters={
+                    "explained_mistakes": explained_mistakes,
+                    "text_level_estimate": text_level_estimate,
+                    "writing_prompt": writing_prompt,
+                    "language": ctx.language,
+                },
+            ),
+            llm,
+        )
         return _PipelineResult(
             detector_success=True,
             detector_error="",
-            explained_mistakes=explained_mistakes,
-            corrected_text=correction_output.metadata.get("corrected_text", user_text),
-            recommendations=correction_output.metadata.get("recommendations", []),
-            comment=correction_output.metadata.get("comment", ""),
+            explained_mistakes=summary_output.metadata.get("mistakes", explained_mistakes),
+            corrected_text=corrected_text,
+            tips=summary_output.metadata.get("tips", []),
+            session_summary=summary_output.metadata.get("session_summary", ""),
             text_level_estimate=text_level_estimate,
+            comparison_note=summary_output.metadata.get("comparison_note"),
         )
 
     def _print_evaluation(self, pipeline: _PipelineResult, stated_level: str = "") -> None:
@@ -275,11 +293,26 @@ class WritingModule(ModuleProtocol):
             print(f"    Error: {pipeline.detector_error}")
         elif pipeline.explained_mistakes:
             print(f"Found {len(pipeline.explained_mistakes)} mistake(s):\n")
-            for i, m in enumerate(pipeline.explained_mistakes, 1):
-                print(f"{i}. [{m['error_tag']}] '{m['fragment']}'")
-                print(f"   Correction : {m['correction']}")
-                print(f"   Explanation: {m['explanation']}")
-                print()
+            groups: dict[str, list[dict]] = {"critical": [], "expected": [], "minor": [], "": []}
+            for m in pipeline.explained_mistakes:
+                groups.setdefault(m.get("severity", ""), []).append(m)
+            labels = {
+                "critical": "── Critical ──────────────────────────────────────",
+                "expected": "── Expected at this level ────────────────────────",
+                "minor":    "── Minor / stylistic ─────────────────────────────",
+                "":         "── Mistakes ──────────────────────────────────────",
+            }
+            counter = 0
+            for sev in ("critical", "expected", "minor", ""):
+                if not groups.get(sev):
+                    continue
+                print(labels[sev])
+                for m in groups[sev]:
+                    counter += 1
+                    print(f"{counter}. [{m['error_tag']}] '{m['fragment']}'")
+                    print(f"   Correction : {m['correction']}")
+                    print(f"   Explanation: {m['explanation']}")
+                    print()
         else:
             print("Excellent! No mistakes were identified.")
 
@@ -288,15 +321,16 @@ class WritingModule(ModuleProtocol):
             print(pipeline.corrected_text)
             print()
 
-        if pipeline.recommendations:
-            print("── Recommendations ───────────────────────────────")
-            for rec in pipeline.recommendations:
-                print(f"  • {rec}")
+        if pipeline.session_summary:
+            print("── Session summary ───────────────────────────────")
+            print(f"  {pipeline.session_summary}")
             print()
 
-        if pipeline.comment:
-            print("── Comment ───────────────────────────────────────")
-            print(f"  {pipeline.comment}")
+        if pipeline.tips:
+            print("── Tips ──────────────────────────────────────────")
+            for tip in pipeline.tips:
+                print(f"  • {tip}")
+            print()
 
         if pipeline.text_level_estimate:
             estimate = pipeline.text_level_estimate.upper()
@@ -342,9 +376,9 @@ class WritingModule(ModuleProtocol):
             requirements=requirements,
             user_text=user_text,
             mistakes=pipeline.explained_mistakes,
-            recommendations=pipeline.recommendations,
+            tips=pipeline.tips,
             corrected_text=pipeline.corrected_text,
-            comment=pipeline.comment,
+            session_summary=pipeline.session_summary,
             btw_log=[
                 {
                     "question": e.question,
@@ -360,6 +394,7 @@ class WritingModule(ModuleProtocol):
             ],
             suggested_focus=None,
             text_level_estimate=pipeline.text_level_estimate,
+            comparison_note=pipeline.comparison_note,
         )
 
         result = ModuleResult(
@@ -368,7 +403,7 @@ class WritingModule(ModuleProtocol):
             task_label="writing_free",
             task_description=writing_prompt,
             errors=errors,
-            comment=pipeline.comment,
+            comment=pipeline.session_summary,
             started_at=started_at,
             completed_at=completed_at,
             duration_minutes=duration_minutes,

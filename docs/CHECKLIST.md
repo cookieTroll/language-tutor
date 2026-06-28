@@ -108,33 +108,33 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 - [ ] [ ] [ ] UI timer widget (Layer 1c — deferred, depends on `IOHandler`)
 
 ### Negative Vocab List (PoC)
-- [x] [x] [ ] `vocab_flags` table in `schema.sql`
-- [x] [x] [ ] `storage.write_vocab_flag()` — insert or increment `occurrence_count` + update `last_seen`
-- [x] [x] [ ] `storage.get_vocab_flags()` implemented
-- [x] [x] [ ] Orchestrator post-session: writes vocab flags from `/btw` entries and evaluator `vocabulary` errors
-- [x] [x] [ ] `ContextRequest.include_vocab_flags` fulfilled by orchestrator, passed into `SkillContext`
-- [x] [x] [ ] Unit test: `write_vocab_flag()` increments count on duplicate, does not insert new row
+- [x] [x] [x] `vocab_flags` table in `schema.sql`
+- [x] [x] [x] `storage.write_vocab_flag()` — insert or increment `occurrence_count` + update `last_seen`
+- [x] [x] [x] `storage.get_vocab_flags()` implemented
+- [x] [x] [x] Orchestrator post-session: writes vocab flags from `/btw` entries and evaluator `vocabulary` errors
+- [x] [x] [x] `ContextRequest.include_vocab_flags` fulfilled by orchestrator, passed into `SkillContext`
+- [x] [x] [x] Unit test: `write_vocab_flag()` increments count on duplicate, does not insert new row
 
 ### Interruption — Resume / Log / Discard (PoC)
-- [x] [ ] [ ] Checkpoint file written incrementally during `skill.run()` — each turn appended to `data/checkpoints/{user_id}/{session_id}.json`
-- [x] [ ] [ ] `status='interrupted'` added to valid status values; schema updated
-- [x] [ ] [ ] On startup: detect `in_progress` sessions, present resume/log/discard prompt
-- [x] [ ] [ ] "Log it" path: load transcript → LLM summarize → write partial session file with `status='interrupted'`
-- [x] [ ] [ ] "Discard" path: delete checkpoint, mark `status='abandoned'`
-- [x] [ ] [ ] "Resume" path: check `restore_checkpoint()` available on skill; if not, show unavailable message, fall back to log/discard
-- [x] [ ] [ ] Checkpoint deleted on successful completion, log, or discard
-- [x] [ ] [ ] Unit test: startup correctly identifies interrupted sessions; all three paths produce correct DB state
+- [x] [x] [ ] Checkpoint file written incrementally during `skill.run()` — each turn appended to `data/checkpoints/{user_id}/{session_id}.json`
+- [x] [x] [ ] `status='interrupted'` added to valid status values; schema updated
+- [x] [x] [ ] On startup: detect `in_progress` sessions, present resume/log/discard prompt
+- [x] [x] [ ] "Log it" path: load transcript → LLM summarize → write partial session file with `status='interrupted'`
+- [x] [x] [ ] "Discard" path: delete checkpoint, mark `status='abandoned'`
+- [x] [x] [ ] "Resume" path: check `restore_checkpoint()` available on skill; if not, show unavailable message, fall back to log/discard
+- [x] [x] [ ] Checkpoint deleted on successful completion, log, or discard
+- [x] [x] [ ] Unit test: startup correctly identifies interrupted sessions; all three paths produce correct DB state
 
 ### CLI (PoC)
-- [x] [ ] [ ] `ui/cli.py`:
-  - [x] [ ] [ ] Startup: load config, initialise storage, check for interrupted sessions
-  - [x] [ ] [ ] Display orchestrator recommendation with reason
-  - [x] [ ] [ ] Accept user confirmation or override
-  - [x] [ ] [ ] Display writing topic + requirements
-  - [x] [ ] [ ] Accept multi-line user text input (blank line or `/end` to submit)
-  - [x] [ ] [ ] Display evaluation output (mistakes with explanations, corrected text, recommendations)
-  - [x] [ ] [ ] Confirm session written (show file path)
-- [x] [ ] [ ] Manual end-to-end test: run one full session, verify DB row and YAML file written correctly
+- [x] [x] [ ] `ui/cli.py`:
+  - [x] [x] [ ] Startup: load config, initialise storage, check for interrupted sessions
+  - [x] [x] [ ] Display orchestrator recommendation with reason
+  - [x] [x] [ ] Accept user confirmation or override
+  - [x] [x] [ ] Display writing topic + requirements
+  - [x] [x] [ ] Accept multi-line user text input (blank line or `/end` to submit)
+  - [x] [x] [ ] Display evaluation output (mistakes with explanations, corrected text, recommendations)
+  - [x] [x] [ ] Confirm session written (show file path)
+- [x] [x] [ ] Manual end-to-end test: run one full session, verify DB row and YAML file written correctly
 
 ---
 
@@ -172,10 +172,10 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
 - [ ] [ ] [ ] Evaluate whether taxonomy tags surface to the user directly or are mapped to learner-friendly labels in the UI layer
 
 ### Steps 5–6 — Text-Level Estimation & Session Summary
-- [ ] [ ] [ ] `skills/estimate_text_level/skill.py` — Step 5: Text CEFR Estimator
-  - [ ] [ ] [ ] Input: raw user text + writing prompt + user's stated level
-  - [ ] [ ] [ ] Output: `text_level_estimate: str` (CEFR band) or `None` if text is too short
-  - [ ] [ ] [ ] Prompt grounds estimation in CEFR descriptors from `lang/maps/cefr/`
+- [x] [x] [ ] `skills/estimate_text_level/skill.py` — Step 5: Text CEFR Estimator
+  - [x] [x] [ ] Input: raw user text + writing prompt + user's stated level
+  - [x] [x] [ ] Output: `text_level_estimate: str` (CEFR band) or `None` if text is too short
+  - [x] [x] [ ] Prompt grounds estimation in CEFR descriptors from `lang/maps/cefr_descriptors/`
 - [ ] [ ] [ ] `skills/summarise_session/skill.py` — Step 6: Session Summariser
   - [ ] [ ] [ ] Input: user level, text level estimate, explained mistakes (with `error_tag`), writing prompt
   - [ ] [ ] [ ] Output:
@@ -183,7 +183,7 @@ Cross-reference `DESIGN.md` for contracts and `TODO.md` for deferred decisions.
     - `mistakes: list[dict]` — explained mistakes enriched with `severity` (`critical` / `expected` / `minor`); severity from gap between user level and per-tag CEFR mastery level (defined in design research)
     - `tips: list[str]` — improvement suggestions sorted by distance from current level (near-level first, aspirational last); not corrections
     - `comparison_note: str | None` — `None` in Layer 1a; filled in by Layer 2b
-- [ ] [ ] [ ] Update `WritingSessionContent`: add `text_level_estimate: str | None`, add `severity` to each mistake dict, replace `recommendations: list[str]` with `tips: list[str]`, replace `comment: str` with `session_summary: str`, add `comparison_note: str | None = None`
+- [ ] [ ] [ ] Update `WritingSessionContent`: ~~add `text_level_estimate: str | None`~~ (done in Step 5), add `severity` to each mistake dict, replace `recommendations: list[str]` with `tips: list[str]`, replace `comment: str` with `session_summary: str`, add `comparison_note: str | None = None`
 - [ ] [ ] [ ] Update `_PipelineResult` to carry Step 5–6 outputs; update `_print_evaluation()` to display text level, severity-grouped mistakes, and tips
 - [ ] [ ] [ ] Wire Steps 5–6 into `WritingModule._run_pipeline()`
 - [ ] [ ] [ ] Unit tests for Steps 5 and 6 (mocked LLM)
