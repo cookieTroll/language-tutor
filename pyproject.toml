@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "language-tutor"
+version = "0.1.0"
+description = "Personal AI-powered Language Tutor"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openai",
+    "pydantic>=2.0.0",
+    "pyyaml"
+]
+
+[project.scripts]
+ltut = "ui.cli:main"

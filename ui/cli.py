@@ -5,6 +5,14 @@ from llm.factory import build_llm
 from orchestrator.orchestrator import Orchestrator
 
 def main():
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1].strip().lower()
+        if cmd != "cli":
+            print("Usage: ltut <command>\n")
+            print("Commands:")
+            print("  cli    Start the interactive local tutor console")
+            return
+
     print("==================================================")
     print("          LANGUAGETUTOR - LOCAL POC TUI           ")
     print("==================================================")
