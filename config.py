@@ -25,10 +25,18 @@ class AppConfig:
     llm: LLMConfig                     # LLM backend configurations
 
 def load_config(config_path: str = "config.yaml") -> AppConfig:
-    if not os.path.exists(config_path):
+    resolved_path = config_path
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    
+    if not os.path.isabs(resolved_path) and not os.path.exists(resolved_path):
+        fallback = os.path.join(project_root, config_path)
+        if os.path.exists(fallback):
+            resolved_path = fallback
+
+    if not os.path.exists(resolved_path):
         raise FileNotFoundError(f"Configuration file not found at {config_path}")
     
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(resolved_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
         
     # Basic validation of outer fields
@@ -71,8 +79,13 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         max_skill_retries=int(llm_data.get("max_skill_retries", 3)),
     )
     
+    # Resolve relative data_root against project root
+    data_root = data["data_root"]
+    if not os.path.isabs(data_root):
+        data_root = os.path.abspath(os.path.join(project_root, data_root))
+
     return AppConfig(
-        data_root=data["data_root"],
+        data_root=data_root,
         default_level=data["default_level"].lower(),
         cold_start_threshold=int(data["cold_start_threshold"]),
         interruption_timeout_minutes=int(data["interruption_timeout_minutes"]),
