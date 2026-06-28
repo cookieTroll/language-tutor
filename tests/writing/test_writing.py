@@ -11,7 +11,7 @@ from skills.protocols import SkillInput
 def test_writing_module_run(mock_input):
     # Simulate user interaction inside the module's input loop:
     # 1. Write first sentence
-    # 2. Ask a vocabulary question mid-session via /btw (matches regex extraction)
+    # 2. Ask a vocabulary question mid-session via /btw (regex extracts "aufstehen")
     # 3. Write second sentence
     # 4. Press Enter (empty line) to submit and finish
     mock_input.side_effect = [
@@ -22,16 +22,35 @@ def test_writing_module_run(mock_input):
     ]
 
     llm = MagicMock(spec=BaseLLM)
-    
-    # Mock LLM completions:
-    # 1. BTW Answer ("It means to get up.") - Regex extracts "aufstehen", so no extraction LLM call is made.
-    # 2. Detect Mistakes JSON output
+    llm.config = MagicMock()
+    llm.config.max_skill_retries = 3
+    llm.config.show_incomplete_responses = False
+    llm.config.show_cut_by_limit_tag = True
+
+    # Mock LLM completions in pipeline order:
+    # 1. BTW answer (regex extracts "aufstehen" — no extra LLM call needed)
     resp_btw_ans = LLMResponse(text="It means to get up.", model="test-model")
+    # 2. Step 1 — detect_mistakes
     resp_detect = LLMResponse(
         text='{"mistakes": [{"fragment": "Ich aufstehen", "error_type_hint": "separable verb position"}]}',
         model="test-model"
     )
-    llm.complete.side_effect = [resp_btw_ans, resp_detect]
+    # 3. Step 2 — classify_mistakes
+    resp_classify = LLMResponse(
+        text='{"classified": [{"fragment": "Ich aufstehen", "error_tag": "verb_conjugation", "correction": "Ich stehe auf"}]}',
+        model="test-model"
+    )
+    # 4. Step 3 — explain_mistakes
+    resp_explain = LLMResponse(
+        text='{"explained": [{"fragment": "Ich aufstehen", "error_tag": "verb_conjugation", "correction": "Ich stehe auf", "explanation": "Separable verbs split in main clauses; the prefix moves to the end."}]}',
+        model="test-model"
+    )
+    # 5. Step 4 — write_correction
+    resp_correct = LLMResponse(
+        text='{"corrected_text": "Ich stehe um 7 Uhr auf. Ich esse Frühstück.", "recommendations": ["Practice separable verbs."], "comment": "Good attempt!"}',
+        model="test-model"
+    )
+    llm.complete.side_effect = [resp_btw_ans, resp_detect, resp_classify, resp_explain, resp_correct]
 
     ctx = ModuleContext(
         user_id="user1",
@@ -47,22 +66,34 @@ def test_writing_module_run(mock_input):
     module = WritingModule()
     result, session_content = module.run(ctx, llm)
 
-    # Asserts
+    # Core module result assertions
     assert result.module == "writing"
     assert result.task_label == "writing_free"
     assert len(result.errors) == 1
+    assert result.errors[0]["error_tag"] == "verb_conjugation"   # taxonomy tag, not raw hint
     assert result.errors[0]["fragment"] == "Ich aufstehen"
-    
+
+    # BTW entry assertions
     assert len(result.metadata["btw_entries"]) == 1
     assert isinstance(result.metadata["btw_entries"][0], BtwEntry)
     assert result.metadata["btw_entries"][0].question == "what does aufstehen mean?"
     assert result.metadata["btw_entries"][0].answer == "It means to get up."
     assert result.metadata["btw_entries"][0].flagged_word == "aufstehen"
 
-    # Verify session text and log aggregation
+    # Session content — full pipeline fields (no stubs)
     assert session_content.user_text == "Ich aufstehen um 7 Uhr.\nIch esse Fruhstuck."
+    assert len(session_content.mistakes) == 1
+    assert session_content.mistakes[0]["error_tag"] == "verb_conjugation"
+    assert session_content.mistakes[0]["correction"] == "Ich stehe auf"
+    assert session_content.mistakes[0]["explanation"] != ""
+    assert session_content.corrected_text == "Ich stehe um 7 Uhr auf. Ich esse Frühstück."
+    assert session_content.recommendations == ["Practice separable verbs."]
+    assert session_content.comment == "Good attempt!"
+
+    # BTW log in session YAML
     assert len(session_content.btw_log) == 1
     assert session_content.btw_log[0]["question"] == "what does aufstehen mean?"
+
 
 
 def test_btw_handler_llm_fallback_extraction():

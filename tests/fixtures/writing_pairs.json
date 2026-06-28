@@ -1,0 +1,57 @@
+[
+  {
+    "id": "fixture_001",
+    "description": "A1 German text with separable verb and word order errors",
+    "user_text": "Ich aufstehen um 7 Uhr. Dann ich mache Frühstück.",
+    "level": "a1",
+    "language": "german",
+    "expected_mistakes": [
+      {
+        "fragment": "Ich aufstehen",
+        "error_tag": "separable_verb",
+        "correction": "Ich stehe auf"
+      },
+      {
+        "fragment": "Dann ich mache",
+        "error_tag": "word_order",
+        "correction": "Dann mache ich"
+      }
+    ],
+    "expected_corrected_text": "Ich stehe um 7 Uhr auf. Dann mache ich Frühstück."
+  },
+  {
+    "id": "fixture_002",
+    "description": "A2 German text with adjective ending and article gender errors",
+    "user_text": "Ich habe einen neues Auto gekauft. Das Wetter ist schönes heute.",
+    "level": "a2",
+    "language": "german",
+    "expected_mistakes": [
+      {
+        "fragment": "einen neues Auto",
+        "error_tag": "adjective_ending",
+        "correction": "ein neues Auto"
+      },
+      {
+        "fragment": "schönes heute",
+        "error_tag": "adjective_ending",
+        "correction": "schön heute"
+      }
+    ],
+    "expected_corrected_text": "Ich habe ein neues Auto gekauft. Das Wetter ist schön heute."
+  },
+  {
+    "id": "fixture_003",
+    "description": "B1 German text with Perfekt tense and dative case errors",
+    "user_text": "Gestern bin ich zu mein Freund gegangen. Wir haben viel geredet und gelacht.",
+    "level": "b1",
+    "language": "german",
+    "expected_mistakes": [
+      {
+        "fragment": "zu mein Freund",
+        "error_tag": "dative_case",
+        "correction": "zu meinem Freund"
+      }
+    ],
+    "expected_corrected_text": "Gestern bin ich zu meinem Freund gegangen. Wir haben viel geredet und gelacht."
+  }
+]
