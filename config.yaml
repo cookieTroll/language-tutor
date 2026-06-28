@@ -1,25 +1,25 @@
 # LanguageTutor Configuration
 
 # Paths & Directories
-data_root: "data"
+data_root: "data"                      # Root directory for session files, databases, checkpoints, and logs
 
 # Tutor Logic Settings
-default_level: "a1"
-cold_start_threshold: 3
-interruption_timeout_minutes: 15
+default_level: "a1"                    # Default CEFR level (a1-c2) assigned to new users
+cold_start_threshold: 3                # Minimum completed sessions before progress summaries can be generated
+interruption_timeout_minutes: 15       # Time window (in minutes) to check and resume interrupted sessions
 
 # Storage settings: 'sqlite' for production, 'json' for dev/testing
-storage_backend: "sqlite"
+storage_backend: "sqlite"              # Storage engine choice ('sqlite' | 'json')
 
 # LLM Backend configurations
 llm:
-  provider: "openai_compat"
-  base_url: "http://localhost:1234/v1"  # Default LM Studio local port
-  api_key: "lm-studio"                 # Placeholder key for local usage
-  model: "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-  max_tokens: 1000
-  show_incomplete_responses: false
-  show_cut_by_limit_tag: true
-  max_retries: 3
-  initial_retry_delay: 1.0
-  max_skill_retries: 3
+  provider: "openai_compat"            # LLM provider ('openai_compat' | 'gemini')
+  base_url: "http://localhost:1234/v1"  # Base URL for OpenAI-compatible APIs (e.g. LM Studio, Ollama)
+  api_key: "lm-studio"                 # API key for the provider (dummy key for local providers)
+  model: "qwen2.5-coder-7b-instruct-q4_k_m.gguf" # The exact model identifier to request
+  max_tokens: 1000                     # Maximum output token limit for individual completion requests
+  show_incomplete_responses: false     # If true, outputs incomplete LLM text when JSON parsing fails
+  show_cut_by_limit_tag: true          # If true, appends '[TRUNCATED BY LIMIT]' to responses cut off by max_tokens
+  max_retries: 3                       # Connection and network retry attempts for LLM completion requests
+  initial_retry_delay: 1.0             # Starting backoff delay (in seconds) for connection retries
+  max_skill_retries: 3                 # Max agentic self-correction iterations for skills when output validation fails

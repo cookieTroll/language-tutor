@@ -4,25 +4,25 @@ from dataclasses import dataclass
 
 @dataclass
 class LLMConfig:
-    provider: str
-    base_url: str | None
-    api_key: str | None
-    model: str
-    max_tokens: int = 1000
-    show_incomplete_responses: bool = False
-    show_cut_by_limit_tag: bool = True
-    max_retries: int = 3
-    initial_retry_delay: float = 1.0
-    max_skill_retries: int = 3
+    provider: str                      # LLM provider ('openai_compat' | 'gemini')
+    base_url: str | None               # Base URL for API calls
+    api_key: str | None                # API key for the provider
+    model: str                         # The exact model identifier to request
+    max_tokens: int = 1000             # Maximum response tokens per call
+    show_incomplete_responses: bool = False # If true, outputs incomplete LLM text when JSON parsing fails
+    show_cut_by_limit_tag: bool = True # If true, appends '[TRUNCATED BY LIMIT]' to responses cut off by max_tokens
+    max_retries: int = 3               # Connection and network retry attempts for LLM completion requests
+    initial_retry_delay: float = 1.0   # Starting backoff delay (in seconds) for connection retries
+    max_skill_retries: int = 3         # Max agentic self-correction iterations for skills when output validation fails
 
 @dataclass
 class AppConfig:
-    data_root: str
-    default_level: str
-    cold_start_threshold: int
-    interruption_timeout_minutes: int
-    storage_backend: str
-    llm: LLMConfig
+    data_root: str                     # Root directory for session files, databases, checkpoints, and logs
+    default_level: str                 # Default CEFR level (a1-c2) assigned to new users
+    cold_start_threshold: int          # Minimum completed sessions before progress summaries can be generated
+    interruption_timeout_minutes: int  # Time window (in minutes) to check and resume interrupted sessions
+    storage_backend: str               # Storage engine choice ('sqlite' | 'json')
+    llm: LLMConfig                     # LLM backend configurations
 
 def load_config(config_path: str = "config.yaml") -> AppConfig:
     if not os.path.exists(config_path):
