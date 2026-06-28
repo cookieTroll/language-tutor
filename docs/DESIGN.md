@@ -39,13 +39,13 @@ Detailed specs for each component live in `docs/`. This document is the human-fa
 
 | Layer | Scope |
 |-------|-------|
-| **PoC** | Contracts + storage abstraction + orchestrator skeleton (cold start) + writing module: hardcoded topic + raw mistake detector + session file write + CLI |
-| **1a** | Full evaluator pipeline (4-step decomposition) |
-| **1b** | Topic picker + orchestrator LLM routing + progress summary |
-| **1c** | Light local frontend (chat window + session file browser) |
+| **PoC** | Contracts + storage abstraction + orchestrator skeleton (cold start) + writing module: hardcoded topic + raw mistake detector + session file write + CLI + `lang/` content maps (CEFR hints, error taxonomy) |
+| **1a** | Full evaluator pipeline: detect → classify → explain → correct (Steps 1–4); design research (feedback rubrics, severity); text-level estimation + session summary (Steps 5–6) |
+| **1b** | User level review + session history aggregation + topic picker + orchestrator LLM routing |
+| **1c** | `IOHandler` protocol + light local frontend (chat window + session file browser) |
 | **2a** | Grammar module |
-| **2b** | Cross-session writing comparison |
-| **2c** | CEFR estimator |
+| **2b** | Cross-session writing comparison (fills `comparison_note` stub from Step 6) |
+| **2c** | CEFR estimator — aggregates per-session text-level estimates (Step 5) into a user-level estimate |
 | **3a** | Vocab module |
 | **3b** | Level progression tracking |
 | **3c** | Anki export |
@@ -77,10 +77,13 @@ The system is organised into three levels of granularity. Each grain has a clear
        (PoC+1a/b)      (Layer 2a)    (Layer 3a)
              │
              │ composes and invokes
-    ┌────────┼─────────────────────────┐
-    ▼        ▼        ▼        ▼       ▼
-[detect] [process] [feedback] [correct] [pick_topic]
-  Skill    Skill     Skill      Skill     Skill
+    ┌────────┬──────────┬──────────┬─────────┬──────────┬────────────┐
+    ▼        ▼          ▼          ▼         ▼          ▼
+[detect_  [classify_ [explain_  [write_   [estimate_ [summarise_
+mistakes] mistakes]  mistakes]  correction] text_level] session]
+  Step 1    Step 2     Step 3     Step 4     Step 5      Step 6
++ [btw_handler] — utility skill, invoked mid-session, no session file
++ [pick_topic] [summarize_progress] — Layer 1b
 ```
 
 ### Grain 1 — Skills (atomic, lowest grain)
@@ -96,34 +99,28 @@ Skills are pure — no storage access, no LLM provider knowledge. They receive i
 Each skill lives in its own folder under `skills/`:
 ```
 skills/
-├── detect_mistakes/        # session skill
-│   ├── skill.md
+├── detect_mistakes/        # Step 1 — session skill (implemented)
 │   └── prompts.py
-├── process_mistakes/       # session skill
-│   ├── skill.md
+├── classify_mistakes/      # Step 2 — session skill (implemented)
 │   └── prompts.py
-├── generate_feedback/      # session skill
-│   ├── skill.md
+├── explain_mistakes/       # Step 3 — session skill (implemented)
 │   └── prompts.py
-├── write_correction/       # session skill
-│   ├── skill.md
+├── write_correction/       # Step 4 — session skill (implemented)
 │   └── prompts.py
-├── pick_topic/             # session skill
-│   ├── skill.md
+├── estimate_text_level/    # Step 5 — session skill (Layer 1a, planned)
 │   └── prompts.py
-├── btw_handler/            # utility skill — invoked mid-session, no session file
-│   ├── skill.md
+├── summarise_session/      # Step 6 — session skill (Layer 1a, planned)
 │   └── prompts.py
-├── select_grammar/         # session skill (Layer 2a)
-│   └── ...
-├── dump_grammar/           # session skill (Layer 2a)
-│   └── ...
-├── explain_grammar/        # utility skill (Layer 2a)
-│   └── ...
-├── generate_exercises/     # session skill (Layer 2a)
-│   └── ...
-└── drill_vocab/            # session skill (Layer 3a)
-    └── ...
+├── btw_handler/            # utility skill — invoked mid-session, no session file (implemented)
+│   └── prompts.py
+├── pick_topic/             # session skill (Layer 1b, planned)
+├── summarize_progress/     # session skill (Layer 1b, planned)
+├── cefr_estimator/         # session skill (Layer 2c, planned)
+├── select_grammar/         # session skill (Layer 2a, planned)
+├── dump_grammar/           # session skill (Layer 2a, planned)
+├── explain_grammar/        # utility skill (Layer 2a, planned)
+├── generate_exercises/     # session skill (Layer 2a, planned)
+└── drill_vocab/            # session skill (Layer 3a, planned)
 ```
 
 ### Grain 2 — Modules (agents, middle grain)
@@ -194,16 +191,25 @@ See `docs/llm_backends.md` for full detail.
 language-tutor/
 ├── docs/
 │   ├── DESIGN.md           # this file
-│   ├── LAYERS.md           # flat layer manifest — agent-facing
+│   ├── CHECKLIST.md        # implementation checklist with submission schedule
+│   ├── TODO.md             # deferred decisions and known risks
 │   ├── contracts.md        # all protocols and dataclasses
 │   ├── memory.md           # storage, schema, session files, interruption
 │   ├── orchestrator.md     # orchestrator logic, cold start, prompts, aggregation
 │   ├── testing.md          # three-tier testing architecture
 │   ├── llm_backends.md     # LLM abstraction, implementations, config
-│   └── skills/
-│       ├── writing.md      # writing module + skills spec
-│       ├── grammar.md      # grammar module + skills spec (Layer 2a)
-│       └── vocab.md        # vocab module + skills spec (Layer 3a)
+│   └── writing.md          # writing module + evaluator pipeline spec (planned)
+│
+├── lang/                   # versioned content maps — CEFR hints and error taxonomy
+│   ├── models.py           # Pydantic models: CEFRMap, TaxonomyMap, LanguageConfig
+│   ├── loader.py           # _Registry: loads + cross-validates maps at startup
+│   ├── maps/
+│   │   ├── cefr/           # {name}.yaml — versioned CEFR pedagogical hint maps
+│   │   └── taxonomy/       # {name}.yaml — versioned error taxonomy maps
+│   └── languages/          # {language}.yaml — maps language → cefr_hints + taxonomy
+│
+├── shared/
+│   └── timer.py            # SessionTimer — background thread, updates terminal title
 │
 ├── llm/
 │   ├── base.py             # BaseLLM abstract class
@@ -219,38 +225,23 @@ language-tutor/
 │   ├── protocols.py        # ModuleProtocol, ModuleContext, ModuleResult
 │   ├── registry.py         # MODULE_REGISTRY, get_registry_description()
 │   ├── writing/
-│   │   ├── module.md
-│   │   ├── agent.py
-│   │   └── skills.py
+│   │   ├── agent.py        # WritingModule — orchestrates evaluator pipeline
+│   │   └── skills.py       # skill instantiation and injection
 │   ├── grammar/            # Layer 2a
-│   │   ├── module.md
-│   │   ├── agent.py
-│   │   └── skills.py
 │   └── vocab/              # Layer 3a
-│       ├── module.md
-│       ├── agent.py
-│       └── skills.py
 │
 ├── skills/
 │   ├── protocols.py        # SkillProtocol, SkillInput, SkillOutput
-│   ├── detect_mistakes/
-│   │   ├── skill.md
-│   │   └── prompts.py
-│   ├── process_mistakes/
-│   │   ├── skill.md
-│   │   └── prompts.py
-│   ├── generate_feedback/
-│   │   ├── skill.md
-│   │   └── prompts.py
-│   ├── write_correction/
-│   │   ├── skill.md
-│   │   └── prompts.py
-│   ├── pick_topic/
-│   │   ├── skill.md
-│   │   └── prompts.py
-│   ├── btw_handler/        # utility skill
-│   │   ├── skill.md
-│   │   └── prompts.py
+│   ├── detect_mistakes/    # Step 1 (implemented)
+│   ├── classify_mistakes/  # Step 2 (implemented)
+│   ├── explain_mistakes/   # Step 3 (implemented)
+│   ├── write_correction/   # Step 4 (implemented)
+│   ├── estimate_text_level/ # Step 5 (planned, Layer 1a)
+│   ├── summarise_session/  # Step 6 (planned, Layer 1a)
+│   ├── btw_handler/        # utility skill (implemented)
+│   ├── pick_topic/         # Layer 1b
+│   ├── summarize_progress/ # Layer 1b
+│   ├── cefr_estimator/     # Layer 2c
 │   ├── select_grammar/     # Layer 2a
 │   ├── dump_grammar/       # Layer 2a
 │   ├── explain_grammar/    # Layer 2a utility
@@ -269,25 +260,31 @@ language-tutor/
 │   └── checkpoints/
 │
 ├── ui/
-│   ├── cli.py              # PoC
-│   ├── app.py              # Layer 1c
+│   ├── cli.py              # PoC CLI
+│   ├── app.py              # Layer 1c frontend
 │   └── mcp_server.py       # Layer 3d
 │
 ├── tests/
 │   ├── test_storage.py
 │   ├── test_registry.py
-│   ├── test_taxonomy.py
 │   ├── test_orchestrator.py
 │   ├── test_llm.py
-│   ├── judge/
+│   ├── writing/
+│   │   ├── test_writing.py
+│   │   └── test_writing_pipeline.py
+│   ├── lang/
+│   │   └── test_lang.py
+│   ├── judge/              # planned
 │   │   ├── judge_detector.py
 │   │   ├── judge_evaluator.py
+│   │   ├── judge_summary.py
 │   │   └── judge_orchestrator.py
 │   └── fixtures/
 │       ├── writing_pairs.json
 │       ├── orchestrator_cases.json
 │       └── regression/
 │
+├── pyproject.toml
 ├── README.md
 ├── requirements.txt
 └── config.yaml
@@ -320,3 +317,7 @@ language-tutor/
 **Storage abstraction.** `SQLiteSessionStore` for production, `JSONSessionStore` for dev/test. Swap via config. Unit tests run against JSON store — no DB setup.
 
 **Three-tier testing.** Unit tests (deterministic), LLM-as-judge (semantic quality), regression fixtures (accumulated during development). Ground truth within B1 scope.
+
+**`lang/` versioned content maps.** CEFR pedagogical hints and error taxonomy live as versioned YAML artifacts in `lang/maps/`. Language configs in `lang/languages/` reference maps by name. The registry cross-validates all references at startup. Default maps (`default.yaml`) provide a language-agnostic fallback for unconfigured languages. Adding a language = one YAML file; adding a new taxonomy variant = one YAML file, no code change.
+
+**`WritingSessionContent` schema evolution.** Layer 1a Steps 1–4 populate `mistakes`, `recommendations`, `comment`, `corrected_text`. Steps 5–6 extend the schema: add `text_level_estimate`, enrich each mistake with `severity` (`critical`/`expected`/`minor`), replace `recommendations` with `tips` (sorted by distance from user level), replace `comment` with `session_summary`, add `comparison_note: str | None` (stub for Layer 2b). Schema changes are additive; no breaking changes to storage.
