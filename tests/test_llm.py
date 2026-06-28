@@ -135,3 +135,21 @@ def test_openai_compat_completion_retry(mock_openai):
     
     assert response.text == "Hallo Welt!"
     assert mock_chat.completions.create.call_count == 2
+
+@patch("urllib.request.urlopen")
+def test_openai_compat_check_health_success(mock_urlopen):
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    config = LLMConfig(provider="openai_compat", base_url="http://localhost:1234/v1", api_key="key", model="model")
+    llm = OpenAICompatibleLLM(config)
+    assert llm.check_health() is True
+
+@patch("urllib.request.urlopen")
+def test_openai_compat_check_health_failure(mock_urlopen):
+    mock_urlopen.side_effect = Exception("Connection refused")
+
+    config = LLMConfig(provider="openai_compat", base_url="http://localhost:1234/v1", api_key="key", model="model")
+    llm = OpenAICompatibleLLM(config)
+    assert llm.check_health() is False

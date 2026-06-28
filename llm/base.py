@@ -32,3 +32,7 @@ class BaseLLM(ABC):
     ) -> LLMResponse:
         """Send messages, return response. Raises LLMError on failure."""
         ...
+
+    def check_health(self) -> bool:
+        """Returns True if the LLM backend is reachable, False otherwise."""
+        return True

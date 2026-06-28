@@ -13,6 +13,13 @@ def main():
         config = load_config()
         store = build_storage(config)
         llm = build_llm(config.llm)
+        
+        if not llm.check_health():
+            print(f"\n[!] ERROR: Cannot reach local LLM server at '{config.llm.base_url or 'http://localhost:1234/v1'}'.")
+            print("    Please ensure LM Studio (or your local LLM provider) is running and the Local Server is enabled.")
+            print("    If you want to use a cloud provider instead, update 'config.yaml' to use 'gemini'.\n")
+            sys.exit(1)
+            
         orchestrator = Orchestrator(store, llm, config)
     except Exception as e:
         print(f"[!] Error loading initialization layers: {e}")

@@ -51,3 +51,12 @@ class OpenAICompatibleLLM(BaseLLM):
                 # Otherwise, wait with exponential backoff and try again
                 time.sleep(delay)
                 delay *= 2.0
+
+    def check_health(self) -> bool:
+        import urllib.request
+        try:
+            url = f"{self.config.base_url or 'http://localhost:1234/v1'}/models"
+            with urllib.request.urlopen(url, timeout=1.5) as response:
+                return response.status == 200
+        except Exception:
+            return False
