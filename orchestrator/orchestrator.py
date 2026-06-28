@@ -198,6 +198,8 @@ class Orchestrator(OrchestratorProtocol):
             choice = input("Continue or switch language? [Press Enter to continue, or type new language]: ").strip().lower()
             if choice:
                 selected_lang = choice
+            else:
+                selected_lang = active_lang
         else:
             if not selected_lang:
                 selected_lang = input("\nWhich language would you like to study? ").strip().lower()
