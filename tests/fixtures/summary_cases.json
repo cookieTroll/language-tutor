@@ -1,0 +1,153 @@
+[
+  {
+    "id": "sum_001",
+    "description": "One sentence submitted for a detailed multi-sentence prompt — summary must flag task incompletion and low effort",
+    "writing_prompt": "Describe your typical school day from morning to evening. Include what you eat, how you travel to school, your lessons, and your afternoon activities. Write at least 6–8 sentences.",
+    "user_text": "Ich gehe zur Schule.",
+    "level": "a2",
+    "language": "german",
+    "text_level_estimate": "a1",
+    "min_words": 80,
+    "explained_mistakes": []
+  },
+  {
+    "id": "sum_002",
+    "description": "Only noun_declension (dative) errors repeated 3× — near-level tips must stay on dative case, not introduce unrelated topics",
+    "writing_prompt": "Tell me about your family.",
+    "user_text": "Ich wohne mit mein Bruder und mein Vater. Ich spiele oft mit mein Hund.",
+    "level": "a2",
+    "language": "german",
+    "text_level_estimate": "a2",
+    "explained_mistakes": [
+      {
+        "fragment": "mit mein Bruder",
+        "error_tag": "noun_declension",
+        "correction": "mit meinem Bruder",
+        "explanation": "After 'mit' (dative preposition), use 'meinem' for masculine nouns."
+      },
+      {
+        "fragment": "mein Vater",
+        "error_tag": "noun_declension",
+        "correction": "meinem Vater",
+        "explanation": "In dative context after 'mit', use 'meinem' not 'mein'."
+      },
+      {
+        "fragment": "mit mein Hund",
+        "error_tag": "noun_declension",
+        "correction": "mit meinem Hund",
+        "explanation": "After 'mit' (dative), masculine nouns take 'meinem'."
+      }
+    ]
+  },
+  {
+    "id": "sum_003",
+    "description": "Basic verb conjugation errors at B1 — must be rated 'critical', not 'expected' or 'minor'",
+    "writing_prompt": "Describe what you did last weekend.",
+    "user_text": "Am Wochenende ich haben Fußball gespielt. Das Wetter war sehr schön und ich sein glücklich.",
+    "level": "b1",
+    "language": "german",
+    "text_level_estimate": "a2",
+    "explained_mistakes": [
+      {
+        "fragment": "ich haben",
+        "error_tag": "verb_conjugation",
+        "correction": "ich habe",
+        "explanation": "'haben' must agree with 'ich' — first person singular is 'habe'."
+      },
+      {
+        "fragment": "ich sein",
+        "error_tag": "verb_conjugation",
+        "correction": "ich war",
+        "explanation": "Past tense of 'sein' for 'ich' is 'war'."
+      }
+    ]
+  },
+  {
+    "id": "sum_004",
+    "description": "Article errors repeated 3× at A2 — systematic gap, all should be rated 'critical'",
+    "writing_prompt": "Describe your bedroom.",
+    "user_text": "In mein Zimmer ist das Bett sehr groß. Das Tisch ist klein. Ich habe ein Lampe auf das Tisch.",
+    "level": "a2",
+    "language": "german",
+    "text_level_estimate": "a1",
+    "explained_mistakes": [
+      {
+        "fragment": "Das Tisch",
+        "error_tag": "article",
+        "correction": "Der Tisch",
+        "explanation": "Tisch is masculine — use 'der', not 'das'."
+      },
+      {
+        "fragment": "ein Lampe",
+        "error_tag": "article",
+        "correction": "eine Lampe",
+        "explanation": "Lampe is feminine — use 'eine', not 'ein'."
+      },
+      {
+        "fragment": "das Tisch",
+        "error_tag": "article",
+        "correction": "dem Tisch",
+        "explanation": "After 'auf' in a location context (dative), masculine nouns take 'dem'."
+      }
+    ]
+  },
+  {
+    "id": "real_001",
+    "description": "Clean B1 narrative (CERN school trip) — very few errors, tips should be aspirational not hallucinated",
+    "writing_prompt": "Write about a memorable school trip or excursion. Include where you went, what you saw, and your overall impression. Write at least 100 words.",
+    "user_text": "Als ich in der Schule war, hatte ich eine verrückte Idee, dass meine Mitschüler und ich nach CERN fahren sollten. CERN ist ein wichtiges Wissenschaftszentrum für Physik. Im Grunde genommen ist es ein großer Ring unter der Erde, wo Partikel sehr schnell fliegen und interessante Dinge passieren. Ich sprach mit meiner Physiklehrerin und sie mochte das, deshalb organisierte sie einen Ausflug. Wir fuhren mit dem Bus durch Deutschland und die Schweiz. Auf dem Weg besuchten wir auch Bern und eine kleine Stadt, in der eine Statue von Freddie Mercury stand. Dann hatten wir Zeit, Genf zu erkunden. Am nächsten Tag besuchten wir CERN. Es war sehr interessant, weil es eine Ausstellung über die Experimente, die die Leute dort machen, gab. Ich denke, dass der Ausflug insgesamt ein Erfolg war.",
+    "level": "b1",
+    "language": "german",
+    "text_level_estimate": "b1",
+    "min_words": 100,
+    "explained_mistakes": []
+  },
+  {
+    "id": "real_002",
+    "description": "B1 formal note to teacher — verb conjugation and word order errors in subordinate clauses",
+    "writing_prompt": "Write a formal note to your child's teacher explaining why they will be absent from school for the next two weeks.",
+    "user_text": "Sehr geehrte Frau Evelin, ich schreibe Ihnen, weil Jan die nächsten zwei Wochen in die Schule nicht kommt. Er hat sich beim Fußballspielen den Fuß verletzt, deshalb kann er nicht laufen. Wir sind zum Arzt gegangen und er hat uns gesagt, dass Jan zuhause bleiben muss, und hat uns eine Bescheinigung gegeben, die beigefügt ist. Zwei Wochen sind eine lange Zeit und er verpassen viele Unterrichtsstunden. Obwohl er nicht laufen kann, kann er lernen. Könnten Sie uns bitte schicken, was er soll tun, sodass er so wenig wie möglich verpasst. Vielen Dank. Mit freundlichen Grüßen, JK",
+    "level": "b1",
+    "language": "german",
+    "text_level_estimate": "b1",
+    "min_words": 60,
+    "explained_mistakes": [
+      {
+        "fragment": "er verpassen",
+        "error_tag": "verb_conjugation",
+        "correction": "er verpasst",
+        "explanation": "Third-person singular present tense requires the '-t' ending: 'verpasst', not the infinitive form 'verpassen'."
+      },
+      {
+        "fragment": "was er soll tun",
+        "error_tag": "word_order",
+        "correction": "was er tun soll",
+        "explanation": "In a subordinate clause, the conjugated verb must go to the end: 'was er tun soll'."
+      }
+    ]
+  },
+  {
+    "id": "real_003",
+    "description": "B1 formal email about missing first class — wrong preposition for 'teilnehmen' and missing verb umlaut",
+    "writing_prompt": "Write a formal email to a language school explaining that you will miss the first class of a course you have enrolled in, and ask what material you should study independently.",
+    "user_text": "Sehr geehrte Damen und Herren, ich nehme in dem Kurs bei Ihnen teil, der nächste Woche am Dienstag anfangt. Leider kann ich nicht zum ersten Unterricht, sondern am Dienstag zum zweiten Unterricht kommen, weil ich bis Mittwoch auf Geschäftsreise bin. Ich hoffe, dass das kein großes Problem ist. Obwohl ich nicht kommen kann, möchte ich das Material des ersten Unterrichts selber lernen. Könnten Sie mir bitte sagen, welche Seiten ich studieren soll? Vielen Dank für Ihr Verständnis. Mit freundlichen Grüßen, Jan Krejci",
+    "level": "b1",
+    "language": "german",
+    "text_level_estimate": "b1",
+    "min_words": 60,
+    "explained_mistakes": [
+      {
+        "fragment": "nehme in dem Kurs teil",
+        "error_tag": "noun_declension",
+        "correction": "nehme an dem Kurs teil",
+        "explanation": "'Teilnehmen' requires the preposition 'an' (dative), not 'in': 'Ich nehme an dem Kurs teil'."
+      },
+      {
+        "fragment": "anfangt",
+        "error_tag": "verb_conjugation",
+        "correction": "anfängt",
+        "explanation": "Third-person singular present of 'anfangen' takes an umlaut: 'anfängt', not 'anfangt'."
+      }
+    ]
+  }
+]

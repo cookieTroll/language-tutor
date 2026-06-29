@@ -5,7 +5,7 @@ from llm.base import LLMMessage
 from lang.loader import get_cefr_descriptors
 from skills.protocols import SkillInput
 from skills.summarise_session.base import BaseSummariseSkill
-from skills.summarise_session.writing.prompts import SUMMARISE_WRITING_SESSION_PROMPT
+from skills.summarise_session.writing.prompts import SUMMARISE_WRITING_SESSION_PROMPT, LOW_WORD_COUNT_WARNING
 
 _VALID_SEVERITIES = frozenset({"critical", "expected", "minor"})
 _REQUIRED_MISTAKE_KEYS = {"fragment", "error_tag", "correction", "explanation"}
@@ -19,6 +19,14 @@ class SummariseWritingSessionSkill(BaseSummariseSkill):
         explained_mistakes = input.parameters.get("explained_mistakes", [])
         text_level_estimate = input.parameters.get("text_level_estimate")
         writing_prompt = input.parameters.get("writing_prompt", "")
+        user_text = input.parameters.get("user_text", "")
+        min_words = input.parameters.get("min_words", 0)
+        word_count = len(user_text.split()) if user_text else 0
+        low_word_count = min_words > 0 and word_count < min_words
+        low_word_count_warning = (
+            LOW_WORD_COUNT_WARNING.format(word_count=word_count, min_words=min_words)
+            if low_word_count else ""
+        )
 
         tag_counts = Counter(m.get("error_tag", "") for m in explained_mistakes)
         mistakes_with_counts = [
@@ -32,6 +40,9 @@ class SummariseWritingSessionSkill(BaseSummariseSkill):
             cefr_descriptors=get_cefr_descriptors(language),
             text_level_estimate=text_level_estimate or "not available",
             writing_prompt=writing_prompt,
+            user_text=user_text,
+            word_count=word_count,
+            low_word_count_warning=low_word_count_warning,
             explained_mistakes=json.dumps(mistakes_with_counts, ensure_ascii=False, indent=2),
         )
         return [
@@ -55,6 +66,17 @@ class SummariseWritingSessionSkill(BaseSummariseSkill):
                 raise ValueError(
                     f"Invalid severity {sev!r}. Must be one of {sorted(_VALID_SEVERITIES)}"
                 )
+
+        user_text = input.parameters.get("user_text", "")
+        min_words = input.parameters.get("min_words", 0)
+        word_count = len(user_text.split()) if user_text else 0
+        if min_words > 0 and word_count < min_words:
+            data.setdefault("tips", []).append(
+                f"Work on writing stamina — your response was {word_count} "
+                f"{'word' if word_count == 1 else 'words'}, well below the {min_words} requested. "
+                "Try to address every part of the prompt and build up to the full length."
+            )
+
         return data
 
     def _defaults(self, input: SkillInput) -> dict:

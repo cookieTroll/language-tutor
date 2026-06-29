@@ -50,7 +50,7 @@ class WritingModule(ModuleProtocol):
     ) -> tuple[ModuleResult, WritingSessionContent]:
         session_id = str(uuid.uuid4())
 
-        topic, requirements, writing_prompt = self._setup_topic()
+        topic, requirements, writing_prompt, min_words = self._setup_topic()
         self._print_exercise_header(ctx, topic, requirements)
 
         started_at = datetime.now()  # writing clock starts after topic is shown
@@ -64,7 +64,7 @@ class WritingModule(ModuleProtocol):
         duration_minutes = (completed_at - started_at).total_seconds() / 60.0
 
         print("\n[*] Evaluating your text. Please wait...")
-        pipeline = self._run_pipeline(ctx, user_lines, writing_prompt, llm)
+        pipeline = self._run_pipeline(ctx, user_lines, writing_prompt, min_words, llm)
         self._print_evaluation(pipeline, stated_level=ctx.level)
 
         return self._build_results(
@@ -77,11 +77,12 @@ class WritingModule(ModuleProtocol):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _setup_topic(self) -> tuple[str, str, str]:
+    def _setup_topic(self) -> tuple[str, str, str, int]:
         # PoC: hardcoded — replaced by topic_picker in Layer 1b
         topic = "Describe your morning routine"
         requirements = "150-200 words, use Perfekt tense, include 3 separable verbs"
-        return topic, requirements, f"Topic: {topic}\nRequirements: {requirements}"
+        min_words = 150
+        return topic, requirements, f"Topic: {topic}\nRequirements: {requirements}", min_words
 
     def _print_exercise_header(self, ctx: ModuleContext, topic: str, requirements: str) -> None:
         language_label = ctx.language.capitalize()
@@ -174,6 +175,7 @@ class WritingModule(ModuleProtocol):
         ctx: ModuleContext,
         user_lines: list[str],
         writing_prompt: str,
+        min_words: int,
         llm: BaseLLM,
     ) -> _PipelineResult:
         user_text = "\n".join(user_lines)
@@ -262,9 +264,11 @@ class WritingModule(ModuleProtocol):
                 user_id=ctx.user_id,
                 level=ctx.level,
                 parameters={
+                    "user_text": user_text,
                     "explained_mistakes": explained_mistakes,
                     "text_level_estimate": text_level_estimate,
                     "writing_prompt": writing_prompt,
+                    "min_words": min_words,
                     "language": ctx.language,
                 },
             ),

@@ -391,7 +391,8 @@ class TestFullPipeline:
         assert session_content.corrected_text == "Ich stehe um 7 Uhr auf."
 
         # Verify Step 6 outputs
-        assert session_content.tips == ["Practise separable verb patterns.", "Aim for two-clause sentences."]
+        assert session_content.tips[:2] == ["Practise separable verb patterns.", "Aim for two-clause sentences."]
+        assert any("stamina" in t or "word" in t.lower() for t in session_content.tips[2:])
         assert session_content.session_summary == "Solid A1 attempt with one separable verb error."
         assert session_content.mistakes[0].get("severity") == "expected"
         assert session_content.comparison_note is None

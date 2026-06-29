@@ -98,7 +98,8 @@ def test_writing_module_run(mock_input):
     assert session_content.mistakes[0]["correction"] == "Ich stehe auf"
     assert session_content.mistakes[0]["explanation"] != ""
     assert session_content.corrected_text == "Ich stehe um 7 Uhr auf. Ich esse Frühstück."
-    assert session_content.tips == ["Practice separable verbs daily.", "Build longer connected sentences."]
+    assert session_content.tips[:2] == ["Practice separable verbs daily.", "Build longer connected sentences."]
+    assert any("stamina" in t or "word" in t.lower() for t in session_content.tips[2:])
     assert session_content.session_summary == "Good attempt with one separable verb error typical for A1."
     assert session_content.mistakes[0].get("severity") == "expected"
     assert session_content.comparison_note is None
