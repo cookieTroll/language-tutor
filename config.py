@@ -22,7 +22,7 @@ def _resolve_env(value: object) -> object:
 
 @dataclass
 class LLMConfig:
-    provider: str                      # LLM provider ('openai_compat' | 'ollama' | 'gemini')
+    provider: str                      # LLM provider ('openai_compat' | 'ollama' | 'gemini' | 'vertex')
     base_url: str | None               # Base URL for API calls
     api_key: str | None                # API key for the provider
     model: str                         # The exact model identifier to request
@@ -82,8 +82,8 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
             raise ValueError(f"Missing required LLM config field: '{field}'")
             
     provider = llm_data["provider"]
-    if provider not in ("openai_compat", "ollama", "gemini"):
-        raise ValueError(f"Invalid LLM provider: '{provider}'. Must be 'openai_compat', 'ollama', or 'gemini'")
+    if provider not in ("openai_compat", "ollama", "gemini", "vertex"):
+        raise ValueError(f"Invalid LLM provider: '{provider}'. Must be 'openai_compat', 'ollama', 'gemini', or 'vertex'")
         
     llm_config = LLMConfig(
         provider=provider,

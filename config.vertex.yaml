@@ -1,0 +1,22 @@
+# Vertex AI configuration — uses Application Default Credentials (ADC).
+# No API key required. Authenticate once with:
+#   gcloud auth application-default login
+#
+# Required: set GCP_PROJECT to your Google Cloud project ID.
+# Optional: set GCP_REGION (defaults to us-central1 if not set).
+
+data_root: "data/test"
+default_level: "a2"
+cold_start_threshold: 3
+interruption_timeout_minutes: 15
+storage_backend: "sqlite"
+
+llm:
+  provider: "vertex"
+  base_url: "${GCP_PROJECT}"    # Your GCP project ID
+  api_key: "${GCP_REGION}"      # GCP region, e.g. europe-west1 (default if unset)
+  model: "gemini-2.0-flash-001"
+  max_tokens: 1000
+  max_retries: 3
+  initial_retry_delay: 1.0
+  max_skill_retries: 3
