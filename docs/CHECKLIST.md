@@ -28,8 +28,10 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 ## Layer 1a — Full Evaluator Pipeline
 
 ### Steps 1–4 — Judges
-- [ ] [ ] [ ] `tests/judge/judge_detector.py` — judge for Step 1 output quality
-- [ ] [ ] [ ] `tests/judge/judge_evaluator.py` — judges for Steps 2, 3, 4 (separate criteria per step)
+- [x] [ ] [ ] `tests/judge/judge_detect_mistakes.py` — judge for Step 1 (fragment detection only)
+- [x] [ ] [ ] `tests/judge/judge_classify_mistakes.py` — judge for Step 2 (error_tag accuracy)
+- [x] [ ] [ ] `tests/judge/judge_explain_mistakes.py` — judge for Step 3 (explanation quality, semantic)
+- [x] [ ] [ ] `tests/judge/judge_write_correction.py` — judge for Step 4 (corrected_text vs expected)
 - [ ] [ ] [ ] Run each judge 5× on same fixture; verify variance is acceptable; document threshold
 
 ### Design Research — Error Taxonomy & Feedback Rubrics
@@ -45,6 +47,13 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ### Steps 5–6 — Judges
 - [ ] [ ] [ ] `tests/judge/judge_summary.py` — judge for Step 6 output (severity accuracy, tip relevance)
+
+### Fluency & Idiomatics (deferred — depends on Layer 1a rubric decisions)
+- [ ] [ ] [ ] Define scope: what counts as an idiomatic issue vs a grammar error; which CEFR levels activate this check (suggest B1+)
+- [ ] [ ] [ ] `skills/fluency_checker/skill.py` — runs after Step 4 (write_correction); flags unnatural phrasing with natural alternatives; output is a list of `{fragment, suggestion, note}` distinct from `mistakes[]`
+- [ ] [ ] [ ] Wire into pipeline between Steps 4 and 6; pass fluency observations to summariser for holistic tip generation
+- [ ] [ ] [ ] UI: render fluency observations separately from grammar mistakes (different label, no "correction" implied)
+- [ ] [ ] [ ] `tests/judge/judge_fluency_checker.py` — judge for fluency output quality
 
 ---
 

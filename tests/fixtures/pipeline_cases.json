@@ -1,0 +1,203 @@
+[
+  {
+    "id": "single_001",
+    "description": "Separable verb not split in main clause",
+    "user_text": "Ich aufstehe um 7 Uhr.",
+    "level": "a1",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "Ich aufstehe",
+        "error_tag": "verb_conjugation",
+        "correction": "Ich stehe auf"
+      }
+    ],
+    "expected_corrected_text": "Ich stehe um 7 Uhr auf."
+  },
+  {
+    "id": "single_002",
+    "description": "Wrong word order after fronted adverb (verb-second violated)",
+    "user_text": "Dann ich gehe zur Schule.",
+    "level": "a1",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "Dann ich gehe",
+        "error_tag": "word_order",
+        "correction": "Dann gehe ich"
+      }
+    ],
+    "expected_corrected_text": "Dann gehe ich zur Schule."
+  },
+  {
+    "id": "single_003",
+    "description": "Missing dative inflection after preposition 'mit'",
+    "user_text": "Ich esse Frühstück mit mein Vater.",
+    "level": "a2",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "mit mein Vater",
+        "error_tag": "noun_declension",
+        "correction": "mit meinem Vater"
+      }
+    ],
+    "expected_corrected_text": "Ich esse Frühstück mit meinem Vater."
+  },
+  {
+    "id": "single_004",
+    "description": "Wrong Perfekt auxiliary — 'haben' used instead of 'sein' for motion verb",
+    "user_text": "Ich habe zur Schule gegangen.",
+    "level": "a2",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "habe gegangen",
+        "error_tag": "verb_tense",
+        "correction": "bin gegangen"
+      }
+    ],
+    "expected_corrected_text": "Ich bin zur Schule gegangen."
+  },
+  {
+    "id": "single_005",
+    "description": "Wrong article gender — 'das' used for masculine noun",
+    "user_text": "Das Hund schläft auf dem Sofa.",
+    "level": "a1",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "Das Hund",
+        "error_tag": "article",
+        "correction": "Der Hund"
+      }
+    ],
+    "expected_corrected_text": "Der Hund schläft auf dem Sofa."
+  },
+  {
+    "id": "single_006",
+    "description": "Mixed adjective ending — strong ending used after definite article",
+    "user_text": "Ich trinke den kalter Kaffee.",
+    "level": "a2",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "den kalter Kaffee",
+        "error_tag": "adjective_declension",
+        "correction": "den kalten Kaffee"
+      }
+    ],
+    "expected_corrected_text": "Ich trinke den kalten Kaffee."
+  },
+  {
+    "id": "correct_001",
+    "description": "Correct A1 sentence — no errors (false-positive probe)",
+    "user_text": "Ich hasse morgens.",
+    "level": "a1",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 0,
+    "expected_mistakes": [],
+    "expected_corrected_text": "Ich hasse morgens."
+  },
+  {
+    "id": "correct_002",
+    "description": "Correct A2 separable verb — no errors (false-positive probe)",
+    "user_text": "Ich stehe um 7 Uhr auf.",
+    "level": "a2",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 0,
+    "expected_mistakes": [],
+    "expected_corrected_text": "Ich stehe um 7 Uhr auf."
+  },
+  {
+    "id": "correct_003",
+    "description": "Correct B1 Perfekt with 'sein' — no errors (false-positive probe)",
+    "user_text": "Gestern bin ich früh aufgestanden.",
+    "level": "b1",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 0,
+    "expected_mistakes": [],
+    "expected_corrected_text": "Gestern bin ich früh aufgestanden."
+  },
+  {
+    "id": "multi_001",
+    "description": "Separable verb + word order — two errors in two sentences",
+    "user_text": "Ich aufstehe um 7 Uhr. Dann ich dusche mich.",
+    "level": "a1",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 2,
+    "expected_mistakes": [
+      {
+        "fragment": "Ich aufstehe",
+        "error_tag": "verb_conjugation",
+        "correction": "Ich stehe auf"
+      },
+      {
+        "fragment": "Dann ich dusche",
+        "error_tag": "word_order",
+        "correction": "Dann dusche ich"
+      }
+    ],
+    "expected_corrected_text": "Ich stehe um 7 Uhr auf. Dann dusche ich mich."
+  },
+  {
+    "id": "multi_002",
+    "description": "Article gender + dative case — two errors in one sentence",
+    "user_text": "Das Hund läuft mit mein Kind.",
+    "level": "a2",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 2,
+    "expected_mistakes": [
+      {
+        "fragment": "Das Hund",
+        "error_tag": "article",
+        "correction": "Der Hund"
+      },
+      {
+        "fragment": "mit mein Kind",
+        "error_tag": "noun_declension",
+        "correction": "mit meinem Kind"
+      }
+    ],
+    "expected_corrected_text": "Der Hund läuft mit meinem Kind."
+  },
+  {
+    "id": "multi_003",
+    "description": "Wrong auxiliary + adjective ending — B1 mixed errors",
+    "user_text": "Ich habe ins Büro gegangen und einen langes Meeting gehabt.",
+    "level": "b1",
+    "language": "german",
+    "writing_prompt": "Describe your morning routine.",
+    "expected_mistake_count": 2,
+    "expected_mistakes": [
+      {
+        "fragment": "habe gegangen",
+        "error_tag": "verb_tense",
+        "correction": "bin gegangen"
+      },
+      {
+        "fragment": "einen langes Meeting",
+        "error_tag": "adjective_declension",
+        "correction": "ein langes Meeting"
+      }
+    ],
+    "expected_corrected_text": "Ich bin ins Büro gegangen und hatte ein langes Meeting."
+  }
+]

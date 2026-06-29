@@ -9,5 +9,5 @@ storage_backend: "sqlite"
 
 llm:
   provider: "ollama"
-  model: "qwen2.5-coder-local"
+  model: "gemma2:9b"
   num_ctx: 4096

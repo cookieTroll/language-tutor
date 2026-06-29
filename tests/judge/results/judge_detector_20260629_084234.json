@@ -1,0 +1,366 @@
+[
+  {
+    "id": "single_001",
+    "description": "Separable verb not split in main clause",
+    "user_text": "Ich aufstehe um 7 Uhr.",
+    "level": "a1",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "Ich aufstehe",
+        "error_tag": "separable_verb",
+        "correction": "Ich stehe auf"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "Ich aufstehe um 7 Uhr.",
+        "error_type_hint": "incorrect verb conjugation"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "PARTIAL",
+    "score": 0.5,
+    "reasoning": "The system detected an incorrect verb conjugation, which is a correct identification of the error. However, it did not detect the separable verb issue.",
+    "missed_errors": [
+      "Ich aufstehe"
+    ],
+    "false_positives": []
+  },
+  {
+    "id": "single_002",
+    "description": "Wrong word order after fronted adverb (verb-second violated)",
+    "user_text": "Dann ich gehe zur Schule.",
+    "level": "a1",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "Dann ich gehe",
+        "error_tag": "word_order",
+        "correction": "Dann gehe ich"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "Dann ich gehe zur Schule",
+        "error_type_hint": "incorrect verb conjugation"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "FAIL",
+    "score": 0.0,
+    "reasoning": "The detected error is incorrect as it identifies an incorrect verb conjugation instead of the word order error.",
+    "missed_errors": [
+      "Dann ich gehe"
+    ],
+    "false_positives": [
+      "Dann ich gehe zur Schule"
+    ]
+  },
+  {
+    "id": "single_003",
+    "description": "Missing dative inflection after preposition 'mit'",
+    "user_text": "Ich esse Frühstück mit mein Vater.",
+    "level": "a2",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "mit mein Vater",
+        "error_tag": "dative_case",
+        "correction": "mit meinem Vater"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "mein",
+        "error_type_hint": "incorrect article"
+      },
+      {
+        "fragment": "Frühstück",
+        "error_type_hint": "incorrect noun declension"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "PARTIAL",
+    "score": 0.5,
+    "reasoning": "The system correctly identified the incorrect article 'mein' but missed the incorrect noun declension of 'Frühstück'. It also detected an extra false positive for 'mein'.",
+    "missed_errors": [
+      "Frühstück"
+    ],
+    "false_positives": [
+      "mein"
+    ]
+  },
+  {
+    "id": "single_004",
+    "description": "Wrong Perfekt auxiliary — 'haben' used instead of 'sein' for motion verb",
+    "user_text": "Ich habe zur Schule gegangen.",
+    "level": "a2",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "habe gegangen",
+        "error_tag": "tense_auxiliary",
+        "correction": "bin gegangen"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "zur Schule gegangen",
+        "error_type_hint": "incorrect verb conjugation"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "PARTIAL",
+    "score": 0.5,
+    "reasoning": "The system detected an error related to verb conjugation, which is correct. However, it missed the specific tense auxiliary error.",
+    "missed_errors": [
+      "habe gegangen"
+    ],
+    "false_positives": [
+      "zur Schule gegangen"
+    ]
+  },
+  {
+    "id": "single_005",
+    "description": "Wrong article gender — 'das' used for masculine noun",
+    "user_text": "Das Hund schläft auf dem Sofa.",
+    "level": "a1",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "Das Hund",
+        "error_tag": "article_gender",
+        "correction": "Der Hund"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "Das Hund",
+        "error_type_hint": "incorrect article"
+      },
+      {
+        "fragment": "schläft",
+        "error_type_hint": "incorrect verb conjugation"
+      },
+      {
+        "fragment": "auf dem Sofa",
+        "error_type_hint": "word order"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "PARTIAL",
+    "score": 0.5,
+    "reasoning": "The system correctly identified the incorrect article, but missed the verb conjugation and word order errors.",
+    "missed_errors": [
+      "schläft",
+      "auf dem Sofa"
+    ],
+    "false_positives": [
+      "incorrect verb conjugation",
+      "word order"
+    ]
+  },
+  {
+    "id": "single_006",
+    "description": "Mixed adjective ending — strong ending used after definite article",
+    "user_text": "Ich trinke den kalter Kaffee.",
+    "level": "a2",
+    "expected_mistake_count": 1,
+    "expected_mistakes": [
+      {
+        "fragment": "den kalter Kaffee",
+        "error_tag": "adjective_ending",
+        "correction": "den kalten Kaffee"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "den kalter Kaffee",
+        "error_type_hint": "incorrect noun declension"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "PASS",
+    "score": 1.0,
+    "reasoning": "The detected error correctly identifies the grammatical problem of incorrect noun declension.",
+    "missed_errors": [],
+    "false_positives": []
+  },
+  {
+    "id": "correct_001",
+    "description": "Correct A1 sentence — no errors (false-positive probe)",
+    "user_text": "Ich hasse morgens.",
+    "level": "a1",
+    "expected_mistake_count": 0,
+    "expected_mistakes": [],
+    "detected": [
+      {
+        "fragment": "Ich hasse morgens",
+        "error_type_hint": "incorrect verb conjugation"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "FAIL",
+    "score": 0.0,
+    "reasoning": "The system incorrectly identified a verb conjugation error where none exists.",
+    "missed_errors": [],
+    "false_positives": [
+      "Ich hasse morgens"
+    ]
+  },
+  {
+    "id": "correct_002",
+    "description": "Correct A2 separable verb — no errors (false-positive probe)",
+    "user_text": "Ich stehe um 7 Uhr auf.",
+    "level": "a2",
+    "expected_mistake_count": 0,
+    "expected_mistakes": [],
+    "detected": [
+      {
+        "fragment": "Ich stehe um 7 Uhr auf.",
+        "error_type_hint": "incorrect verb conjugation"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "FAIL",
+    "score": 0.0,
+    "reasoning": "The system incorrectly identified a verb conjugation error where none exists.",
+    "missed_errors": [],
+    "false_positives": [
+      "Ich stehe um 7 Uhr auf."
+    ]
+  },
+  {
+    "id": "correct_003",
+    "description": "Correct B1 Perfekt with 'sein' — no errors (false-positive probe)",
+    "user_text": "Gestern bin ich früh aufgestanden.",
+    "level": "b1",
+    "expected_mistake_count": 0,
+    "expected_mistakes": [],
+    "detected": [
+      {
+        "fragment": "Gestern bin ich früh aufgestanden.",
+        "error_type_hint": "incorrect verb conjugation"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "FAIL",
+    "score": 0.0,
+    "reasoning": "The system incorrectly identified a verb conjugation error where none exists.",
+    "missed_errors": [],
+    "false_positives": [
+      "Gestern bin ich früh aufgestanden."
+    ]
+  },
+  {
+    "id": "multi_001",
+    "description": "Separable verb + word order — two errors in two sentences",
+    "user_text": "Ich aufstehe um 7 Uhr. Dann ich dusche mich.",
+    "level": "a1",
+    "expected_mistake_count": 2,
+    "expected_mistakes": [
+      {
+        "fragment": "Ich aufstehe",
+        "error_tag": "separable_verb",
+        "correction": "Ich stehe auf"
+      },
+      {
+        "fragment": "Dann ich dusche",
+        "error_tag": "word_order",
+        "correction": "Dann dusche ich"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "Ich aufstehe um 7 Uhr",
+        "error_type_hint": "incorrect verb conjugation"
+      },
+      {
+        "fragment": "Dann ich dusche mich",
+        "error_type_hint": "word order"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "PARTIAL",
+    "score": 0.5,
+    "reasoning": "The system correctly identified the word order error but failed to detect the separable verb error.",
+    "missed_errors": [
+      "Ich aufstehe"
+    ],
+    "false_positives": [
+      "Ich aufstehe um 7 Uhr"
+    ]
+  },
+  {
+    "id": "multi_002",
+    "description": "Article gender + dative case — two errors in one sentence",
+    "user_text": "Das Hund läuft mit mein Kind.",
+    "level": "a2",
+    "expected_mistake_count": 2,
+    "expected_mistakes": [
+      {
+        "fragment": "Das Hund",
+        "error_tag": "article_gender",
+        "correction": "Der Hund"
+      },
+      {
+        "fragment": "mit mein Kind",
+        "error_tag": "dative_case",
+        "correction": "mit meinem Kind"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "Das Hund läuft mit mein Kind.",
+        "error_type_hint": "incorrect verb conjugation and missing article"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "PARTIAL",
+    "score": 0.5,
+    "reasoning": "The system detected one error but missed another.",
+    "missed_errors": [
+      "mit mein Kind"
+    ],
+    "false_positives": []
+  },
+  {
+    "id": "multi_003",
+    "description": "Wrong auxiliary + adjective ending — B1 mixed errors",
+    "user_text": "Ich habe ins Büro gegangen und einen langes Meeting gehabt.",
+    "level": "b1",
+    "expected_mistake_count": 2,
+    "expected_mistakes": [
+      {
+        "fragment": "habe gegangen",
+        "error_tag": "tense_auxiliary",
+        "correction": "bin gegangen"
+      },
+      {
+        "fragment": "einen langes Meeting",
+        "error_tag": "adjective_ending",
+        "correction": "ein langes Meeting"
+      }
+    ],
+    "detected": [
+      {
+        "fragment": "ins Büro gegangen",
+        "error_type_hint": "incorrect verb conjugation"
+      },
+      {
+        "fragment": "einen langes Meeting gehabt",
+        "error_type_hint": "incorrect verb conjugation"
+      }
+    ],
+    "executor_success": true,
+    "verdict": "PARTIAL",
+    "score": 0.5,
+    "reasoning": "The system correctly identified the incorrect verb conjugation in both fragments, but it did not provide the correct error tags or corrections.",
+    "missed_errors": [],
+    "false_positives": [
+      "ins Büro gegangen",
+      "einen langes Meeting gehabt"
+    ]
+  }
+]

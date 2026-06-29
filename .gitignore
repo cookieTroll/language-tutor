@@ -17,3 +17,6 @@ data/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Judge test run outputs
+tests/judge/results/
