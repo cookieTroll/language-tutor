@@ -5,17 +5,16 @@ from llm.openai_compat import OpenAICompatibleLLM
 def build_llm(config: LLMConfig) -> BaseLLM:
     """
     Builds and returns the configured LLM backend.
-    Supports: 'openai_compat' (local LM Studio/Ollama) and 'gemini' (cloud).
+    Supports: 'openai_compat' (LM Studio), 'ollama' (local Ollama), 'gemini' (Google cloud).
     """
+    if config.provider == "ollama":
+        from llm.ollama_setup import ensure_ollama_ready
+        ensure_ollama_ready(model=config.model, base_url=config.base_url)
+        return OpenAICompatibleLLM(config)
     if config.provider == "openai_compat":
         return OpenAICompatibleLLM(config)
     elif config.provider == "gemini":
-        try:
-            from llm.gemini import GeminiLLM
-            return GeminiLLM(api_key=config.api_key, model=config.model)
-        except (ImportError, ModuleNotFoundError):
-            raise NotImplementedError(
-                "Gemini provider is selected but the backend is not yet implemented."
-            )
+        from llm.gemini import GeminiLLM
+        return GeminiLLM(config)
     else:
         raise ValueError(f"Unknown LLM provider: '{config.provider}'")

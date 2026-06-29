@@ -7,9 +7,14 @@ class OpenAICompatibleLLM(BaseLLM):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
         self.model = config.model
+        default_url = (
+            "http://localhost:11434/v1" if config.provider == "ollama"
+            else "http://localhost:1234/v1"
+        )
+        self._base_url = config.base_url or default_url
         self.client = OpenAI(
-            api_key=config.api_key or "lm-studio",
-            base_url=config.base_url or "http://localhost:1234/v1"
+            api_key=config.api_key or "ollama",
+            base_url=self._base_url,
         )
 
     def complete(
@@ -33,11 +38,15 @@ class OpenAICompatibleLLM(BaseLLM):
         
         for attempt in range(1, max_attempts + 1):
             try:
+                extra = {}
+                if self.config.num_ctx is not None:
+                    extra["extra_body"] = {"num_ctx": self.config.num_ctx}
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=formatted_messages,
                     temperature=temperature,
                     max_tokens=tokens_limit,
+                    **extra,
                 )
                 choice = response.choices[0]
                 text = choice.message.content or ""
@@ -55,7 +64,7 @@ class OpenAICompatibleLLM(BaseLLM):
     def check_health(self) -> bool:
         import urllib.request
         try:
-            url = f"{self.config.base_url or 'http://localhost:1234/v1'}/models"
+            url = f"{self._base_url}/models"
             with urllib.request.urlopen(url, timeout=1.5) as response:
                 return response.status == 200
         except Exception:

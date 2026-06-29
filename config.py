@@ -1,10 +1,28 @@
 import os
+import re
 import yaml
 from dataclasses import dataclass
 
+
+def _resolve_env(value: object) -> object:
+    """Replaces ${VAR_NAME} in string values with the matching environment variable."""
+    if not isinstance(value, str):
+        return value
+    match = re.fullmatch(r"\$\{([^}]+)\}", value.strip())
+    if match:
+        var = match.group(1)
+        resolved = os.environ.get(var)
+        if resolved is None:
+            raise ValueError(
+                f"Environment variable '{var}' is not set "
+                f"(referenced as '${{{var}}}' in config)"
+            )
+        return resolved
+    return value
+
 @dataclass
 class LLMConfig:
-    provider: str                      # LLM provider ('openai_compat' | 'gemini')
+    provider: str                      # LLM provider ('openai_compat' | 'ollama' | 'gemini')
     base_url: str | None               # Base URL for API calls
     api_key: str | None                # API key for the provider
     model: str                         # The exact model identifier to request
@@ -14,6 +32,7 @@ class LLMConfig:
     max_retries: int = 3               # Connection and network retry attempts for LLM completion requests
     initial_retry_delay: float = 1.0   # Starting backoff delay (in seconds) for connection retries
     max_skill_retries: int = 3         # Max agentic self-correction iterations for skills when output validation fails
+    num_ctx: int | None = None         # Context window size (Ollama only); None uses the model default
 
 @dataclass
 class AppConfig:
@@ -63,13 +82,13 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
             raise ValueError(f"Missing required LLM config field: '{field}'")
             
     provider = llm_data["provider"]
-    if provider not in ("openai_compat", "gemini"):
-        raise ValueError(f"Invalid LLM provider: '{provider}'. Must be 'openai_compat' or 'gemini'")
+    if provider not in ("openai_compat", "ollama", "gemini"):
+        raise ValueError(f"Invalid LLM provider: '{provider}'. Must be 'openai_compat', 'ollama', or 'gemini'")
         
     llm_config = LLMConfig(
         provider=provider,
-        base_url=llm_data.get("base_url"),
-        api_key=llm_data.get("api_key"),
+        base_url=_resolve_env(llm_data.get("base_url")),
+        api_key=_resolve_env(llm_data.get("api_key")),
         model=llm_data["model"],
         max_tokens=int(llm_data.get("max_tokens", 1000)),
         show_incomplete_responses=bool(llm_data.get("show_incomplete_responses", False)),
@@ -77,6 +96,7 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         max_retries=int(llm_data.get("max_retries", 3)),
         initial_retry_delay=float(llm_data.get("initial_retry_delay", 1.0)),
         max_skill_retries=int(llm_data.get("max_skill_retries", 3)),
+        num_ctx=int(llm_data["num_ctx"]) if llm_data.get("num_ctx") is not None else None,
     )
     
     # Resolve relative data_root against project root
