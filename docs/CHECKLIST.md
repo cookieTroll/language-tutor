@@ -28,7 +28,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [x] [ ] [ ] `tests/judge/judge_detect_mistakes.py` — judge for Step 1 (fragment detection only)
 - [x] [ ] [ ] `tests/judge/judge_classify_mistakes.py` — judge for Step 2 (error_tag accuracy)
 - [x] [ ] [ ] `tests/judge/judge_explain_mistakes.py` — judge for Step 3 (explanation quality, semantic)
-- [x] [ ] [ ] `tests/judge/judge_write_correction.py` — judge for Step 4 (corrected_text vs expected)
+- [x] [x] [ ] `tests/judge/judge_write_correction.py` — judge for Step 4 (corrected_text vs expected)
 - [ ] [ ] [ ] Run each judge 5× on same fixture; verify variance is acceptable; document threshold
 
 ### Design Research — Error Taxonomy & Feedback Rubrics
