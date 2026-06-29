@@ -9,6 +9,7 @@ LanguageTutor is an AI-powered language tutoring agent focused on personalized *
 * [docs/CHECKLIST.md](docs/CHECKLIST.md) — Implementation task list.
 * [docs/TODO.md](docs/TODO.md) — Known risks, backlog, and deferred design items.
 * [docs/contracts.md](docs/contracts.md) — Original interface and protocol specifications.
+* [PROVIDERS.md](PROVIDERS.md) — LLM provider setup, API key management, config selection.
 
 ### Source Code
 

@@ -366,6 +366,7 @@ class OrchestratorProtocol(Protocol):
 ```python
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from config import LLMConfig
 
 @dataclass
 class LLMMessage:
@@ -376,41 +377,49 @@ class LLMMessage:
 class LLMResponse:
     text: str
     model: str       # actual model used, logged for observability
+    truncated: bool = False  # True when finish_reason == length/MAX_TOKENS
+
+class LLMError(Exception):
+    """Raised on provider errors, timeouts, or malformed responses."""
+    pass
 
 class BaseLLM(ABC):
+    config: LLMConfig
+
+    def __init__(self, config: LLMConfig): ...
+
     @abstractmethod
     def complete(
         self,
         messages: list[LLMMessage],
         temperature: float = 0.2,
-        max_tokens: int = 1000,
+        max_tokens: int | None = None,  # None → uses config.max_tokens
     ) -> LLMResponse:
         """Send messages, return response. Raises LLMError on failure."""
+        ...
+
+    def check_health(self) -> bool:
+        """Returns True if the backend is reachable. Default: True."""
         ...
 ```
 
 ---
 
-## Error Taxonomy (`skills/detect_mistakes/taxonomy.py`)
+## Error Taxonomy (`lang/maps/taxonomy/german_taxonomy_v1.yaml`)
 
-Fixed set of `error_tag` values. Enforced after mistake processing — unknown tags raise `TaxonomyError`.
+Canonical set of `error_tag` values for German. Loaded at runtime by skills and judge tests.
 
-```python
-ERROR_TAXONOMY: set[str] = {
-    # Cases
-    "dative_case", "accusative_case", "genitive_case",
-    # Word order
-    "word_order", "verb_position", "separable_verb",
-    # Agreement
-    "article_gender", "adjective_ending",
-    # Verbs
-    "verb_conjugation", "tense_usage",
-    # Other
-    "vocabulary", "spelling",
-}
-
-def validate_error_tag(tag: str) -> str:
-    if tag not in ERROR_TAXONOMY:
-        raise TaxonomyError(f"Unknown error_tag: '{tag}'. Must be one of {ERROR_TAXONOMY}")
-    return tag
+```yaml
+tags:
+  noun_declension:      "Noun case endings — nominative, accusative, dative, or genitive inflection"
+  adjective_declension: "Adjective endings — strong, weak, or mixed inflection after articles"
+  article:              "Article error — wrong gender, wrong case, or missing article"
+  verb_conjugation:     "Verb conjugation error — person/number agreement, separable verb splitting, modal verb usage"
+  verb_tense:           "Wrong tense selection or auxiliary — e.g. Perfekt vs Präteritum, haben vs sein, Konjunktiv, Futur"
+  word_order:           "Word order error — verb-second rule violated, subordinate clause verb placement, adverb fronting"
+  vocabulary:           "Wrong word choice, false friend, or register mismatch"
+  spelling:             "Spelling error — capitalisation, umlauts, compound words"
+  other:                "Error does not clearly fit any category above — use as last resort"
 ```
+
+The language config (`lang/languages/german.yaml`) points to the active taxonomy version. To add tags without breaking existing fixtures, create `german_taxonomy_v2.yaml` and update the language config — do not edit the v1 file in place.

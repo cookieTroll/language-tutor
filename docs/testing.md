@@ -56,142 +56,96 @@ All orchestrator and module tests use a **mock LLM** returning fixed strings —
 
 ## Tier 2 — LLM-as-Judge (skill output quality)
 
-Offline evaluation against manually verified fixtures. Ground truth kept within B1 scope (verifiable by author). Fixtures in `tests/fixtures/`.
+Offline evaluation against manually verified fixtures. Fixtures in `tests/fixtures/pipeline_cases.json`.
 
-**Scope:** A1–A2 content for PoC and Layer 1a fixtures. B1 content added as confidence grows. Do not use unverified content as ground truth.
+**Scope:** A1–A2 content for PoC and Layer 1a fixtures. B1 content added as confidence grows.
 
 **When to run:** Before merging prompt changes. After tuning a step, run its judge to verify improvement.
 
 ---
 
-### Writing Evaluator Judges
+### Two-LLM design
 
-One judge per pipeline step — targeted criteria, not a single catch-all.
+Each judge uses two LLM instances:
 
-#### Step 1 — Detector (`tests/judge/judge_detector.py`)
+- **Executor** (`LTUT_CONFIG`) — runs the skill under test with real prompt inputs
+- **Judge** (`LTUT_JUDGE_CONFIG`, defaults to `LTUT_CONFIG`) — evaluates executor output against fixture labels
 
-```
-You are evaluating a German mistake detector's output.
-
-Student level: {level}
-Writing prompt: {writing_prompt}
-Student text: {user_text}
-Detector output: {raw_mistakes_json}
-
-Score each criterion 0–2:
-1. Accuracy — are flagged fragments actually errors in German?
-2. Completeness — are significant errors missed?
-3. False positives — are correct German phrases flagged as errors?
-
-Return JSON: { "scores": {"accuracy": N, "completeness": N, "false_positives": N}, "total": N, "notes": "..." }
-```
-
-#### Step 2 — Processor (`tests/judge/judge_evaluator.py`)
-
-```
-You are evaluating a German mistake classifier's output.
-
-Classified mistakes: {classified_json}
-Valid error tags: {taxonomy_list}
-
-Score each criterion 0–2:
-1. Tag accuracy — is each error_tag the correct category?
-2. Correction accuracy — is each correction grammatically correct German?
-3. Tag validity — are all tags from the valid set?
-
-Return JSON: { "scores": {...}, "total": N, "notes": "..." }
-```
-
-#### Step 3 — Feedback Generator (`tests/judge/judge_evaluator.py`)
-
-```
-You are evaluating a German tutor's feedback explanations.
-
-Student level: {level}
-Feedback: {feedback_json}
-
-Score each criterion 0–2:
-1. Explanation accuracy — is the grammatical explanation correct?
-2. Level appropriateness — is the explanation pitched correctly for {level}?
-3. Clarity — is the explanation clear and actionable?
-
-Return JSON: { "scores": {...}, "total": N, "notes": "..." }
-```
-
-#### Step 4 — Correction Writer (`tests/judge/judge_evaluator.py`)
-
-```
-You are evaluating a German corrected text.
-
-Original student text: {user_text}
-Corrections applied: {corrections_json}
-Corrected text produced: {corrected_text}
-
-Score each criterion 0–2:
-1. Correction accuracy — are all specified corrections applied correctly?
-2. Grammatical correctness — is the corrected text valid German?
-3. Minimal intervention — are only the specified errors changed, nothing else?
-
-Return JSON: { "scores": {...}, "total": N, "notes": "..." }
-```
+This keeps evaluation independent from the system under test. Set `LTUT_JUDGE_CONFIG` to use a stronger model as judge while keeping a local model as executor.
 
 ---
 
-### Orchestrator Judge (`tests/judge/judge_orchestrator.py`)
+### Running judges
 
+```powershell
+# Both executor and judge use the default config (Ollama)
+pytest tests/judge/ -v -s
+
+# Both use Gemini
+$env:GEMINI_API_KEY = "your-key-here"
+$env:LTUT_CONFIG = "config.gemini.yaml"
+pytest tests/judge/ -v -s
+
+# Executor: Ollama, judge: Gemini
+$env:GEMINI_API_KEY = "your-key-here"
+$env:LTUT_JUDGE_CONFIG = "config.gemini.yaml"
+pytest tests/judge/ -v -s
 ```
-Given this session history:
-{session_aggregate_json}
 
-The orchestrator recommended:
-{recommendation_json}
-
-Score 0–2:
-1. Module selection — appropriate given recency and error patterns?
-2. Suggested focus — relevant to recurring errors?
-3. Reason quality — clear and accurate?
-
-Return JSON: { "scores": {...}, "total": N }
-```
+Results are written to `tests/judge/results/judge_<skill>_<timestamp>.json`, including `judge_prompt` per case for full traceability.
 
 ---
 
-### Judge Validation
+### Implemented judges
 
-Before trusting any judge prompt, run it 5 times on the same fixture input. Record scores. If variance > 1 point on any criterion, tighten the judge prompt before use.
+#### Step 1 — Detector (`tests/judge/judge_detect_mistakes.py`)
 
-Document acceptable variance threshold per step in a comment at the top of each judge file.
+Evaluates `DetectMistakesSkill` output. Scoped to what the skill actually produces: erroneous fragments + `error_type_hint`. Does NOT check corrections or taxonomy tags (those belong to later steps).
+
+Judge criteria:
+1. Fragment coverage — does a detected fragment cover each expected error location?
+2. False positives — is any correct German flagged as an error?
+3. `error_type_hint` plausibility — does it name a real grammatical problem that maps to the expected taxonomy bucket?
+
+Verdict: `PASS` / `PARTIAL` / `FAIL`. Score 0.0–1.0.
+
+The judge is given the full taxonomy (`lang/maps/taxonomy/german_taxonomy_v1.yaml`) so it can accept `error_type_hint` values that map to the correct bucket without requiring exact tag matches.
+
+A session-scoped fixture validates all `error_tag` values in `pipeline_cases.json` against the taxonomy before any test runs — fails fast with a clear message if labels drift out of sync.
 
 ---
 
-### Fixture Spec (`tests/fixtures/writing_pairs.json`)
+### Fixture spec (`tests/fixtures/pipeline_cases.json`)
 
-Minimum 3 fixtures per evaluator step before judge testing begins. Each fixture:
+Each case:
 
 ```json
 {
-  "id": "w001",
-  "level": "A2",
-  "writing_prompt": "Describe your morning routine in 80-100 words.",
-  "user_text": "Ich habe heute Morgen um sieben Uhr aufgestanden...",
+  "id": "single_001",
+  "description": "Separable verb not split in main clause",
+  "user_text": "Ich aufstehe um 7 Uhr.",
+  "level": "a1",
+  "language": "german",
+  "writing_prompt": "Describe your morning routine.",
+  "expected_mistake_count": 1,
   "expected_mistakes": [
     {
-      "fragment": "habe ... aufgestanden",
+      "fragment": "Ich aufstehe",
       "error_tag": "verb_conjugation",
-      "correction": "bin ... aufgestanden",
-      "explanation": "aufstehen is a motion verb, takes sein in Perfekt"
+      "correction": "Ich stehe auf"
     }
   ],
-  "verified_by": "author",
-  "verified_date": "2026-06-28",
-  "notes": "Common Perfekt auxiliary error at A2"
+  "expected_corrected_text": "Ich stehe um 7 Uhr auf."
 }
 ```
 
+`error_tag` must be a tag from `lang/maps/taxonomy/german_taxonomy_v1.yaml`. The taxonomy label check enforces this at test collection time.
+
+Current coverage: 6 single-error cases (A1/A2), 3 correct-text false-positive probes, 3 multi-error cases (A1–B1).
+
 **Ground truth rules:**
-- Verified personally within B1 scope, or verified against a trusted German grammar reference
-- Mark unverified fixtures clearly — do not use as judge ground truth
-- Cover: single error, multiple errors, no errors (false positive test), mixed error types
+- Verified personally within B1 scope, or against a trusted German grammar reference
+- Cover: single error, no errors (false-positive probe), multiple errors, mixed error types
 
 ---
 
@@ -206,7 +160,7 @@ tests/fixtures/regression/{step}_{YYYYMMDD}_{short_description}.json
 
 Example: `tests/fixtures/regression/detector_20260628_dative_mixed_errors.json`
 
-On prompt changes, re-run all regression fixtures through the relevant judge. A drop in score flags a regression. No minimum count required upfront — grows naturally.
+On prompt changes, re-run all regression fixtures through the relevant judge. A drop in score flags a regression.
 
 ---
 
@@ -214,8 +168,8 @@ On prompt changes, re-run all regression fixtures through the relevant judge. A 
 
 | Tier | When | Command |
 |------|------|---------|
-| Tier 1 — unit tests | Every commit | `pytest tests/test_*.py` |
-| Tier 2 — LLM judge | Before merging prompt changes | `python tests/judge/judge_*.py` |
-| Tier 3 — regression | Before merging prompt changes | `python tests/judge/run_regression.py` |
+| Tier 1 — unit tests | Every commit | `pytest tests/ -x -q --ignore=tests/judge` |
+| Tier 2 — LLM judge | Before merging prompt changes | `pytest tests/judge/ -v -s` |
+| Tier 3 — regression | Before merging prompt changes | `pytest tests/judge/ -v -s` (same runner) |
 
-Tier 1 requires no API keys. Tiers 2 and 3 require a valid `GEMINI_API_KEY` (or configured backend).
+Tier 1 requires no API keys. Tiers 2 and 3 require a live LLM backend (Ollama local or `GEMINI_API_KEY` for Gemini). See `PROVIDERS.md` for setup.

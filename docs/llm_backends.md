@@ -1,8 +1,6 @@
 # LanguageTutor — LLM Backends
 
-All LLM calls go through `BaseLLM`. No skill, module, or orchestrator imports a provider SDK directly. Swap backend by changing `llm.backend` in `config.yaml`.
-
-See `docs/contracts.md` for `BaseLLM`, `LLMMessage`, `LLMResponse`.
+All LLM calls go through `BaseLLM`. No skill, module, or orchestrator imports a provider SDK directly. Swap provider by editing the `llm:` block in the active config file (see `PROVIDERS.md`).
 
 ---
 
@@ -10,22 +8,18 @@ See `docs/contracts.md` for `BaseLLM`, `LLMMessage`, `LLMResponse`.
 
 ```
 llm/
-├── base.py         # BaseLLM abstract class — the only thing other components import
-├── factory.py      # build_llm(config) → BaseLLM instance
-├── gemini.py       # GeminiLLM (production default)
-└── openai_compat.py  # OpenAICompatibleLLM (OpenAI API + LM Studio local)
+├── base.py           # BaseLLM abstract class + LLMMessage, LLMResponse, LLMError
+├── factory.py        # build_llm(LLMConfig) → BaseLLM
+├── gemini.py         # GeminiLLM — Google Gemini via google-generativeai SDK
+├── openai_compat.py  # OpenAICompatibleLLM — LM Studio, Ollama, or any OpenAI-compat endpoint
+└── ollama_setup.py   # ensure_ollama_ready() — auto-starts Ollama, pulls model if missing
 ```
-
-Ollama is not currently supported. Can be added later as another `BaseLLM` subclass without touching any other component.
 
 ---
 
 ## `llm/base.py`
 
 ```python
-from dataclasses import dataclass
-from abc import ABC, abstractmethod
-
 @dataclass
 class LLMMessage:
     role: str        # system | user | assistant
@@ -35,210 +29,152 @@ class LLMMessage:
 class LLMResponse:
     text: str
     model: str       # actual model used — logged for observability
-
-class LLMError(Exception):
-    """Raised on provider errors, timeouts, or malformed responses."""
-    pass
+    truncated: bool = False
 
 class BaseLLM(ABC):
+    config: LLMConfig
+
+    def __init__(self, config: LLMConfig): ...
+
     @abstractmethod
     def complete(
         self,
         messages: list[LLMMessage],
         temperature: float = 0.2,
-        max_tokens: int = 1000,
-    ) -> LLMResponse:
-        """
-        Send messages, return response.
-        Raises LLMError on failure — never returns None.
-        Callers parse LLMResponse.text; they do not catch provider exceptions.
-        """
+        max_tokens: int | None = None,   # None → uses config.max_tokens
+    ) -> LLMResponse: ...
+
+    def check_health(self) -> bool:
+        """Returns True if the backend is reachable. Default: True."""
         ...
 ```
 
----
-
-## `llm/gemini.py` — GeminiLLM
-
-Production default. Wraps `google-generativeai` SDK.
-
-```python
-import google.generativeai as genai
-from llm.base import BaseLLM, LLMMessage, LLMResponse, LLMError
-
-class GeminiLLM(BaseLLM):
-    def __init__(self, model: str = "gemini-2.0-flash", api_key: str | None = None):
-        genai.configure(api_key=api_key or os.environ["GEMINI_API_KEY"])
-        self._model = genai.GenerativeModel(model)
-        self._model_name = model
-
-    def complete(self, messages, temperature=0.2, max_tokens=1000) -> LLMResponse:
-        try:
-            # Convert LLMMessage list to Gemini format
-            # System message handled separately as system_instruction
-            ...
-            return LLMResponse(text=response.text, model=self._model_name)
-        except Exception as e:
-            raise LLMError(f"Gemini error: {e}") from e
-```
-
-**Notes:**
-- API key from `GEMINI_API_KEY` env var (preferred) or config
-- System message must be passed as `system_instruction` in Gemini API — handle in adapter
-- Rate limits: implement basic exponential backoff for 429 errors
+`LLMResponse.truncated` is `True` when the response was cut short by the token limit (`finish_reason == "length"` for OpenAI-compat, `MAX_TOKENS` for Gemini).
 
 ---
 
-## `llm/openai_compat.py` — OpenAICompatibleLLM
+## Providers
 
-Single implementation covering two use cases via `base_url`:
+### `llm/openai_compat.py` — OpenAICompatibleLLM
 
-- **OpenAI API** (`base_url=None`) — cloud, paid, high quality
-- **LM Studio** (`base_url="http://localhost:1234/v1"`) — local, free, development use
-
-Both use the same OpenAI-compatible `/v1/chat/completions` endpoint and the `openai` Python SDK.
+Handles both **LM Studio** and **Ollama** via their shared OpenAI-compatible endpoint.
 
 ```python
-from openai import OpenAI
-from llm.base import BaseLLM, LLMMessage, LLMResponse, LLMError
-
 class OpenAICompatibleLLM(BaseLLM):
-    def __init__(
-        self,
-        model: str,
-        api_key: str | None = None,
-        base_url: str | None = None,   # None = OpenAI; set to LM Studio URL for local
-    ):
-        self._client = OpenAI(
-            api_key=api_key or os.environ.get("OPENAI_API_KEY", "lm-studio"),
-            base_url=base_url,
+    def __init__(self, config: LLMConfig):
+        # Default base_url: localhost:11434/v1 (Ollama) or localhost:1234/v1 (LM Studio)
+        default_url = (
+            "http://localhost:11434/v1" if config.provider == "ollama"
+            else "http://localhost:1234/v1"
         )
-        self._model = model
-
-    def complete(self, messages, temperature=0.2, max_tokens=1000) -> LLMResponse:
-        try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return LLMResponse(
-                text=response.choices[0].message.content,
-                model=response.model,
-            )
-        except Exception as e:
-            raise LLMError(f"OpenAI-compatible API error: {e}") from e
+        self._base_url = config.base_url or default_url
+        self.client = OpenAI(api_key=config.api_key or "ollama", base_url=self._base_url)
 ```
 
-**LM Studio notes:**
-- Download from [lmstudio.ai](https://lmstudio.ai), load a model, start the local server
-- Default endpoint: `http://localhost:1234/v1`
-- API key is not checked by LM Studio — any non-empty string works (e.g. `"lm-studio"`)
-- Model name must match exactly what LM Studio shows (e.g. `"mistral-7b-instruct-v0.3"`)
-- Quality warning: local models are weaker than Gemini on nuanced grammar feedback. Use for development and cost-free iteration, not as primary production backend. Run judge fixtures against both to compare.
+Ollama-specific: `num_ctx` from config is passed via `extra_body={"num_ctx": N}` if set.
 
-**Other compatible providers (via `base_url`):**
-- Together AI: `base_url="https://api.together.xyz/v1"`
-- Groq: `base_url="https://api.groq.com/openai/v1"`
-- Mistral API: `base_url="https://api.mistral.ai/v1"`
+Retry: exponential backoff, `config.max_retries` attempts, starting at `config.initial_retry_delay` seconds.
+
+`check_health()` hits `{base_url}/models` with a 1.5 s timeout.
+
+### `llm/gemini.py` — GeminiLLM
+
+```python
+class GeminiLLM(BaseLLM):
+    def __init__(self, config: LLMConfig):
+        genai.configure(api_key=config.api_key)
+        self._model_name = config.model
+```
+
+- System messages are extracted and passed as `system_instruction` to `GenerativeModel`.
+- `assistant` role is mapped to `"model"` (Gemini's name for that role).
+- `truncated` is set from `finish_reason.name == "MAX_TOKENS"`.
+- `check_health()` calls `genai.list_models()`.
+- Same retry/backoff pattern as `OpenAICompatibleLLM`.
+
+---
+
+## `llm/ollama_setup.py`
+
+Called automatically by `factory.py` when `provider == "ollama"`. No manual invocation needed.
+
+```python
+def ensure_ollama_ready(model: str, base_url: str | None = None) -> None:
+    # 1. Strips /v1 from base_url to get native Ollama API root
+    # 2. If Ollama is not running, spawns 'ollama serve' and waits up to 15 s
+    # 3. Checks local model list; runs 'ollama pull <model>' if absent
+    # Raises RuntimeError if Ollama is not installed or startup times out
+```
+
+Model matching: treats `name` and `name:latest` as equivalent.
 
 ---
 
 ## `llm/factory.py`
 
 ```python
-from llm.base import BaseLLM
-from llm.gemini import GeminiLLM
-from llm.openai_compat import OpenAICompatibleLLM
-
-def build_llm(config: dict) -> BaseLLM:
-    """
-    Read config['llm'] and return the correct BaseLLM implementation.
-    Raises ValueError on unknown backend — fail fast at startup, not mid-session.
-    """
-    llm_cfg = config.get("llm", {})
-    backend = llm_cfg.get("backend", "gemini")
-    model = llm_cfg.get("model")
-
-    if backend == "gemini":
-        return GeminiLLM(model=model or "gemini-2.0-flash")
-
-    elif backend == "lm_studio":
-        return OpenAICompatibleLLM(
-            model=model or "mistral-7b-instruct-v0.3",
-            api_key="lm-studio",           # LM Studio ignores the key value
-            base_url=llm_cfg.get("lm_studio_base_url", "http://localhost:1234/v1"),
-        )
-
-    elif backend == "openai":
-        return OpenAICompatibleLLM(
-            model=model or "gpt-4o-mini",
-            base_url=llm_cfg.get("openai_base_url"),  # None = OpenAI default
-        )
-
+def build_llm(config: LLMConfig) -> BaseLLM:
+    if config.provider == "ollama":
+        ensure_ollama_ready(model=config.model, base_url=config.base_url)
+        return OpenAICompatibleLLM(config)
+    if config.provider == "openai_compat":
+        return OpenAICompatibleLLM(config)
+    elif config.provider == "gemini":
+        return GeminiLLM(config)
     else:
-        raise ValueError(
-            f"Unknown LLM backend: '{backend}'. "
-            f"Valid options: gemini, lm_studio, openai"
-        )
+        raise ValueError(f"Unknown LLM provider: '{config.provider}'")
 ```
+
+Valid providers: `"ollama"`, `"openai_compat"`, `"gemini"`. Validated in `config.py` at load time.
 
 ---
 
-## Config (`config.yaml`)
+## Config
 
-```yaml
-llm:
-  provider: "openai_compat"                           # openai_compat | gemini
-  base_url: "http://localhost:1234/v1"                 # base url for api
-  api_key: "lm-studio"                                # api key
-  model: "qwen2.5-coder-7b-instruct-q4_k_m.gguf"      # LLM model name
-  max_tokens: 1000                                    # maximum token response limit
-  show_incomplete_responses: false                    # show incomplete text when json fails
-  show_cut_by_limit_tag: true                         # append [TRUNCATED BY LIMIT] on truncation
-  max_skill_retries: 3                                # number of self-correction attempts in skills
-```
+`LLMConfig` fields (all sourced from the `llm:` block in the active config file):
 
-**Development workflow:** set `backend: lm_studio` to iterate locally at zero cost. Switch to `backend: gemini` for quality testing and final evaluation.
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `provider` | str | required | `ollama` \| `openai_compat` \| `gemini` |
+| `model` | str | required | Exact model identifier |
+| `base_url` | str \| None | None | Provider API URL; has per-provider defaults |
+| `api_key` | str \| None | None | Supports `${VAR_NAME}` env var placeholder |
+| `max_tokens` | int | 1000 | Max response tokens per call |
+| `num_ctx` | int \| None | None | Ollama context window; omit for model default |
+| `max_retries` | int | 3 | Retry attempts on transient failure |
+| `initial_retry_delay` | float | 1.0 | First backoff delay in seconds (doubles each retry) |
+| `max_skill_retries` | int | 3 | Max self-correction loops inside skills |
+| `show_incomplete_responses` | bool | False | Print raw LLM text on JSON parse failure |
+| `show_cut_by_limit_tag` | bool | True | Append `[TRUNCATED BY LIMIT]` on truncation |
+
+`${VAR_NAME}` placeholders in `api_key` or `base_url` are resolved from environment variables at load time. Missing variable → `ValueError` at startup.
 
 ---
 
 ## Injection Pattern
 
-LLM instance built once at startup, injected into orchestrator and modules. Never constructed inside a skill or module.
+`build_llm` is called once at startup; the instance is injected everywhere.
 
 ```python
-# ui/cli.py or ui/app.py
-config = load_config("config.yaml")
-llm = build_llm(config)
-storage = build_storage(config)
-orchestrator = Orchestrator(storage=storage, llm=llm, registry=MODULE_REGISTRY)
+# ui/cli.py
+config = load_config(os.environ.get("LTUT_CONFIG", "config.yaml"))
+llm = build_llm(config.llm)
+orchestrator = Orchestrator(storage=build_storage(config), llm=llm, ...)
 ```
+
+Skills and modules receive `llm` as a parameter. They never import a provider SDK or call `build_llm` themselves.
 
 ---
 
-## Mock LLM (Testing)
+## Mock LLM (unit tests)
 
 ```python
-# tests/conftest.py
 class MockLLM(BaseLLM):
     def __init__(self, responses: list[str]):
         self._responses = iter(responses)
 
     def complete(self, messages, **kwargs) -> LLMResponse:
-        return LLMResponse(
-            text=next(self._responses),
-            model="mock"
-        )
+        return LLMResponse(text=next(self._responses), model="mock")
 ```
 
-All unit tests inject `MockLLM` — no network calls, no API keys in CI.
-
-```python
-mock_llm = MockLLM(responses=[
-    '{"mistakes": []}',          # detector returns no errors
-    '{"classified": [...]}',     # processor output
-])
-module = WritingModule(skills=writing_skills(llm=mock_llm))
-```
+All unit tests use `MockLLM` — no network calls, no API keys required in CI.
