@@ -1,0 +1,13 @@
+# Test configuration — used by e2e smoke tests and local test runs.
+# Isolated data_root prevents test sessions from mixing with real user data.
+
+data_root: "data/test"
+default_level: "a2"
+cold_start_threshold: 3
+interruption_timeout_minutes: 15
+storage_backend: "sqlite"
+
+llm:
+  provider: "ollama"
+  model: "qwen2.5-coder-local"
+  num_ctx: 4096

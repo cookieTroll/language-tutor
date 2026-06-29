@@ -22,3 +22,6 @@ packages = ["ui", "llm", "memory", "skills", "modules", "orchestrator", "shared"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests requiring a live LLM; run manually with: pytest tests/e2e/ -v -s",
+]

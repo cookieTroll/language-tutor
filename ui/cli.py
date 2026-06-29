@@ -6,6 +6,10 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+# Windows cp1252 can't print box-drawing chars (──) or bullet points (•) used in evaluation output
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from config import load_config
 from memory.factory import build_storage
 from llm.factory import build_llm
@@ -37,7 +41,8 @@ def main():
     print("==================================================")
     
     try:
-        config = load_config()
+        config_path = os.environ.get("LTUT_CONFIG", "config.yaml")
+        config = load_config(config_path)
         store = build_storage(config)
         llm = build_llm(config.llm)
         
