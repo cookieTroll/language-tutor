@@ -197,10 +197,17 @@ class Orchestrator(OrchestratorProtocol):
         # 8-13. Finalize session (write YAML file, update DB log, BTW logs, vocab flags, delete checkpoint)
         self._finalize_session(user_id, selected_lang, module_key, session_id, profile, result, file_content, checkpoint_path)
 
+    def _confirm_or_update_level(self, user_id: str, profile: UserProfile) -> None:
+        print(f"\nYour current CEFR level: {profile.level.upper()}")
+        choice = input("Press Enter to keep, or type a new level (A1–C2): ").strip().lower()
+        if choice and choice != profile.level:
+            self.store.write_level(user_id, choice, "stated")
+            profile.level = choice
+
     def _select_language_and_profile(self, user_id: str, language: str) -> tuple[str, UserProfile]:
         active_lang = self.store.get_active_language(user_id)
         selected_lang = language
-        
+
         if active_lang:
             print(f"\nCurrently studying {active_lang.upper()}.")
             choice = input("Continue or switch language? [Press Enter to continue, or type new language]: ").strip().lower()
@@ -215,7 +222,11 @@ class Orchestrator(OrchestratorProtocol):
         # Load/Create user profile
         profile = self.store.get_user_profile(user_id, selected_lang)
         if not profile:
-            level = input(f"Enter your CEFR level for {selected_lang.upper()} (A1-C2): ").strip().lower()
+            default = self.config.default_level
+            level_input = input(
+                f"Enter your CEFR level for {selected_lang.upper()} [default: {default.upper()}]: "
+            ).strip().lower()
+            level = level_input if level_input else default
             profile = UserProfile(
                 user_id=user_id,
                 language=selected_lang,
@@ -227,10 +238,11 @@ class Orchestrator(OrchestratorProtocol):
             )
             self.store.write_user_profile(profile)
         else:
+            self._confirm_or_update_level(user_id, profile)
             profile.active = True
             profile.updated_at = datetime.now()
             self.store.write_user_profile(profile)
-            
+
         return selected_lang, profile
 
     def _check_language_config(self, language: str, on_warn=None) -> None:

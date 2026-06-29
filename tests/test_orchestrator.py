@@ -252,6 +252,82 @@ def test_interrupted_session_invalid_choice_retry(mock_print, mock_input, store_
     recent = store.get_recent_sessions("user1", "german")
     assert recent[0].status == "abandoned"
 
+@patch("orchestrator.orchestrator.input")
+@patch("orchestrator.orchestrator.print")
+def test_new_user_stated_level_overrides_config_default(mock_print, mock_input, store_and_llm):
+    """Typing a level at the prompt saves it; config default is not used."""
+    store, llm, config = store_and_llm
+    orchestrator = Orchestrator(store, llm, config)
+
+    # Simulate: no active language → type "german", then level "b1" (config default is "a1")
+    mock_input.side_effect = ["german", "b1"]
+
+    _, profile = orchestrator._select_language_and_profile("user1", language=None)
+
+    assert profile.level == "b1"
+    assert store.get_current_level("user1") == "b1"
+
+
+@patch("orchestrator.orchestrator.input")
+@patch("orchestrator.orchestrator.print")
+def test_new_user_enter_uses_config_default(mock_print, mock_input, store_and_llm):
+    """Pressing Enter at the level prompt falls back to config.default_level."""
+    store, llm, config = store_and_llm
+    orchestrator = Orchestrator(store, llm, config)
+
+    # Simulate: no active language → type "german", then Enter (empty) for level
+    mock_input.side_effect = ["german", ""]
+
+    _, profile = orchestrator._select_language_and_profile("user1", language=None)
+
+    assert profile.level == config.default_level
+
+
+@patch("orchestrator.orchestrator.input")
+@patch("orchestrator.orchestrator.print")
+def test_existing_user_level_override(mock_print, mock_input, store_and_llm):
+    """Returning user who types a new level updates storage via write_level."""
+    store, llm, config = store_and_llm
+    orchestrator = Orchestrator(store, llm, config)
+
+    date_now = datetime.now()
+    store.write_user_profile(UserProfile(
+        user_id="user1", language="german", level="a2",
+        level_source="stated", active=True,
+        created_at=date_now, updated_at=date_now,
+    ))
+
+    # Simulate: continue german, then override level to "b1"
+    mock_input.side_effect = ["", "b1"]
+
+    _, profile = orchestrator._select_language_and_profile("user1", language=None)
+
+    assert profile.level == "b1"
+    assert store.get_current_level("user1") == "b1"
+
+
+@patch("orchestrator.orchestrator.input")
+@patch("orchestrator.orchestrator.print")
+def test_existing_user_level_kept_on_enter(mock_print, mock_input, store_and_llm):
+    """Returning user who presses Enter keeps the stored level unchanged."""
+    store, llm, config = store_and_llm
+    orchestrator = Orchestrator(store, llm, config)
+
+    date_now = datetime.now()
+    store.write_user_profile(UserProfile(
+        user_id="user1", language="german", level="b2",
+        level_source="stated", active=True,
+        created_at=date_now, updated_at=date_now,
+    ))
+
+    # Simulate: continue german, then Enter (keep level)
+    mock_input.side_effect = ["", ""]
+
+    _, profile = orchestrator._select_language_and_profile("user1", language=None)
+
+    assert profile.level == "b2"
+
+
 def test_finalize_session_success(store_and_llm):
     from modules.protocols import ModuleResult
     store, llm, config = store_and_llm

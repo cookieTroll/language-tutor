@@ -20,9 +20,6 @@ Finished items live in `CHECKLIST_FINISHED.md`.
   - [x] [ ] [ ] `get_current_level()` — most recent row from `user_levels`
   - [x] [ ] [ ] `write_level()`
 
-### Session Clock (remaining)
-- [ ] [ ] [ ] UI timer widget (Layer 1c — deferred, depends on `IOHandler`)
-
 ---
 
 ## Layer 1a — Full Evaluator Pipeline
@@ -60,10 +57,10 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 ## Layer 1b — User Personalization + Topic Picker
 
 ### User Level Review
-- [ ] [ ] [ ] On startup (or via `/level` CLI command), display current CEFR level from `user_levels` table
-- [ ] [ ] [ ] Prompt user to confirm or override — write override to `user_levels` with `source='stated'`
-- [ ] [ ] [ ] `config.yaml` default level used only if no row exists in `user_levels`
-- [ ] [ ] [ ] Unit test: stated level overrides config default; most recent row returned by `get_current_level()`
+- [x] [x] [ ] On startup (or via `/level` CLI command), display current CEFR level from `user_levels` table
+- [x] [x] [ ] Prompt user to confirm or override — write override to `user_levels` with `source='stated'`
+- [x] [x] [ ] `config.yaml` default level used only if no row exists in `user_levels`
+- [x] [x] [ ] Unit test: stated level overrides config default; most recent row returned by `get_current_level()`
 
 ### Session History Aggregation
 - [ ] [ ] [ ] `storage.get_session_aggregate()` — structured profile: sessions by skill, recency, recurring errors, recent topics, vocab flag count
@@ -83,6 +80,12 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [ ] [ ] [ ] `tests/fixtures/orchestrator_cases.json` — 3–5 session history scenarios with expected recommendations
 - [ ] [ ] [ ] `tests/judge/judge_orchestrator.py` — judge for orchestrator recommendation quality
 - [ ] [ ] [ ] Update CLI to display recommendation reason and suggested focus
+
+---
+
+## Orchestrator Refactor (post-1b)
+
+- [ ] [ ] [ ] Extract `SessionManager(store, config)` — absorbs `_init_write_ahead_log`, `_build_module_context`, `_finalize_session`; `Orchestrator.run_session` delegates to it
 
 ---
 
