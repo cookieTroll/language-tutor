@@ -176,6 +176,42 @@ class BaseSessionStore(StorageProtocol, ABC):
     def __init__(self, data_root: str):
         self.data_root = data_root
 
+    def get_session_aggregate(self, user_id: str, language: str) -> "SessionAggregate":
+        from datetime import datetime as _dt
+        now = _dt.now()
+
+        all_sessions = self.get_recent_sessions(user_id, language, n=10_000)
+        by_module: dict[str, list] = {}
+        for s in all_sessions:
+            if s.status == "completed":
+                by_module.setdefault(s.module, []).append(s)
+
+        sessions_by_module: dict[str, int] = {}
+        days_since_module: dict[str, float] = {}
+        total_time_by_module: dict[str, float] = {}
+        for mod, logs in by_module.items():
+            sessions_by_module[mod] = len(logs)
+            total_time_by_module[mod] = sum(s.duration_minutes or 0.0 for s in logs)
+            latest = max((s.completed_at for s in logs if s.completed_at), default=None)
+            if latest:
+                days_since_module[mod] = (now - latest).total_seconds() / 86400.0
+
+        error_freq = self.get_error_frequency(user_id, language)
+        recurring_errors = [
+            tag for tag, freq in sorted(error_freq.items(), key=lambda x: -x[1]) if freq >= 2
+        ]
+        recent_topics = self.get_recent_topics(user_id, language, module="writing", n=5)
+        vocab_flag_count = len(self.get_vocab_flags(user_id, language))
+
+        return SessionAggregate(
+            sessions_by_module=sessions_by_module,
+            days_since_module=days_since_module,
+            total_time_by_module=total_time_by_module,
+            recurring_errors=recurring_errors,
+            recent_topics=recent_topics,
+            vocab_flag_count=vocab_flag_count,
+        )
+
     def write_file(self, content: SessionFileContent, base_dir: str) -> str:
         # Determine paths
         # Relative file_path schema: sessions/{user_id}/{language}/{session_id}.yaml
