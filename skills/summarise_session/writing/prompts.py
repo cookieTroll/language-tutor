@@ -39,6 +39,7 @@ Your task:
    - Near-level tips must be grounded in the actual error_tags above or clearly observable characteristics of this text
    - Grammar topics fitting for the next CEFR band may be referenced in aspirational tips, even when not evidenced in this session's mistakes
    - Tips must NOT restate specific corrections — they should be actionable learning directions
+   - Tips and session_summary must ALWAYS be written in English, regardless of the target language
 
 4. Set comparison_note to null.
 
