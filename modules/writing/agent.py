@@ -11,7 +11,6 @@ from skills.protocols import SkillInput
 from skills.topic_picker.skill import TopicPickerSkill
 from modules.writing.skills import get_writing_skills
 from modules.writing.pipeline import WritingPipeline, PipelineResult
-from shared.timer import SessionTimer
 
 
 class WritingModule(ModuleProtocol):
@@ -54,12 +53,11 @@ class WritingModule(ModuleProtocol):
         self._print_exercise_header(ctx, topic, requirements, io)
 
         started_at = datetime.now()
-        timer = SessionTimer(label="Writing")
-        timer.start()
+        io.start_timer(label="Writing")
         user_lines, btw_entries, vocab_signals = self._collect_input(
             ctx, topic, writing_prompt, llm, io
         )
-        timer.stop()
+        io.stop_timer()
         completed_at = datetime.now()
         duration_minutes = (completed_at - started_at).total_seconds() / 60.0
 
@@ -69,23 +67,25 @@ class WritingModule(ModuleProtocol):
             enable_timing=not bool(os.environ.get("PYTEST_CURRENT_TEST")),
         )
         self._write_latency_log(pipeline, ctx, session_id)
-        self._print_evaluation(pipeline, stated_level=ctx.level, io=io)
-
-        # Send structured evaluation data for client-side annotated view
-        if hasattr(io, "data"):
-            io.data({
-                "event": "evaluation_complete",
-                "user_text": user_text,
-                "corrected_text": pipeline.corrected_text,
-                "mistakes": [
-                    {
-                        "fragment":   m.get("fragment", ""),
-                        "error_tag":  m.get("error_tag", ""),
-                        "correction": m.get("correction", ""),
-                    }
-                    for m in pipeline.explained_mistakes
-                ],
-            })
+        io.render_evaluation({
+            "detector_success":   pipeline.detector_success,
+            "detector_error":     pipeline.detector_error,
+            "explained_mistakes": pipeline.explained_mistakes,
+            "corrected_text":     pipeline.corrected_text,
+            "session_summary":    pipeline.session_summary,
+            "tips":               pipeline.tips,
+            "text_level_estimate": pipeline.text_level_estimate,
+            "stated_level":       ctx.level,
+            "user_text":          user_text,
+            "mistakes": [
+                {
+                    "fragment":   m.get("fragment", ""),
+                    "error_tag":  m.get("error_tag", ""),
+                    "correction": m.get("correction", ""),
+                }
+                for m in pipeline.explained_mistakes
+            ],
+        })
 
         self._follow_up_phase(ctx, topic, user_lines, llm, io)
 
@@ -246,73 +246,6 @@ class WritingModule(ModuleProtocol):
             flagged_word=output.metadata.get("flagged_word"),
             timestamp=datetime.now(),
         )
-
-    def _print_evaluation(self, pipeline: PipelineResult, stated_level: str = "", io: IOHandler = None) -> None:
-        # NOTE: this method will move to ui/ layer (Layer 1c) once IOHandler is fully wired.
-        io.output(
-            "\n=================================================="
-            "\n                 EVALUATION"
-            "\n=================================================="
-        )
-
-        if not pipeline.detector_success:
-            io.output(
-                f"[!] Mistake detection failed."
-                f"\n    Error: {pipeline.detector_error}"
-            )
-        elif pipeline.explained_mistakes:
-            io.output(f"Found {len(pipeline.explained_mistakes)} mistake(s):\n")
-            groups: dict[str, list[dict]] = {"critical": [], "expected": [], "minor": [], "": []}
-            for m in pipeline.explained_mistakes:
-                groups.setdefault(m.get("severity", ""), []).append(m)
-            labels = {
-                "critical": "── Critical ──────────────────────────────────────",
-                "expected": "── Expected at this level ────────────────────────",
-                "minor":    "── Minor / stylistic ─────────────────────────────",
-                "":         "── Mistakes ──────────────────────────────────────",
-            }
-            counter = 0
-            for sev in ("critical", "expected", "minor", ""):
-                if not groups.get(sev):
-                    continue
-                io.output(labels[sev])
-                for m in groups[sev]:
-                    counter += 1
-                    io.output(
-                        f"{counter}. [{m['error_tag']}] '{m['fragment']}'"
-                        f"\n   Correction : {m['correction']}"
-                        f"\n   Explanation: {m['explanation']}\n"
-                    )
-        else:
-            io.output("Excellent! No mistakes were identified.")
-
-        if pipeline.corrected_text:
-            io.output(
-                f"── Corrected text ────────────────────────────────"
-                f"\n{pipeline.corrected_text}\n"
-            )
-
-        if pipeline.session_summary:
-            io.output(
-                f"── Session summary ───────────────────────────────"
-                f"\n  {pipeline.session_summary}\n"
-            )
-
-        if pipeline.tips:
-            tips_text = "\n".join(f"  • {tip}" for tip in pipeline.tips)
-            io.output(f"── Tips ──────────────────────────────────────────\n{tips_text}\n")
-
-        if pipeline.text_level_estimate:
-            estimate = pipeline.text_level_estimate.upper()
-            level_line = f"  Estimated: {estimate}"
-            if stated_level:
-                level_line += f"  (your stated level: {stated_level.upper()})"
-            io.output(
-                f"── Text level ────────────────────────────────────"
-                f"\n{level_line}"
-            )
-
-        io.output("==================================================\n")
 
     def _follow_up_phase(
         self, ctx: ModuleContext, topic: str, user_lines: list[str], llm: BaseLLM, io: IOHandler
