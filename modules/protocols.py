@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel
 from llm.base import BaseLLM
 from memory.protocols import SessionFileContent
+from shared.io import IOHandler
 
 class WritingPrompt(BaseModel):
     """Exercise specification returned by topic_picker and consumed by WritingModule."""
@@ -57,7 +58,7 @@ class ModuleProtocol(Protocol):
         ...
 
     def run(
-        self, ctx: ModuleContext, llm: BaseLLM
+        self, ctx: ModuleContext, llm: BaseLLM, io: IOHandler
     ) -> tuple[ModuleResult, SessionFileContent]:
         """
         Execute interactive session. Pure — no storage calls.
