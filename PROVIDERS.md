@@ -33,6 +33,8 @@ $env:GEMINI_API_KEY = "your-key-here"
 
 ## Running the app
 
+### CLI
+
 ```powershell
 # Ollama (default)
 python -m ui.cli
@@ -49,6 +51,24 @@ $env:GCP_PROJECT = "your-gcp-project-id"
 $env:GCP_REGION  = "us-central1"
 $env:LTUT_CONFIG = "config.vertex.yaml"
 python -m ui.cli
+```
+
+### Web UI (Flask)
+
+```powershell
+# Ollama (default) — open http://localhost:5000 in a browser
+python -m ui.app
+
+# Gemini
+$env:GEMINI_API_KEY = "your-key-here"
+$env:LTUT_CONFIG = "config.gemini.yaml"
+python -m ui.app
+
+# Vertex AI
+$env:GCP_PROJECT = "your-gcp-project-id"
+$env:GCP_REGION  = "us-central1"
+$env:LTUT_CONFIG = "config.vertex.yaml"
+python -m ui.app
 ```
 
 ## Running judge tests

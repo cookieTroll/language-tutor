@@ -222,3 +222,25 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 - [x] [x] [ ] Split `StorageProtocol` into domain-specific sub-protocols: `SessionStore`, `LevelStore`, `BtwLogStore`, `VocabStore`, `ProfileStore` — 23-method kitchen-sink interface cascades bloat to every implementation
 - [x] [x] [ ] Add `_hydrate_session_log(row) -> SessionLog` helper to `SQLiteSessionStore` — `SessionLog` reconstruction is duplicated ~5 times across query methods
 - [x] [x] [ ] Extract `WritingPipeline` class from `WritingModule._run_pipeline()` — 114-line method sequencing 6 skill calls with error routing and metadata threading; should be its own unit
+
+---
+
+## Layer 1c — Local Frontend
+
+- [x] [x] [ ] Choose framework — Flask
+- [x] [x] [ ] `IOHandler` protocol — `prompt()`, `output()` — decouples module I/O from terminal/web
+  - [x] [x] [ ] `TerminalIOHandler` — wraps `input()` / `print()`
+  - [x] [x] [ ] `WebIOHandler` — queue-based SSE bridge for Flask sessions (`shared/io.py`)
+  - [x] [x] [ ] `WritingModule.run()` accepts `IOHandler`; all `input()` / `print()` calls replaced
+- [x] [x] [ ] `ui/app.py`:
+  - [x] [x] [ ] `/` — chat window: recommendation → confirm → exercise → feedback
+  - [x] [x] [ ] `/sessions` — session file browser: lists past sessions by date/skill, renders YAML as readable HTML
+  - [x] [x] [ ] `/session/{session_id}` — individual session view
+  - [x] [x] [ ] Thin JS for multi-line text input and SSE streaming display
+- [x] [x] [ ] Verify runs locally on `localhost` with no external dependencies
+
+---
+
+## LLM Throughput Optimization
+
+- [x] [x] [ ] Investigate writing evaluation latency — per-step profiling via `StepTiming` dataclass; latency log written to `data/logs/skill_latency.jsonl` per session

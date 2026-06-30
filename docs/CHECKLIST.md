@@ -44,18 +44,8 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ## Layer 1c — Local Frontend
 
-- [ ] [ ] [ ] Choose framework — Flask or FastAPI + minimal HTML/JS (single file preferred)
-- [ ] [ ] [ ] `IOHandler` protocol — `prompt()`, `output()`, `confirm()` — decouples module I/O from terminal/web
-  - [ ] [ ] [ ] `TerminalIOHandler` — wraps `input()` / `print()`
-  - [ ] [ ] [ ] `WritingModule.run()` accepts `IOHandler`; all `input()` / `print()` calls replaced
-- [ ] [ ] [ ] Move evaluation rendering out of `WritingModule._print_evaluation()` into `TerminalIOHandler` — module returns structured data only (blocked on `IOHandler` above)
+- [ ] [ ] [ ] Move evaluation rendering out of `WritingModule._print_evaluation()` into `TerminalIOHandler` — module returns structured data only
 - [ ] [ ] [ ] Move `SessionTimer` display into `TerminalIOHandler`; add timer widget in web UI
-- [ ] [ ] [ ] `ui/app.py`:
-  - [ ] [ ] [ ] `/` — chat window: recommendation → confirm → exercise → feedback
-  - [ ] [ ] [ ] `/sessions` — session file browser: lists past sessions by date/skill, renders YAML as readable HTML (not raw YAML)
-  - [ ] [ ] [ ] `/session/{session_id}` — individual session view
-  - [ ] [ ] [ ] Thin JS for multi-line text input and streaming display if possible
-- [ ] [ ] [ ] Verify runs locally on `localhost` with no external dependencies
 - [ ] [ ] [ ] Manual test: complete full session via browser, verify session file renders correctly
 
 ---
@@ -138,7 +128,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 - [ ] [ ] [ ] Identify and evaluate the LLM inference optimization package (cache efficiency + low-level throughput improvements); assess fit with `llm/` abstraction layer and document findings in `docs/llm_backends.md`
 - [ ] [ ] [ ] Investigate `/btw` response latency — measure time from question submission to answer; evaluate whether prompt size, token budget, or the Gemini API cold path is the dominant factor
-- [ ] [ ] [ ] Investigate writing evaluation latency — measure total time from submission to feedback display; profile per-step (Steps 1–6) to identify which skill call dominates; evaluate batching or parallelising independent steps (Step 5 is already independent of Steps 1–4)
+- [ ] [ ] [ ] Evaluate batching or parallelising independent pipeline steps (Step 5 is already independent of Steps 1–4); profiling data now available in `data/logs/skill_latency.jsonl`
 
 ---
 
