@@ -275,7 +275,15 @@ function handleDone() {
   document.getElementById('done-banner').style.display = 'block';
   document.getElementById('submit-btn').disabled = true;
   document.getElementById('btw-btn').disabled   = true;
+  document.getElementById('done-btn').style.display = 'none';
   localStorage.removeItem('draftText');
+}
+
+async function finishSession() {
+  document.getElementById('done-btn').disabled  = true;
+  document.getElementById('btw-btn').disabled   = true;
+  document.getElementById('btw-inp').disabled   = true;
+  await sendInput('');
 }
 
 function handleData(payload) {
@@ -316,10 +324,11 @@ function handleData(payload) {
   // Enter follow-up phase so sendBtw() doesn't gate out
   phase = 'follow-up';
 
-  // Focus the btw input for follow-up
+  // Focus the btw input for follow-up; show Done button
   const btwInp = document.getElementById('btw-inp');
-  btwInp.placeholder = 'Ask about a mistake…';
+  btwInp.placeholder = 'Ask about a mistake… (Enter to finish)';
   document.getElementById('btw-btn').disabled = false;
+  document.getElementById('done-btn').style.display = '';
   setTimeout(() => btwInp.focus(), 150);
 
   const out = document.getElementById('tutor-output');
@@ -453,6 +462,7 @@ async function submitWriting() {
 async function sendBtw() {
   const inp = document.getElementById('btw-inp');
   const q   = inp.value.trim();
+  if (phase === 'follow-up' && !q) { finishSession(); return; }
   if (!q || (phase !== 'writing' && phase !== 'follow-up')) return;
   inp.value = '';
   if (phase === 'follow-up') {
