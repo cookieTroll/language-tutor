@@ -20,7 +20,6 @@ description: Conducts a German writing session. Generates a prompt at the user's
              level, accepts their written response, identifies grammar and vocabulary
              errors, provides structured feedback with explanations, and produces a
              corrected version.
-skill_type: session
 ```
 
 ### Context request (`modules/writing/agent.py`)
@@ -36,19 +35,26 @@ def context_request(self) -> ContextRequest:
     )
 ```
 
-### Skills injected (`modules/writing/skills.py`)
+### Pipeline (`modules/writing/pipeline.py`)
+
+`WritingPipeline` sequences all six evaluator skills. `WritingModule.run()` delegates to it — the module handles I/O (prompts, display), the pipeline handles LLM calls.
+
+Execution order: **Step 5 → 1 → 2 → 3 → 4 → 6**. Step 5 (`estimate_text_level`) runs first because it only needs the raw user text; Step 1 (`detect_mistakes`) acts as a gate — if no mistakes are found, Steps 2–4 are skipped.
+
+Returns `PipelineResult` dataclass carrying all per-step outputs.
+
+### Skills injected
 
 | Layer | Skill | Role |
 |-------|-------|------|
-| PoC | `detect_mistakes` | Step 1 — raw mistake detection |
 | PoC | `btw_handler` | utility — inline /btw questions during writing |
-| 1a | `process_mistakes` | Step 2 — classify + taxonomy |
-| 1a | `generate_feedback` | Step 3 — explanations |
-| 1a | `write_correction` | Step 4 — corrected text |
-| 1a | `explain_grammar` | utility — post-evaluation grammar follow-up |
-| 1b | `pick_topic` | topic generation |
-
-`explain_grammar` is a shared utility skill (also used by grammar module). Injected here for the post-evaluation review loop.
+| 1a | `detect_mistakes` | Step 1 — raw mistake detection (gate) |
+| 1a | `classify_mistakes` | Step 2 — taxonomy classification |
+| 1a | `explain_mistakes` | Step 3 — explanations pitched to level |
+| 1a | `write_correction` | Step 4 — corrected text + tips + session summary |
+| 1a | `estimate_text_level` | Step 5 — CEFR band estimation (runs first, independent) |
+| 1a | `summarise_session` | Step 6 — severity-grouped summary |
+| 1b | `topic_picker` | topic generation |
 
 ### Session flow (`modules/writing/agent.py`)
 
@@ -152,7 +158,7 @@ Return empty list if no errors found.
 
 ---
 
-### `skills/process_mistakes/` — Mistake Processor
+### `skills/classify_mistakes/` — Mistake Classifier
 
 **Layer:** 1a
 **Type:** session
@@ -166,75 +172,28 @@ user_text: str
 **Output:**
 ```python
 classified: list[dict]     # [{fragment, error_tag, correction}]
-# error_tag validated against ERROR_TAXONOMY before return
+# error_tag validated via lang.loader taxonomy before return
 ```
 
-**Prompt template:**
-```
-Classify each mistake and provide the correct German form.
-
-User text:
-{user_text}
-
-Raw mistakes:
-{raw_mistakes_json}
-
-Valid error tags: {taxonomy_list}
-
-Return JSON only:
-{
-  "classified": [
-    {
-      "fragment": "mit meinen Bruder",
-      "error_tag": "dative_case",
-      "correction": "mit meinem Bruder"
-    }
-  ]
-}
-```
-
-**Post-processing:** `validate_error_tag()` called on every `error_tag` in output. Unknown tags raise `TaxonomyError` and must be retried or removed before proceeding to Step 3.
+**Post-processing:** `taxonomy.validate_tag()` called on every `error_tag`. Unknown tags fall back to `"other"`.
 
 ---
 
-### `skills/generate_feedback/` — Feedback Generator
+### `skills/explain_mistakes/` — Explanation Generator
 
 **Layer:** 1a
 **Type:** session
 
 **Input:**
 ```python
-classified: list[dict]    # from process_mistakes
+classified: list[dict]    # from classify_mistakes
 level: str
 ```
 
 **Output:**
 ```python
-feedback: list[dict]      # [{error_tag, fragment, correction, explanation}]
+explained: list[dict]     # [{error_tag, fragment, correction, explanation}]
 # explanation pitched to level
-```
-
-**Prompt template:**
-```
-You are a {language} language teacher explaining errors to a {level} learner.
-
-For each mistake, write a clear, concise explanation appropriate for this level.
-Do not over-explain. Be specific about the rule.
-
-Mistakes:
-{classified_json}
-
-Return JSON only:
-{
-  "feedback": [
-    {
-      "error_tag": "dative_case",
-      "fragment": "mit meinen Bruder",
-      "correction": "mit meinem Bruder",
-      "explanation": "After 'mit', German requires dative case. The masculine dative article is 'meinem', not 'meinen'."
-    }
-  ]
-}
 ```
 
 **Notes:**
@@ -258,8 +217,8 @@ level: str
 **Output:**
 ```python
 corrected_text: str
-recommendations: list[str]
-comment: str
+tips: list[str]            # actionable next-steps (formerly recommendations)
+session_summary: str       # overall comment (formerly comment)
 ```
 
 **Prompt template:**
@@ -289,7 +248,7 @@ Return JSON only:
 
 ---
 
-### `skills/pick_topic/` — Topic Picker
+### `skills/topic_picker/` — Topic Picker
 
 **Layer:** 1b
 **Type:** session
@@ -384,19 +343,11 @@ if user_input.startswith("/btw "):
 
 ## Error Taxonomy
 
-Shared across all writing skills. Defined in `skills/detect_mistakes/taxonomy.py`.
+Loaded at runtime from `lang/maps/taxonomy/` YAML files via `lang.loader.get_taxonomy(language)`. Language configs point to the active taxonomy version; a default fallback covers unconfigured languages.
 
-```python
-ERROR_TAXONOMY = {
-    "dative_case", "accusative_case", "genitive_case",
-    "word_order", "verb_position", "separable_verb",
-    "article_gender", "adjective_ending",
-    "verb_conjugation", "tense_usage",
-    "vocabulary", "spelling",
-}
-```
+All `error_tag` values in `classify_mistakes` output are validated against the loaded taxonomy. Unknown tags fall back to `"other"` via `taxonomy.validate_tag()`. To add tags without breaking existing fixtures, create a new taxonomy version file and update the language config — do not edit an in-use version in place.
 
-All `error_tag` values in `process_mistakes` output must be from this set. Validated before proceeding to `generate_feedback`. Tags may be extended as new error patterns emerge — do not add retroactively to old sessions.
+See `docs/contracts.md` for the current German taxonomy tags.
 
 ---
 

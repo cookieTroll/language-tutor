@@ -52,6 +52,37 @@ class SkillProtocol(Protocol):
 
 ---
 
+## IO Contracts (`shared/io.py`)
+
+Thin I/O abstraction passed into modules and orchestrator — keeps storage-free components testable without patching `print`/`input`.
+
+```python
+from typing import Protocol
+
+class IOHandler(Protocol):
+    show_cli_hints: bool   # True in CLI; False in web/test — controls hint text in banners
+
+    def output(self, text: str = "") -> None:
+        """Display text to the user. Multi-line strings passed as a single block."""
+        ...
+
+    def prompt(self, text: str = "") -> str:
+        """Display a prompt and return the user's input."""
+        ...
+
+class TerminalIOHandler:
+    """Concrete implementation for the local CLI."""
+    show_cli_hints = True
+
+    def output(self, text: str = "") -> None:
+        print(text)
+
+    def prompt(self, text: str = "") -> str:
+        return input(text)
+```
+
+---
+
 ## Module Contracts (`modules/protocols.py`)
 
 Modules are the middle grain — agents that compose skills to complete a session.
@@ -107,7 +138,7 @@ class ModuleProtocol(Protocol):
         ...
 
     def run(
-        self, ctx: ModuleContext, llm: "BaseLLM"
+        self, ctx: ModuleContext, llm: "BaseLLM", io: "IOHandler"
     ) -> tuple[ModuleResult, "SessionFileContent"]:
         """
         Execute interactive session. Pure — no storage calls.
@@ -158,13 +189,15 @@ class WritingSessionContent(SessionFileContent):
     topic: str
     requirements: str
     user_text: str
-    mistakes: list[dict]      # [{error_tag, fragment, correction, explanation}]
-    recommendations: list[str]
+    mistakes: list[dict]           # [{error_tag, fragment, correction, explanation, severity}]
+    tips: list[str]                # actionable next-steps (formerly recommendations)
     corrected_text: str
-    comment: str
-    btw_log: list[dict]       # [{question, answer, flagged_word, timestamp}]
-    vocab_updates: list[dict] # [{word, source, occurrence_count}]
+    session_summary: str           # overall 1-2 sentence comment (formerly comment)
+    btw_log: list[dict]            # [{question, answer, flagged_word, timestamp}]
+    vocab_updates: list[dict]      # [{word, source, occurrence_count}]
     suggested_focus: str | None = None
+    text_level_estimate: str | None = None   # CEFR band from Step 5 estimator
+    comparison_note: str | None = None       # cross-session comparison (Layer 2b)
 
 class GrammarSessionContent(SessionFileContent):  # Layer 2a
     topic: str
@@ -177,6 +210,8 @@ class GrammarSessionContent(SessionFileContent):  # Layer 2a
 ---
 
 ## Storage Contracts (`memory/protocols.py`)
+
+`StorageProtocol` is composed from five domain-specific sub-protocols. Each sub-protocol can be type-checked independently; the full interface inherits all five.
 
 ```python
 from typing import Protocol, Literal
@@ -200,13 +235,14 @@ class SessionLog(BaseModel):
     completed_at: datetime | None = None
     duration_minutes: float | None = None
 
-    @field_validator("level")
-    @classmethod
-    def validate_level(cls, v: str) -> str:
-        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
-        if v.lower() not in valid_levels:
-            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
-        return v.lower()
+class SessionAggregate(BaseModel):
+    """Aggregated session profile for a (user, language) pair. Used by progress summariser."""
+    sessions_by_module: dict[str, int]      # module → completed session count
+    days_since_module: dict[str, float]     # module → days since last completed session
+    total_time_by_module: dict[str, float]  # module → total minutes
+    recurring_errors: list[str]             # error tags with freq >= 2, sorted by freq desc
+    recent_topics: list[str]               # last 5 writing task_labels
+    vocab_flag_count: int
 
 class BtwEntry(BaseModel):
     btw_id: str
@@ -238,59 +274,55 @@ class UserProfile(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @field_validator("level")
-    @classmethod
-    def validate_level(cls, v: str) -> str:
-        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
-        if v.lower() not in valid_levels:
-            raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
-        return v.lower()
+# --- Sub-protocols ---
 
-class StorageProtocol(Protocol):
-    # Session lifecycle
+class SessionStore(Protocol):
+    """Session lifecycle and reads — scoped to (user_id, language)."""
     def write_session(self, log: SessionLog) -> None: ...
     def update_session_status(self, session_id: str, status: str) -> None: ...
     def write_file(self, content: SessionFileContent, base_dir: str) -> str:
         """Write to temp path, atomic rename. Returns relative path."""
         ...
-
-    # Session reads — all scoped to (user_id, language)
     def get_recent_sessions(self, user_id: str, language: str, n: int = 10) -> list[SessionLog]: ...
     def get_sessions_by_module(self, user_id: str, language: str, module: str) -> list[SessionLog]: ...
     def get_error_frequency(self, user_id: str, language: str, module: str | None = None) -> dict[str, int]: ...
     def get_recent_topics(self, user_id: str, language: str, module: str, n: int = 5) -> list[str]: ...
+    def get_session_aggregate(self, user_id: str, language: str) -> SessionAggregate: ...
     def get_interrupted_sessions(self, user_id: str, timeout_minutes: int) -> list[SessionLog]:
         """Not language-scoped — surface all interrupted sessions regardless of language."""
         ...
 
-    # Level
+class LevelStore(Protocol):
+    """User CEFR level tracking."""
     def get_current_level(self, user_id: str) -> str: ...
     def write_level(self, user_id: str, level: str, source: str) -> None:
         """source: stated | estimated | cefr_module"""
         ...
 
-    # /btw log
+class BtwLogStore(Protocol):
+    """By-the-way question/answer log."""
     def write_btw(self, entry: BtwEntry) -> None: ...
     def get_btw_log(self, user_id: str, language: str, session_id: str | None = None) -> list[BtwEntry]: ...
 
-    # Negative vocab list — scoped to (user_id, language)
+class VocabStore(Protocol):
+    """Negative vocab list — scoped to (user_id, language)."""
     def get_vocab_flags(self, user_id: str, language: str) -> list[VocabFlag]: ...
     def write_vocab_flag(self, flag: VocabFlag) -> None:
         """Insert or increment occurrence_count + update last_seen.
         Unique constraint on (user_id, language, word)."""
         ...
 
-    # User profiles — one row per (user_id, language)
+class ProfileStore(Protocol):
+    """User profiles — one row per (user_id, language)."""
     def get_user_profile(self, user_id: str, language: str) -> UserProfile | None: ...
     def write_user_profile(self, profile: UserProfile) -> None:
         """Insert or update. Sets active=True, sets active=False on all other languages for this user."""
         ...
-    def get_user_languages(self, user_id: str) -> list[str]:
-        """Return all languages this user has a profile for."""
-        ...
-    def get_active_language(self, user_id: str) -> str | None:
-        """Return the language where active=True, or None if no profile exists."""
-        ...
+    def get_user_languages(self, user_id: str) -> list[str]: ...
+    def get_active_language(self, user_id: str) -> str | None: ...
+
+class StorageProtocol(SessionStore, LevelStore, BtwLogStore, VocabStore, ProfileStore, Protocol):
+    """Full storage interface — composed from domain-specific sub-protocols."""
 ```
 
 ---
@@ -329,32 +361,25 @@ class OrchestratorProtocol(Protocol):
         """Cold start → DEFAULT_RECOMMENDATION. Otherwise LLM over summary."""
         ...
 
-    def run_session(self, user_id: str, language: str) -> None:
+    def run_session(self, user_id: str, language: str, on_language_warning=None) -> None:
         """
-        0.  Check interrupted sessions → resume / log / discard
-        1.  summarize_progress(user_id, language) — may return None
-        2.  recommend_exercise
-        3.  Present to user, await confirmation or override
-        4.  Write-ahead: write_session(status='in_progress')
-        5.  Fulfill module's ContextRequest from storage (all queries scoped to language)
-        6.  module.run() → (ModuleResult, SessionFileContent)
+        0.  Check interrupted sessions → resume / log / discard (SessionManager)
+        1.  Language selection + user profile (get/create)
+        2.  summarize_progress(user_id, language) — may return None
+        3.  recommend_exercise
+        4.  Present to user, await confirmation or override
+        5.  Write-ahead: write_session(status='in_progress') + create checkpoint file (SessionManager)
+        6.  Fulfill module's ContextRequest from storage (SessionManager)
+        7.  module.run(ctx, llm, io) → (ModuleResult, SessionFileContent)
               └─ clock runs; checkpoint transcript written per turn
               └─ /btw handled inline inside module
-        7.  write_file() → temp → atomic rename
-        8.  update_session_status('completed')
-        9.  write_session() → full result update
-        10. write_btw() for each entry in result.metadata['btw_entries']
-        11. write_vocab_flag() for each signal in result.metadata['vocab_signals']
-        12. Delete checkpoint file
-        """
-        ...
-              └─ /btw handled inline inside module
-        7.  write_file() → temp → atomic rename
-        8.  update_session_status('completed')
-        9.  write_session() → full result update
-        10. write_btw() for each entry in result.metadata['btw_entries']
-        11. write_vocab_flag() for each signal in result.metadata['vocab_signals']
-        12. Delete checkpoint file
+        8.  write_file() → temp → atomic rename
+        9.  update_session_status('completed')
+        10. write_session() → full result update
+        11. write_btw() for each entry in result.metadata['btw_entries']
+        12. write_vocab_flag() for each signal in result.metadata['vocab_signals']
+        13. Delete checkpoint file
+        Steps 5, 6, 8–13 delegated to SessionManager.
         """
         ...
 ```

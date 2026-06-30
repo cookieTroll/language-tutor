@@ -12,30 +12,25 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 - `llm/base.py` — `BaseLLM` abstract class
 - `llm/gemini.py` — `GeminiLLM` (primary backend)
 - `llm/factory.py` — `build_llm(config)`
-- `memory/protocols.py` — `StorageProtocol`, `SessionLog`, `SessionFileContent` (base + `WritingSessionContent`), `UserProfile`, `VocabFlag`, `BtwEntry`
+- `shared/io.py` — `IOHandler` protocol + `TerminalIOHandler`; passed into module.run() and orchestrator to decouple I/O from logic
+- `memory/protocols.py` — `StorageProtocol` (composed from `SessionStore`, `LevelStore`, `BtwLogStore`, `VocabStore`, `ProfileStore`), `SessionLog`, `SessionAggregate`, `SessionFileContent` (base + `WritingSessionContent`), `UserProfile`, `VocabFlag`, `BtwEntry`
 - `memory/sqlite_store.py` — full `StorageProtocol` implementation including `user_profiles` table
 - `memory/json_store.py` — dev/test backend
 - `memory/schema.sql` — all tables (sessions, errors, btw_log, vocab_flags, user_levels, user_profiles)
-- `modules/protocols.py` — `ModuleProtocol`, `ModuleContext` (with `language` field), `ModuleResult`, `ContextRequest`
+- `modules/protocols.py` — `ModuleProtocol`, `ModuleContext`, `ModuleResult`, `ContextRequest`
 - `modules/registry.py` — `MODULE_REGISTRY`, `get_registry_description()`
 - `skills/protocols.py` — `SkillProtocol`, `SkillInput`, `SkillOutput`
 
 ### Orchestrator
-- `orchestrator/orchestrator.py` — cold start only (no LLM routing)
-  - Startup: language selection (get/set active language, prompt for level if new)
-  - Startup: interrupted session check → resume/log/discard
-  - `summarize_progress(user_id, language)` → returns `None` below threshold
-  - `recommend_exercise()` → `DEFAULT_RECOMMENDATION` when summary is None (per language)
-  - `run_session(user_id, language)` — full 13-step loop
-- `orchestrator/prompts.py` — stub (no LLM prompts in PoC orchestrator)
+- `orchestrator/orchestrator.py` — cold start only (no LLM routing); language selection, interrupted session surface, progress summarise, recommend, confirm, run
+- `orchestrator/session_manager.py` — `SessionManager`: owns WAL init + checkpoint creation, context fulfillment, finalization, interruption log/discard
+- `orchestrator/prompts.py` — interruption summarisation prompt
 
 ### Writing Module
-- `modules/writing/agent.py` — `WritingModule` (ModuleProtocol impl, PoC scope)
-- `modules/writing/skills.py` — instantiate and inject `detect_mistakes` skill only
-- `modules/writing/module.md` — spec
+- `modules/writing/agent.py` — `WritingModule` (ModuleProtocol impl)
+- `modules/writing/pipeline.py` — `WritingPipeline`: sequences Steps 5→1→2→3→4→6; `WritingModule` delegates to it
 
 ### Skills (PoC)
-- `skills/detect_mistakes/` — Raw Mistake Detector (Step 1 only)
 - `skills/btw_handler/` — utility skill, invoked inline during writing phase
 
 ### UI
@@ -49,40 +44,39 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 
 ---
 
-## Layer 1a — Full Evaluator Pipeline
+## Layer 1a — Full Evaluator Pipeline ✓
 
 ### Skills
-- `skills/process_mistakes/` — Step 2: Mistake Processor
-- `skills/generate_feedback/` — Step 3: Feedback Generator
-- `skills/write_correction/` — Step 4: Correction Writer
-- `skills/explain_grammar/` — utility skill (shared); writing module uses it in post-evaluation review loop; grammar module uses it in exercise feedback (Layer 2a)
-- `skills/detect_mistakes/` — updated: taxonomy validation added
+- `skills/detect_mistakes/` — Step 1: Raw Mistake Detector (gate — skips Steps 2–4 if no mistakes)
+- `skills/classify_mistakes/` — Step 2: Taxonomy Classifier
+- `skills/explain_mistakes/` — Step 3: Explanation Generator
+- `skills/write_correction/` — Step 4: Correction Writer (produces `corrected_text`, `tips`, `session_summary`)
+- `skills/estimate_text_level/` — Step 5: CEFR Band Estimator (runs before Step 1; independent)
+- `skills/summarise_session/` — Step 6: Session Summariser (severity-grouped mistakes, `comparison_note`)
 
 ### Module
-- `modules/writing/agent.py` — updated: all 4 evaluator steps wired + post-evaluation review loop; full `WritingSessionContent` populated
-- `modules/writing/skills.py` — updated: inject all 4 evaluator skills + `explain_grammar`
+- `modules/writing/pipeline.py` — `WritingPipeline` sequences all six steps; `WritingModule` delegates to it
+- `modules/writing/agent.py` — updated: delegates to pipeline, handles I/O via `IOHandler`
 
 ### Tests
-- `tests/test_taxonomy.py` — error taxonomy enforcement
-- `tests/fixtures/writing_pairs.json` — 3–5 manually verified pairs
-- `tests/judge/judge_detector.py`
-- `tests/judge/judge_evaluator.py`
+- `tests/fixtures/writing_pairs.json` — verified input/output pairs
+- `tests/unit/writing/test_writing_pipeline.py`
+- `tests/unit/writing/test_writing.py`
+- `tests/judge/` — per-step judges
 
 ---
 
-## Layer 1b — Topic Picker + LLM Routing + Progress Summary
+## Layer 1b — Topic Picker + LLM Routing + Progress Summary ✓
 
 ### Skills
-- `skills/pick_topic/` — Topic Picker skill
-- `skills/summarize_progress/` — Progress Summary skill
+- `skills/topic_picker/` — Topic Picker skill
+- `skills/summarize_progress/` — Progress Summary skill (LLM-driven aggregation; returns `weakest_module` + `recommendation_reason`)
 
 ### Module
-- `modules/writing/agent.py` — updated: topic picker wired, context request expanded
-- `modules/writing/skills.py` — updated: inject `pick_topic` skill
+- `modules/writing/agent.py` — updated: `topic_picker` wired, context request expanded
 
 ### Orchestrator
-- `orchestrator/orchestrator.py` — updated: `summarize_progress()` LLM call, `recommend_exercise()` LLM call, validation against registry
-- `orchestrator/prompts.py` — progress summary prompt, recommendation prompt
+- `orchestrator/orchestrator.py` — updated: `summarize_progress()` LLM call, `recommend_exercise()` derives from summary; both validated against `MODULE_REGISTRY`
 
 ### Tests
 - `tests/fixtures/orchestrator_cases.json`
