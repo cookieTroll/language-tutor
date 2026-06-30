@@ -122,15 +122,14 @@ class SessionAggregate(BaseModel):
     vocab_flag_count: int
 
 
-class StorageProtocol(Protocol):
-    # Session lifecycle
+class SessionStore(Protocol):
+    """Session lifecycle and reads — scoped to (user_id, language)."""
+
     def write_session(self, log: SessionLog) -> None: ...
     def update_session_status(self, session_id: str, status: str) -> None: ...
     def write_file(self, content: SessionFileContent, base_dir: str) -> str:
         """Write to temp path, atomic rename. Returns relative path."""
         ...
-
-    # Session reads — all scoped to (user_id, language)
     def get_recent_sessions(self, user_id: str, language: str, n: int = 10) -> list[SessionLog]: ...
     def get_sessions_by_module(self, user_id: str, language: str, module: str) -> list[SessionLog]: ...
     def get_error_frequency(self, user_id: str, language: str, module: str | None = None) -> dict[str, int]: ...
@@ -138,29 +137,40 @@ class StorageProtocol(Protocol):
     def get_session_aggregate(self, user_id: str, language: str) -> "SessionAggregate":
         """Return a structured profile bundling session counts, error frequency, topics, and vocab flags."""
         ...
-
     def get_interrupted_sessions(self, user_id: str, timeout_minutes: int) -> list[SessionLog]:
         """Not language-scoped — surface all interrupted sessions regardless of language."""
         ...
 
-    # Level
+
+class LevelStore(Protocol):
+    """User CEFR level tracking."""
+
     def get_current_level(self, user_id: str) -> str: ...
     def write_level(self, user_id: str, level: str, source: str) -> None:
         """source: stated | estimated | cefr_module"""
         ...
 
-    # /btw log
+
+class BtwLogStore(Protocol):
+    """By-the-way question/answer log."""
+
     def write_btw(self, entry: BtwEntry) -> None: ...
     def get_btw_log(self, user_id: str, language: str, session_id: str | None = None) -> list[BtwEntry]: ...
 
-    # Negative vocab list — scoped to (user_id, language)
+
+class VocabStore(Protocol):
+    """Negative vocab list — scoped to (user_id, language)."""
+
     def get_vocab_flags(self, user_id: str, language: str) -> list[VocabFlag]: ...
     def write_vocab_flag(self, flag: VocabFlag) -> None:
         """Insert or increment occurrence_count + update last_seen.
         Unique constraint on (user_id, language, word)."""
         ...
 
-    # User profiles — one row per (user_id, language)
+
+class ProfileStore(Protocol):
+    """User profiles — one row per (user_id, language)."""
+
     def get_user_profile(self, user_id: str, language: str) -> UserProfile | None: ...
     def write_user_profile(self, profile: UserProfile) -> None:
         """Insert or update. Sets active=True, sets active=False on all other languages for this user."""
@@ -171,6 +181,10 @@ class StorageProtocol(Protocol):
     def get_active_language(self, user_id: str) -> str | None:
         """Return the language where active=True, or None if no profile exists."""
         ...
+
+
+class StorageProtocol(SessionStore, LevelStore, BtwLogStore, VocabStore, ProfileStore, Protocol):
+    """Full storage interface — composed from domain-specific sub-protocols."""
 
 class BaseSessionStore(StorageProtocol, ABC):
     def __init__(self, data_root: str):

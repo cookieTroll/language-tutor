@@ -42,6 +42,39 @@ class SQLiteSessionStore(BaseSessionStore):
         conn.row_factory = sqlite3.Row
         return conn
 
+    def _hydrate_session_log(self, row, conn, status_override: str | None = None) -> SessionLog:
+        # Build a SessionLog from a sessions row + its errors. status_override lets
+        # callers reclassify status (e.g. in_progress → interrupted) without a DB write.
+        err_rows = conn.execute(
+            "SELECT * FROM errors WHERE session_id = ?", (row["session_id"],)
+        ).fetchall()
+        errors = [
+            {
+                "error_tag": er["error_tag"],
+                "fragment": er["source_text"],
+                "correction": "",
+                "explanation": er["error_detail"],
+            }
+            for er in err_rows
+        ]
+        return SessionLog(
+            user_id=row["user_id"],
+            session_id=row["session_id"],
+            language=row["language"],
+            module=row["module"],
+            task_label=row["task_label"],
+            task_description=row["task_description"],
+            comment=row["comment"],
+            errors=errors,
+            level=row["level"],
+            date=self._str_to_dt(row["date"]),
+            file_path=row["file_path"],
+            status=status_override if status_override is not None else row["status"],
+            started_at=self._str_to_dt(row["started_at"]),
+            completed_at=self._str_to_dt(row["completed_at"]),
+            duration_minutes=row["duration_minutes"],
+        )
+
     # 1. write_session(self, log: SessionLog) -> None
     def write_session(self, log: SessionLog) -> None:
         conn = self._get_conn()
@@ -123,33 +156,7 @@ class SQLiteSessionStore(BaseSessionStore):
                 (user_id, language, n)
             ).fetchall()
             
-            result = []
-            for r in rows:
-                err_rows = conn.execute("SELECT * FROM errors WHERE session_id = ?", (r["session_id"],)).fetchall()
-                errors = [
-                    {"error_tag": er["error_tag"], "fragment": er["source_text"], "correction": "", "explanation": er["error_detail"]}
-                    for er in err_rows
-                ]
-                result.append(
-                    SessionLog(
-                        user_id=r["user_id"],
-                        session_id=r["session_id"],
-                        language=r["language"],
-                        module=r["module"],
-                        task_label=r["task_label"],
-                        task_description=r["task_description"],
-                        comment=r["comment"],
-                        errors=errors,
-                        level=r["level"],
-                        date=self._str_to_dt(r["date"]),
-                        file_path=r["file_path"],
-                        status=r["status"],
-                        started_at=self._str_to_dt(r["started_at"]),
-                        completed_at=self._str_to_dt(r["completed_at"]),
-                        duration_minutes=r["duration_minutes"]
-                    )
-                )
-            return result
+            return [self._hydrate_session_log(r, conn) for r in rows]
         finally:
             conn.close()
 
@@ -159,40 +166,13 @@ class SQLiteSessionStore(BaseSessionStore):
         try:
             rows = conn.execute(
                 """
-                SELECT * FROM sessions 
+                SELECT * FROM sessions
                 WHERE user_id = ? AND language = ? AND module = ?
                 ORDER BY date DESC
                 """,
                 (user_id, language, module)
             ).fetchall()
-            
-            result = []
-            for r in rows:
-                err_rows = conn.execute("SELECT * FROM errors WHERE session_id = ?", (r["session_id"],)).fetchall()
-                errors = [
-                    {"error_tag": er["error_tag"], "fragment": er["source_text"], "correction": "", "explanation": er["error_detail"]}
-                    for er in err_rows
-                ]
-                result.append(
-                    SessionLog(
-                        user_id=r["user_id"],
-                        session_id=r["session_id"],
-                        language=r["language"],
-                        module=r["module"],
-                        task_label=r["task_label"],
-                        task_description=r["task_description"],
-                        comment=r["comment"],
-                        errors=errors,
-                        level=r["level"],
-                        date=self._str_to_dt(r["date"]),
-                        file_path=r["file_path"],
-                        status=r["status"],
-                        started_at=self._str_to_dt(r["started_at"]),
-                        completed_at=self._str_to_dt(r["completed_at"]),
-                        duration_minutes=r["duration_minutes"]
-                    )
-                )
-            return result
+            return [self._hydrate_session_log(r, conn) for r in rows]
         finally:
             conn.close()
 
@@ -312,30 +292,7 @@ class SQLiteSessionStore(BaseSessionStore):
                 if started_at:
                     elapsed = (now - started_at).total_seconds() / 60.0
                     if elapsed > timeout_minutes:
-                        err_rows = conn.execute("SELECT * FROM errors WHERE session_id = ?", (r["session_id"],)).fetchall()
-                        errors = [
-                            {"error_tag": er["error_tag"], "fragment": er["source_text"], "correction": "", "explanation": er["error_detail"]}
-                            for er in err_rows
-                        ]
-                        result.append(
-                            SessionLog(
-                                user_id=r["user_id"],
-                                session_id=r["session_id"],
-                                language=r["language"],
-                                module=r["module"],
-                                task_label=r["task_label"],
-                                task_description=r["task_description"],
-                                comment=r["comment"],
-                                errors=errors,
-                                level=r["level"],
-                                date=self._str_to_dt(r["date"]),
-                                file_path=r["file_path"],
-                                status="interrupted",
-                                started_at=started_at,
-                                completed_at=self._str_to_dt(r["completed_at"]),
-                                duration_minutes=r["duration_minutes"]
-                            )
-                        )
+                        result.append(self._hydrate_session_log(r, conn, status_override="interrupted"))
             return result
         finally:
             conn.close()
