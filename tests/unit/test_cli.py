@@ -71,7 +71,9 @@ def test_cli_main_flow(mock_print, mock_input, mock_orchestrator_cls, mock_build
     main()
     
     # Assert orchestrator instantiation and session execution
-    mock_orchestrator_cls.assert_called_once_with(mock_build_storage.return_value, mock_llm, mock_config)
+    call_args = mock_orchestrator_cls.call_args
+    assert call_args[0] == (mock_build_storage.return_value, mock_llm, mock_config)
+    assert "io" in call_args[1]
     call_kwargs = mock_orch.run_session.call_args
     assert call_kwargs[0][0] == "john"
     assert call_kwargs[1]["language"] is None

@@ -14,6 +14,7 @@ from config import load_config
 from memory.factory import build_storage
 from llm.factory import build_llm
 from orchestrator.orchestrator import Orchestrator
+from shared.io import TerminalIOHandler
 
 def _language_config_warning(language: str, missing: list) -> None:
     print(f"\n[!] No language-specific configuration found for '{language.upper()}'.")
@@ -52,7 +53,7 @@ def main():
             print("    If you want to use a cloud provider instead, update 'config.yaml' to use 'gemini'.\n")
             sys.exit(1)
             
-        orchestrator = Orchestrator(store, llm, config)
+        orchestrator = Orchestrator(store, llm, config, io=TerminalIOHandler())
     except Exception as e:
         print(f"[!] Error loading initialization layers: {e}")
         sys.exit(1)
@@ -64,7 +65,7 @@ def main():
     while True:
         try:
             # Run the full session flow (includes startup check, active language selection, etc.)
-            orchestrator.run_session(user_id, language=None, on_language_warning=_language_config_warning, extra_parameters={"ui_mode": "cli"})
+            orchestrator.run_session(user_id, language=None, on_language_warning=_language_config_warning)
         except KeyboardInterrupt:
             print("\n\nExiting active tutoring session. Goodbye!")
             break

@@ -12,6 +12,8 @@ from memory.protocols import UserProfile, SessionLog
 def store_and_llm(tmp_path):
     store = JSONSessionStore(data_root=str(tmp_path))
     llm = MagicMock(spec=BaseLLM)
+    io = MagicMock()
+    io.prompt.return_value = ""
     config = AppConfig(
         data_root=str(tmp_path),
         default_level="a1",
@@ -20,11 +22,11 @@ def store_and_llm(tmp_path):
         storage_backend="json",
         llm=LLMConfig(provider="openai_compat", base_url=None, api_key=None, model="model")
     )
-    return store, llm, config
+    return store, llm, config, io
 
 def test_cold_start_threshold(store_and_llm):
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
     
     # 0 completed sessions -> should be cold start
     assert orchestrator.summarize_progress("user1", "german") is None
@@ -109,13 +111,11 @@ def test_cold_start_threshold(store_and_llm):
     assert summary.sessions_by_module["writing"] == 3
     assert orchestrator.recommend_exercise(summary).module == "writing"
 
-@patch("orchestrator.orchestrator.input")
-def test_interrupted_session_discard(mock_input, store_and_llm):
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
-    
-    # Mock user input choosing 'd' for Discard
-    mock_input.return_value = "d"
+def test_interrupted_session_discard(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    io.prompt.return_value = "d"
     
     # Setup an interrupted session log
     date_now = datetime.now()
@@ -162,13 +162,11 @@ def test_interrupted_session_discard(mock_input, store_and_llm):
     assert recent[0].status == "abandoned"
     assert not os.path.exists(checkpoint_path)
 
-@patch("orchestrator.orchestrator.input")
-def test_interrupted_session_log(mock_input, store_and_llm):
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
-    
-    # Mock user input choosing 'l' for Log it
-    mock_input.return_value = "l"
+def test_interrupted_session_log(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    io.prompt.return_value = "l"
     llm.complete.return_value = LLMResponse(text="Practiced daily routines and discussed separable verbs.", model="test-model")
     
     # Setup an interrupted session log
@@ -215,14 +213,11 @@ def test_interrupted_session_log(mock_input, store_and_llm):
     assert recent[0].comment == "Practiced daily routines and discussed separable verbs."
     assert not os.path.exists(checkpoint_path)
 
-@patch("orchestrator.orchestrator.input")
-@patch("orchestrator.orchestrator.print")
-def test_interrupted_session_invalid_choice_retry(mock_print, mock_input, store_and_llm):
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
-    
-    # Mock user input choosing 'r' (unsupported), then 'invalid' (invalid), then 'd' (discard)
-    mock_input.side_effect = ["r", "invalid", "d"]
+def test_interrupted_session_invalid_choice_retry(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    io.prompt.side_effect = ["r", "invalid", "d"]
     
     # Setup an interrupted session log
     date_now = datetime.now()
@@ -246,21 +241,19 @@ def test_interrupted_session_invalid_choice_retry(mock_print, mock_input, store_
     orchestrator._handle_interruption("user1")
 
     # Assert correct warning prints were outputted
-    mock_print.assert_any_call("[!] Resume option is currently unavailable in PoC mode. Please select 'l' to log or 'd' to discard.")
-    mock_print.assert_any_call("[!] Invalid option 'invalid'. Please enter 'l' to log or 'd' to discard.")
+    io.output.assert_any_call("[!] Resume option is currently unavailable in PoC mode. Please select 'l' to log or 'd' to discard.")
+    io.output.assert_any_call("[!] Invalid option 'invalid'. Please enter 'l' to log or 'd' to discard.")
     
     recent = store.get_recent_sessions("user1", "german")
     assert recent[0].status == "abandoned"
 
-@patch("orchestrator.orchestrator.input")
-@patch("orchestrator.orchestrator.print")
-def test_new_user_stated_level_overrides_config_default(mock_print, mock_input, store_and_llm):
+def test_new_user_stated_level_overrides_config_default(store_and_llm):
     """Typing a level at the prompt saves it; config default is not used."""
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
 
     # Simulate: no active language → type "german", then level "b1" (config default is "a1")
-    mock_input.side_effect = ["german", "b1"]
+    io.prompt.side_effect = ["german", "b1"]
 
     _, profile = orchestrator._select_language_and_profile("user1", language=None)
 
@@ -268,27 +261,23 @@ def test_new_user_stated_level_overrides_config_default(mock_print, mock_input, 
     assert store.get_current_level("user1") == "b1"
 
 
-@patch("orchestrator.orchestrator.input")
-@patch("orchestrator.orchestrator.print")
-def test_new_user_enter_uses_config_default(mock_print, mock_input, store_and_llm):
+def test_new_user_enter_uses_config_default(store_and_llm):
     """Pressing Enter at the level prompt falls back to config.default_level."""
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
 
     # Simulate: no active language → type "german", then Enter (empty) for level
-    mock_input.side_effect = ["german", ""]
+    io.prompt.side_effect = ["german", ""]
 
     _, profile = orchestrator._select_language_and_profile("user1", language=None)
 
     assert profile.level == config.default_level
 
 
-@patch("orchestrator.orchestrator.input")
-@patch("orchestrator.orchestrator.print")
-def test_existing_user_level_override(mock_print, mock_input, store_and_llm):
+def test_existing_user_level_override(store_and_llm):
     """Returning user who types a new level updates storage via write_level."""
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
 
     date_now = datetime.now()
     store.write_user_profile(UserProfile(
@@ -298,7 +287,7 @@ def test_existing_user_level_override(mock_print, mock_input, store_and_llm):
     ))
 
     # Simulate: continue german, then override level to "b1"
-    mock_input.side_effect = ["", "b1"]
+    io.prompt.side_effect = ["", "b1"]
 
     _, profile = orchestrator._select_language_and_profile("user1", language=None)
 
@@ -306,12 +295,10 @@ def test_existing_user_level_override(mock_print, mock_input, store_and_llm):
     assert store.get_current_level("user1") == "b1"
 
 
-@patch("orchestrator.orchestrator.input")
-@patch("orchestrator.orchestrator.print")
-def test_existing_user_level_kept_on_enter(mock_print, mock_input, store_and_llm):
+def test_existing_user_level_kept_on_enter(store_and_llm):
     """Returning user who presses Enter keeps the stored level unchanged."""
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
 
     date_now = datetime.now()
     store.write_user_profile(UserProfile(
@@ -321,7 +308,7 @@ def test_existing_user_level_kept_on_enter(mock_print, mock_input, store_and_llm
     ))
 
     # Simulate: continue german, then Enter (keep level)
-    mock_input.side_effect = ["", ""]
+    io.prompt.side_effect = ["", ""]
 
     _, profile = orchestrator._select_language_and_profile("user1", language=None)
 
@@ -330,8 +317,8 @@ def test_existing_user_level_kept_on_enter(mock_print, mock_input, store_and_llm
 
 def test_finalize_session_success(store_and_llm):
     from modules.protocols import ModuleResult
-    store, llm, config = store_and_llm
-    orchestrator = Orchestrator(store, llm, config)
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
     
     profile = UserProfile(
         user_id="user1",
@@ -395,9 +382,9 @@ def test_finalize_session_success(store_and_llm):
     )
     store.write_session(initial_log)
 
-    orchestrator._finalize_session(
+    orchestrator._session_manager.finalize_session(
         user_id="user1",
-        selected_lang="german",
+        language="german",
         module_key="writing",
         session_id="session123",
         profile=profile,

@@ -1,16 +1,14 @@
 import os
-import json
-import uuid
 from datetime import datetime
 from config import AppConfig
-from memory.protocols import StorageProtocol, SessionLog, BtwEntry, VocabFlag, UserProfile
-from modules.protocols import ModuleContext
-from llm.base import BaseLLM, LLMMessage
+from memory.protocols import StorageProtocol, SessionLog, UserProfile
+from llm.base import BaseLLM
 from orchestrator.protocols import OrchestratorProtocol, ProgressSummary, ExerciseRecommendation
-from orchestrator.prompts import INTERRUPTION_SUMMARY_PROMPT
+from orchestrator.session_manager import SessionManager
 from skills.summarize_progress.skill import SummarizeProgressSkill
 from skills.protocols import SkillInput
-from modules.registry import MODULE_REGISTRY, get_registry_description
+from modules.registry import MODULE_REGISTRY
+from shared.io import IOHandler
 from lang.loader import using_defaults
 
 DEFAULT_RECOMMENDATION = ExerciseRecommendation(
@@ -20,11 +18,13 @@ DEFAULT_RECOMMENDATION = ExerciseRecommendation(
 )
 
 class Orchestrator(OrchestratorProtocol):
-    def __init__(self, store: StorageProtocol, llm: BaseLLM, config: AppConfig):
+    def __init__(self, store: StorageProtocol, llm: BaseLLM, config: AppConfig, io: IOHandler):
         self.store = store
         self.llm = llm
         self.config = config
+        self.io = io
         self._warned_languages: set[str] = set()
+        self._session_manager = SessionManager(store, config, llm, io)
 
     def summarize_progress(self, user_id: str, language: str) -> ProgressSummary | None:
         """Returns None if below cold_start_threshold; otherwise calls SummarizeProgressSkill."""
@@ -78,75 +78,49 @@ class Orchestrator(OrchestratorProtocol):
         )
 
     def _handle_interruption(self, user_id: str):
-        """
-        Step 0: Check for interrupted sessions and prompt user.
-        """
+        """Step 0: Check for interrupted sessions and prompt user."""
         interrupted = self.store.get_interrupted_sessions(user_id, self.config.interruption_timeout_minutes)
         if not interrupted:
             return
 
-        print("\n==================================================")
-        print("          INTERRUPTED SESSION DETECTED")
-        print("==================================================")
-        for s in interrupted:
-            print(f"- Session ID: {s.session_id} ({s.module} in {s.language}, started {s.started_at})")
-        print("--------------------------------------------------")
-        print("What would you like to do?")
-        print("  [l] Log it   - Summarize what was completed and start fresh")
-        print("  [d] Discard  - Delete the partial session and start fresh")
-        print("  [r] Resume   - (Unavailable in PoC mode)")
-        print("==================================================")
+        self._print_interruption_banner(interrupted)
 
         while True:
-            choice = input("Choice [l/d]: ").strip().lower()
+            choice = self.io.prompt("Choice [l/d]: ").strip().lower()
             if choice == "l":
                 for s in interrupted:
-                    checkpoint_path = os.path.join(self.config.data_root, "checkpoints", user_id, f"{s.session_id}.json")
-                    summary = "Interrupted session logged."
-                    
-                    if os.path.exists(checkpoint_path):
-                        try:
-                            with open(checkpoint_path, "r", encoding="utf-8") as f:
-                                transcript = f.read()
-                            prompt = INTERRUPTION_SUMMARY_PROMPT.format(transcript=transcript)
-                            response = self.llm.complete([LLMMessage(role="user", content=prompt)])
-                            summary = response.text.strip()
-                        except Exception as e:
-                            summary = f"Interrupted session. Error summarizing: {e}"
-                            
-                    # Update status to interrupted
-                    self.store.update_session_status(s.session_id, "interrupted")
-                    
-                    # Create final session log entry
-                    s.status = "interrupted"
-                    s.comment = summary
-                    s.completed_at = datetime.now()
-                    s.duration_minutes = 0.0
-                    self.store.write_session(s)
-                    
-                    # Clean up checkpoint
-                    if os.path.exists(checkpoint_path):
-                        os.remove(checkpoint_path)
-                    print(f"Logged session {s.session_id}.")
+                    self._session_manager.log_interrupted_session(s, user_id)
                 break
             elif choice == "d":
                 for s in interrupted:
-                    self.store.update_session_status(s.session_id, "abandoned")
-                    checkpoint_path = os.path.join(self.config.data_root, "checkpoints", user_id, f"{s.session_id}.json")
-                    if os.path.exists(checkpoint_path):
-                        os.remove(checkpoint_path)
-                    print(f"Discarded session {s.session_id}.")
+                    self._session_manager.discard_interrupted_session(s, user_id)
                 break
             elif choice == "r":
-                print("[!] Resume option is currently unavailable in PoC mode. Please select 'l' to log or 'd' to discard.")
+                self.io.output("[!] Resume option is currently unavailable in PoC mode. Please select 'l' to log or 'd' to discard.")
             else:
-                print(f"[!] Invalid option '{choice}'. Please enter 'l' to log or 'd' to discard.")
+                self.io.output(f"[!] Invalid option '{choice}'. Please enter 'l' to log or 'd' to discard.")
 
-    def run_session(self, user_id: str, language: str, on_language_warning=None, extra_parameters: dict | None = None) -> None:
-        """
-        Executes a full interactive session lifecycle.
+    def _print_interruption_banner(self, interrupted: list[SessionLog]) -> None:
+        session_lines = "\n".join(
+            f"- Session ID: {s.session_id} ({s.module} in {s.language}, started {s.started_at})"
+            for s in interrupted
+        )
+        self.io.output(
+            "\n=================================================="
+            "\n          INTERRUPTED SESSION DETECTED"
+            "\n=================================================="
+            f"\n{session_lines}"
+            "\n--------------------------------------------------"
+            "\nWhat would you like to do?"
+            "\n  [l] Log it   - Summarize what was completed and start fresh"
+            "\n  [d] Discard  - Delete the partial session and start fresh"
+            "\n  [r] Resume   - (Unavailable in PoC mode)"
+            "\n=================================================="
+        )
+
+    def run_session(self, user_id: str, language: str, on_language_warning=None) -> None:
+        """Executes a full interactive session lifecycle.
         on_language_warning: optional callable(language, missing_maps) for UI to display config warnings.
-        extra_parameters: caller-supplied context (e.g. {"ui_mode": "cli"}) merged into ModuleContext.parameters.
         """
         # 0. Check interrupted sessions
         self._handle_interruption(user_id)
@@ -158,53 +132,52 @@ class Orchestrator(OrchestratorProtocol):
         # 2 & 3. Summarize and recommend
         summary = self.summarize_progress(user_id, selected_lang)
         recommendation = self.recommend_exercise(summary)
-        suggested_focus = recommendation.suggested_focus
 
         # 4. Present recommendation, confirm or override
         module_key = self._get_confirmed_module(recommendation)
         module = MODULE_REGISTRY[module_key]
 
-        # 5. Write-ahead session initialization
-        session_id = self._init_write_ahead_log(user_id, selected_lang, module_key, profile)
+        # 5. Write-ahead log + checkpoint creation
+        session_id, checkpoint_path = self._session_manager.init_write_ahead_log(
+            user_id, selected_lang, module_key, profile
+        )
 
         # 6. ContextRequest fulfillment
-        parameters = dict(extra_parameters or {})
-        if suggested_focus:
-            parameters["suggested_focus"] = suggested_focus
-        ctx = self._build_module_context(user_id, selected_lang, module_key, profile, module.context_request(), parameters)
-
-        # Create checkpoint directory & initial checkpoint setup
-        checkpoint_dir = os.path.join(self.config.data_root, "checkpoints", user_id)
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_path = os.path.join(checkpoint_dir, f"{session_id}.json")
-        
-        # Write initial empty checkpoint file
-        with open(checkpoint_path, "w", encoding="utf-8") as f:
-            json.dump([], f)
+        parameters = {"suggested_focus": recommendation.suggested_focus} if recommendation.suggested_focus else {}
+        ctx = self._session_manager.build_module_context(
+            user_id, selected_lang, module_key, profile, module.context_request(), parameters
+        )
 
         # 7. Run module
         try:
-            # We pass checkpoint path in ctx parameters for module to write if needed
             ctx.parameters["checkpoint_path"] = checkpoint_path
-            
-            result, file_content = module.run(ctx, self.llm)
-            
-            # Update result with actual session_id assigned by orchestrator write-ahead
+
+            result, file_content = module.run(ctx, self.llm, self.io)
+
             result.session_id = session_id
             file_content.session_id = session_id
-            
+
         except KeyboardInterrupt:
-            # Mark session as interrupted if aborted
-            self.store.update_session_status(session_id, "in_progress") # Keep as in_progress to trigger step 0 check
-            print("\n[!] Session interrupted. You can resume or log it next time.")
+            self.io.output("\n[!] Session interrupted. You can resume or log it next time.")
             return
 
-        # 8-13. Finalize session (write YAML file, update DB log, BTW logs, vocab flags, delete checkpoint)
-        self._finalize_session(user_id, selected_lang, module_key, session_id, profile, result, file_content, checkpoint_path)
+        # 8-13. Finalize session
+        self._session_manager.finalize_session(
+            user_id, selected_lang, module_key, session_id, profile, result, file_content, checkpoint_path
+        )
+
+    def _check_language_config(self, language: str, on_warn=None) -> None:
+        if language in self._warned_languages:
+            return
+        self._warned_languages.add(language)
+        defaults = using_defaults(language)
+        missing = [k.replace("_", " ") for k, v in defaults.items() if v]
+        if missing and on_warn:
+            on_warn(language, missing)
 
     def _confirm_or_update_level(self, user_id: str, profile: UserProfile) -> None:
-        print(f"\nYour current CEFR level: {profile.level.upper()}")
-        choice = input("Press Enter to keep, or type a new level (A1–C2): ").strip().lower()
+        self.io.output(f"\nYour current CEFR level: {profile.level.upper()}")
+        choice = self.io.prompt("Press Enter to keep, or type a new level (A1–C2): ").strip().lower()
         if choice and choice != profile.level:
             self.store.write_level(user_id, choice, "stated")
             profile.level = choice
@@ -214,21 +187,20 @@ class Orchestrator(OrchestratorProtocol):
         selected_lang = language
 
         if active_lang:
-            print(f"\nCurrently studying {active_lang.upper()}.")
-            choice = input("Continue or switch language? [Press Enter to continue, or type new language]: ").strip().lower()
+            self.io.output(f"\nCurrently studying {active_lang.upper()}.")
+            choice = self.io.prompt("Continue or switch language? [Press Enter to continue, or type new language]: ").strip().lower()
             if choice:
                 selected_lang = choice
             else:
                 selected_lang = active_lang
         else:
             if not selected_lang:
-                selected_lang = input("\nWhich language would you like to study? ").strip().lower()
+                selected_lang = self.io.prompt("\nWhich language would you like to study? ").strip().lower()
 
-        # Load/Create user profile
         profile = self.store.get_user_profile(user_id, selected_lang)
         if not profile:
             default = self.config.default_level
-            level_input = input(
+            level_input = self.io.prompt(
                 f"Enter your CEFR level for {selected_lang.upper()} [default: {default.upper()}]: "
             ).strip().lower()
             level = level_input if level_input else default
@@ -250,141 +222,23 @@ class Orchestrator(OrchestratorProtocol):
 
         return selected_lang, profile
 
-    def _check_language_config(self, language: str, on_warn=None) -> None:
-        if language in self._warned_languages:
-            return
-        self._warned_languages.add(language)
-        defaults = using_defaults(language)
-        missing = [k.replace("_", " ") for k, v in defaults.items() if v]
-        if missing and on_warn:
-            on_warn(language, missing)
-
     def _get_confirmed_module(self, recommendation: ExerciseRecommendation) -> str:
-        print(f"\n[Recommendation]: We suggest using the '{recommendation.module.upper()}' module.")
-        print(f"Reason: {recommendation.reason}")
-        if recommendation.suggested_focus:
-            print(f"Suggested focus: {recommendation.suggested_focus}")
-        
-        confirm = input("\nStart this module? [Y/n]: ").strip().lower()
+        focus_line = f"\nSuggested focus: {recommendation.suggested_focus}" if recommendation.suggested_focus else ""
+        self.io.output(
+            f"\n[Recommendation]: We suggest using the '{recommendation.module.upper()}' module."
+            f"\nReason: {recommendation.reason}"
+            f"{focus_line}"
+        )
+
+        confirm = self.io.prompt("\nStart this module? [Y/n]: ").strip().lower()
         module_key = recommendation.module
-        
+
         if confirm == "n":
-            print(f"Available modules: {list(MODULE_REGISTRY.keys())}")
-            override = input("Enter module name to run instead: ").strip().lower()
+            self.io.output(f"Available modules: {list(MODULE_REGISTRY.keys())}")
+            override = self.io.prompt("Enter module name to run instead: ").strip().lower()
             if override in MODULE_REGISTRY:
                 module_key = override
             else:
-                print(f"[!] Invalid module. Falling back to suggested module '{module_key}'.")
-                
+                self.io.output(f"[!] Invalid module. Falling back to suggested module '{module_key}'.")
+
         return module_key
-
-    def _init_write_ahead_log(self, user_id: str, selected_lang: str, module_key: str, profile: UserProfile) -> str:
-        session_id = str(uuid.uuid4())
-        initial_log = SessionLog(
-            user_id=user_id,
-            session_id=session_id,
-            language=selected_lang,
-            module=module_key,
-            task_label="writing_free",
-            task_description="Initializing",
-            comment="",
-            errors=[],
-            level=profile.level,
-            date=datetime.now(),
-            file_path="",
-            status="in_progress",
-            started_at=datetime.now()
-        )
-        self.store.write_session(initial_log)
-        return session_id
-
-    def _build_module_context(
-        self, user_id: str, selected_lang: str, module_key: str, profile: UserProfile, req,
-        parameters: dict | None = None,
-    ) -> ModuleContext:
-        recent_sessions = []
-        if req.recent_sessions_n > 0:
-            recent_sessions = self.store.get_recent_sessions(user_id, selected_lang, req.recent_sessions_n)
-            if req.module_filter:
-                recent_sessions = [s for s in recent_sessions if s.module == req.module_filter]
-
-        error_frequency = {}
-        if req.include_error_frequency:
-            error_frequency = self.store.get_error_frequency(user_id, selected_lang, req.module_filter)
-
-        recent_topics = []
-        if req.include_recent_topics:
-            recent_topics = self.store.get_recent_topics(user_id, selected_lang, module_key, n=5)
-
-        vocab_flags = []
-        if req.include_vocab_flags:
-            vocab_flags = [
-                {"word": f.word, "occurrence_count": f.occurrence_count}
-                for f in self.store.get_vocab_flags(user_id, selected_lang)
-            ]
-
-        return ModuleContext(
-            user_id=user_id,
-            language=selected_lang,
-            level=profile.level,
-            recent_sessions=recent_sessions,
-            error_frequency=error_frequency,
-            recent_topics=recent_topics,
-            vocab_flags=vocab_flags,
-            parameters=parameters or {},
-        )
-
-    def _finalize_session(
-        self, user_id: str, selected_lang: str, module_key: str, session_id: str,
-        profile: UserProfile, result, file_content, checkpoint_path: str
-    ) -> None:
-        # 8. Write YAML session file
-        rel_path = self.store.write_file(file_content, self.config.data_root)
-
-        # 9 & 10. Update session state and write final session result
-        self.store.update_session_status(session_id, "completed")
-        
-        final_log = SessionLog(
-            user_id=user_id,
-            session_id=session_id,
-            language=selected_lang,
-            module=module_key,
-            task_label=result.task_label,
-            task_description=result.task_description,
-            comment=result.comment,
-            errors=result.errors,
-            level=profile.level,
-            date=datetime.now(),
-            file_path=rel_path,
-            status="completed",
-            started_at=result.started_at,
-            completed_at=result.completed_at,
-            duration_minutes=result.duration_minutes
-        )
-        self.store.write_session(final_log)
-
-        # 11. Write BTW logs
-        for entry in result.metadata.get("btw_entries", []):
-            entry.session_id = session_id
-            self.store.write_btw(entry)
-
-        # 12. Write vocab flags
-        for word in result.metadata.get("vocab_signals", []):
-            flag = VocabFlag(
-                flag_id=str(uuid.uuid4()),
-                user_id=user_id,
-                language=selected_lang,
-                word=word.lower().strip(),
-                translation=None,
-                source="btw",
-                first_seen=datetime.now(),
-                last_seen=datetime.now(),
-                occurrence_count=1
-            )
-            self.store.write_vocab_flag(flag)
-
-        # 13. Delete checkpoint file
-        if os.path.exists(checkpoint_path):
-            os.remove(checkpoint_path)
-
-        print("\n[*] Session successfully saved!")
