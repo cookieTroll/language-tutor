@@ -34,25 +34,6 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ## Layer 1b — User Personalization + Topic Picker
 
-### Session History Aggregation
-- [x] [x] [ ] `storage.get_session_aggregate()` — structured profile: sessions by skill, recency, recurring errors, recent topics, vocab flag count
-- [x] [x] [ ] Convert progress summary logic into `skills/summarize_progress/` (LLM-driven aggregation & analysis)
-- [x] [x] [ ] Orchestrator uses `summarize_progress` skill to build progress summary
-- [x] [x] [ ] `WritingModule.context_request()` — return full `ContextRequest` (recent 5 writing sessions, error frequency, recent topics, vocab flags)
-- [x] [x] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
-- [ ] [ ] [ ] Evaluator Step 1 prompt primed with recurring errors from context
-- [x] [x] [ ] `suggested_focus` recorded in session file for traceability
-- [x] [x] [ ] Unit test: aggregate computed correctly from mixed session history
-
-### Topic Picker + Orchestrator LLM Routing
-- [x] [x] [ ] `skills/topic_picker/` — takes level, `suggested_focus`, `recent_topics`; returns `WritingPrompt` dataclass; user can bypass with own topic
-- [ ] [ ] [ ] `orchestrator/prompts.py` — progress summary prompt + recommendation prompt
-- [x] [x] [ ] `Orchestrator.summarize_progress()` — LLM call when sessions >= threshold; validate `weakest_skill` against `MODULE_REGISTRY.keys()`
-- [x] [x] [ ] `Orchestrator.recommend_exercise()` — LLM call over progress summary; validate `skill` field against registry
-- [ ] [ ] [ ] `tests/fixtures/orchestrator_cases.json` — 3–5 session history scenarios with expected recommendations
-- [x] [x] [ ] `tests/judge/judge_orchestrator.py` — judge for orchestrator recommendation quality
-- [x] [x] [ ] Update CLI to display recommendation reason and suggested focus
-
 ---
 
 ## Orchestrator Refactor (post-1b)

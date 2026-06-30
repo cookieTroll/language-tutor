@@ -193,3 +193,22 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 - [x] [x] [ ] Prompt user to confirm or override — write override to `user_levels` with `source='stated'`
 - [x] [x] [ ] `config.yaml` default level used only if no row exists in `user_levels`
 - [x] [x] [ ] Unit test: stated level overrides config default; most recent row returned by `get_current_level()`
+
+### Session History Aggregation
+- [x] [x] [ ] `storage.get_session_aggregate()` — structured profile: sessions by skill, recency, recurring errors, recent topics, vocab flag count
+- [x] [x] [ ] Convert progress summary logic into `skills/summarize_progress/` (LLM-driven aggregation & analysis)
+- [x] [x] [ ] Orchestrator uses `summarize_progress` skill to build progress summary
+- [x] [x] [ ] `WritingModule.context_request()` — return full `ContextRequest` (recent 5 writing sessions, error frequency, recent topics, vocab flags)
+- [x] [x] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
+- [x] [x] [ ] Evaluator Step 1 prompt primed with recurring errors from context
+- [x] [x] [ ] `suggested_focus` recorded in session file for traceability
+- [x] [x] [ ] Unit test: aggregate computed correctly from mixed session history
+
+### Topic Picker + Orchestrator LLM Routing
+- [x] [x] [ ] `skills/topic_picker/` — takes level, `suggested_focus`, `recent_topics`; returns `WritingPrompt` dataclass; user can bypass with own topic
+- [x] [x] [ ] Progress summary + recommendation prompts live in skills/ (not orchestrator/prompts.py)
+- [x] [x] [ ] `Orchestrator.summarize_progress()` — LLM call when sessions >= threshold; validates module against `MODULE_REGISTRY`
+- [x] [x] [ ] `Orchestrator.recommend_exercise()` — derives module/reason/suggested_focus from ProgressSummary
+- [x] [x] [ ] `tests/fixtures/orchestrator_cases.json` — 4 session history scenarios with expected module and focus
+- [x] [x] [ ] `tests/judge/judge_orchestrator.py` — judge for orchestrator recommendation quality (4/4 PASS)
+- [x] [x] [ ] Update CLI to display recommendation reason and suggested focus

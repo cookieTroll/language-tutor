@@ -1,0 +1,66 @@
+[
+  {
+    "id": "orch_verb_errors",
+    "description": "Writing-heavy user with recurring verb errors — should recommend grammar with verb_conjugation focus",
+    "level": "b1",
+    "modules": ["writing", "grammar"],
+    "aggregate": {
+      "sessions_by_module": {"writing": 9, "grammar": 1},
+      "days_since_module": {"writing": 1.0, "grammar": 20.0},
+      "total_time_by_module": {"writing": 270.0, "grammar": 30.0},
+      "recurring_errors": ["verb_conjugation", "word_order"],
+      "recent_topics": ["daily_routine", "holiday", "work", "food", "sport"],
+      "vocab_flag_count": 4
+    },
+    "expected_module": "grammar",
+    "expected_focus": "verb_conjugation"
+  },
+  {
+    "id": "orch_stale_writing",
+    "description": "Grammar done recently, writing stale 25 days — should recommend writing with no focus",
+    "level": "a2",
+    "modules": ["writing", "grammar"],
+    "aggregate": {
+      "sessions_by_module": {"writing": 4, "grammar": 7},
+      "days_since_module": {"writing": 25.0, "grammar": 1.0},
+      "total_time_by_module": {"writing": 120.0, "grammar": 210.0},
+      "recurring_errors": [],
+      "recent_topics": ["weekend", "family", "home"],
+      "vocab_flag_count": 0
+    },
+    "expected_module": "writing",
+    "expected_focus": null
+  },
+  {
+    "id": "orch_balanced_errors",
+    "description": "Balanced history with recurring dative errors — should recommend grammar with dative_case focus",
+    "level": "b2",
+    "modules": ["writing", "grammar"],
+    "aggregate": {
+      "sessions_by_module": {"writing": 6, "grammar": 6},
+      "days_since_module": {"writing": 3.0, "grammar": 5.0},
+      "total_time_by_module": {"writing": 180.0, "grammar": 180.0},
+      "recurring_errors": ["dative_case", "genitive_case"],
+      "recent_topics": ["news", "travel", "culture", "opinion", "debate"],
+      "vocab_flag_count": 7
+    },
+    "expected_module": "grammar",
+    "expected_focus": "dative_case"
+  },
+  {
+    "id": "orch_three_modules_stale_writing",
+    "description": "Three modules, writing oldest — should recommend writing with no focus",
+    "level": "b1",
+    "modules": ["writing", "grammar", "vocab"],
+    "aggregate": {
+      "sessions_by_module": {"writing": 5, "grammar": 5, "vocab": 5},
+      "days_since_module": {"writing": 14.0, "grammar": 7.0, "vocab": 2.0},
+      "total_time_by_module": {"writing": 150.0, "grammar": 150.0, "vocab": 75.0},
+      "recurring_errors": [],
+      "recent_topics": ["weekend", "family", "work"],
+      "vocab_flag_count": 2
+    },
+    "expected_module": "writing",
+    "expected_focus": null
+  }
+]
