@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sessions — GermanTutor</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+body { padding-bottom: 40px; }
+header {
+  background: var(--panel); border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 48px; display: flex; align-items: center; gap: 16px;
+}
+header h1 { font-size: 0.9rem; color: var(--accent); letter-spacing: 2px; margin-right: 8px; }
+header a  { color: var(--muted); font-size: 0.82rem; margin-left: auto; }
+header a:hover { color: var(--accent); }
+main { max-width: 1000px; margin: 0 auto; padding: 28px 24px; }
+h2 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted);
+     margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* filter bar */
+.filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; }
+.filter-bar select, .filter-bar input[type=checkbox] { cursor: pointer; }
+.filter-bar select {
+  background: var(--panel); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 0.84rem;
+}
+.filter-bar label { font-size: 0.82rem; color: var(--sub); display: flex; align-items: center; gap: 6px; }
+.filter-bar button {
+  padding: 6px 14px; background: var(--surface); border: 1px solid var(--border);
+  color: var(--sub); border-radius: 4px; font-family: inherit; font-size: 0.82rem; cursor: pointer;
+}
+.filter-bar button:hover { color: var(--accent); border-color: var(--accent); }
+/* error freq bars */
+.freq-chart { display: flex; flex-direction: column; gap: 6px; margin-bottom: 28px; }
+.freq-row   { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+.freq-tag   { width: 200px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.freq-bar-wrap { flex: 1; background: var(--panel); border-radius: 3px; height: 14px; }
+.freq-bar   { height: 100%; background: var(--accent); border-radius: 3px; opacity: 0.7; transition: width .3s; }
+.freq-count { width: 24px; text-align: right; color: var(--muted); }
+/* table */
+table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+th { text-align: left; padding: 8px 12px; color: var(--muted); font-size: 0.74rem;
+     border-bottom: 1px solid var(--border); font-weight: normal; letter-spacing: 0.5px; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--panel); vertical-align: top; }
+tr:hover td { background: var(--panel); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.72rem;
+         background: var(--surface); color: var(--sub); }
+.tag-chip { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 0.68rem;
+            background: var(--panel); color: var(--muted); margin: 1px 2px 1px 0; }
+.empty { color: var(--muted); padding: 60px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GERMANTUTOR</h1>
+  <a href="/">&larr; New Session</a>
+</header>
+<main>
+  <form class="filter-bar" method="get" action="/sessions">
+    <select name="user" onchange="this.form.submit()">
+      <option value="">All users</option>
+      {% for u in all_users %}
+      <option value="{{ u }}" {% if u == filter_user %}selected{% endif %}>{{ u }}</option>
+      {% endfor %}
+    </select>
+    <label>
+      <input type="checkbox" name="days7" value="1" onchange="this.form.submit()"
+             {% if filter_7d %}checked{% endif %}>
+      Last 7 days
+    </label>
+    {% if filter_user or filter_7d %}
+    <a href="/sessions" style="font-size:0.8rem;color:var(--muted);">clear</a>
+    {% endif %}
+  </form>
+
+  {% if top_errors and filter_user %}
+  <h2>Error Tags — {{ filter_user }}{% if filter_7d %} · last 7 days{% endif %}</h2>
+  <div class="freq-chart">
+    {% for tag, count in top_errors %}
+    <div class="freq-row">
+      <span class="freq-tag">{{ tag }}</span>
+      <div class="freq-bar-wrap">
+        <div class="freq-bar" style="width:{{ (count / max_freq * 100)|int }}%"></div>
+      </div>
+      <span class="freq-count">{{ count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <h2>Sessions{% if filter_user %} — {{ filter_user }}{% endif %}{% if filter_7d %} · last 7 days{% endif %}</h2>
+  {% if sessions %}
+  <table>
+    <tr>
+      <th>Date</th><th>User</th><th>Lang</th><th>Level</th>
+      <th>Topic</th><th>Error tags</th><th>Status</th>
+    </tr>
+    {% for s in sessions %}
+    <tr>
+      <td>{{ s.date[:16] if s.date else '—' }}</td>
+      <td>{{ s.user_id }}</td>
+      <td>{{ s.language }}</td>
+      <td><span class="badge">{{ s.level }}</span></td>
+      <td><a href="/sessions/{{ s.rel_path }}">{{ s.topic or '—' }}</a></td>
+      <td>
+        {% for tag in s.error_tags[:4] %}
+        <span class="tag-chip">{{ tag }}</span>
+        {% endfor %}
+        {% if s.error_tags|length > 4 %}
+        <span class="tag-chip">+{{ s.error_tags|length - 4 }}</span>
+        {% endif %}
+        {% if not s.error_tags %}—{% endif %}
+      </td>
+      <td>{{ s.status }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="empty">No sessions yet. <a href="/">Start one &rarr;</a></p>
+  {% endif %}
+</main>
+</body>
+</html>

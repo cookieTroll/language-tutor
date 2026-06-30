@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GermanTutor</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+/* ── Background themes ── */
+.bg-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+
+/* ruled */
+body.theme-ruled .bg-layer {
+  background: repeating-linear-gradient(
+    transparent, transparent 31px,
+    rgba(248,113,113,0.06) 31px, rgba(248,113,113,0.06) 32px
+  );
+}
+/* dots */
+body.theme-dots .bg-layer {
+  background-image: radial-gradient(circle, rgba(248,113,113,0.14) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+/* diamonds */
+body.theme-diamonds .bg-layer {
+  background-image:
+    linear-gradient(45deg,  rgba(248,113,113,0.06) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(248,113,113,0.06) 25%, transparent 25%),
+    linear-gradient(45deg,  transparent 75%, rgba(248,113,113,0.06) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(248,113,113,0.06) 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+}
+/* words: handled by JS */
+/* cat:   handled by JS */
+
+@keyframes float-word {
+  0%   { opacity: 0;    transform: translateY(0)      rotate(-3deg); }
+  8%   { opacity: 0.05; }
+  92%  { opacity: 0.05; }
+  100% { opacity: 0;    transform: translateY(-100vh) rotate(3deg); }
+}
+.word-particle {
+  position: fixed; color: var(--accent);
+  animation: float-word linear infinite;
+  pointer-events: none; z-index: 0; user-select: none;
+}
+
+@keyframes cat-walk {
+  0%   { transform: translateX(-180px); }
+  100% { transform: translateX(calc(100vw + 180px)); }
+}
+@keyframes tail-sway {
+  0%,100% { transform: rotate(0deg);   }
+  50%      { transform: rotate(20deg);  }
+}
+@keyframes ear-twitch {
+  0%,90%,100% { transform: rotate(0deg);  }
+  95%         { transform: rotate(-8deg); }
+}
+.cat-walk { position: fixed; bottom: 90px; z-index: 0; pointer-events: none;
+            animation: cat-walk 22s linear infinite; opacity: 0.18; }
+.cat-tail { transform-origin: 2px 2px; animation: tail-sway 1.8s ease-in-out infinite; }
+.cat-ear-l { transform-origin: 8px 14px; animation: ear-twitch 4s ease-in-out infinite; }
+.cat-ear-r { transform-origin: 12px 14px; animation: ear-twitch 4s ease-in-out infinite 0.3s; }
+
+/* ── Mouse peeks ── */
+@keyframes peek-from-left {
+  0%    { transform: translateX(-108%); }
+  10%   { transform: translateX(-20%);  }
+  18%,62% { transform: translateX(-30%); }
+  78%   { transform: translateX(-52%);  }
+  92%   { transform: translateX(-95%);  }
+  100%  { transform: translateX(-108%); }
+}
+@keyframes peek-from-right {
+  0%    { transform: translateX(108%);  }
+  10%   { transform: translateX(20%);   }
+  18%,62% { transform: translateX(30%);  }
+  78%   { transform: translateX(52%);   }
+  92%   { transform: translateX(95%);   }
+  100%  { transform: translateX(108%);  }
+}
+@keyframes mouse-sniff {
+  0%,100% { transform: translateY(0);    }
+  50%     { transform: translateY(-5px); }
+}
+.mouse-peek {
+  position: fixed; z-index: 0; pointer-events: none; opacity: 0.22;
+  transition: opacity 0.2s ease-in;
+}
+.mouse-peek.from-left {
+  left: 0;
+  animation: peek-from-left var(--dur) ease-in-out infinite var(--delay);
+}
+.mouse-peek.from-right {
+  right: 0;
+  animation: peek-from-right var(--dur) ease-in-out infinite var(--delay);
+}
+/* sniff applied to inner SVG wrapper to avoid transform conflict */
+.mouse-sniff-wrap { display: inline-block; animation: mouse-sniff 1.5s ease-in-out infinite; }
+
+/* ── Mistake highlight + annotated comparison ── */
+mark.mistake-hl {
+  background: rgba(248,113,113,0.2); color: var(--bright);
+  font-weight: 700; border-radius: 2px;
+  border-bottom: 2px solid var(--accent); padding: 0 1px; cursor: help;
+}
+.annotated-block {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  margin: 6px 0; padding: 10px 12px; font-size: 0.86rem; line-height: 1.75;
+  white-space: pre-wrap; word-break: break-word;
+}
+.annotated-block.corr { border-color: rgba(52,211,153,0.3); }
+.ann-label {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); margin-bottom: 7px; display: flex; align-items: center; gap: 6px;
+}
+.ann-count {
+  background: rgba(248,113,113,0.15); color: var(--accent);
+  padding: 1px 6px; border-radius: 8px; font-size: 0.66rem;
+  text-transform: none; letter-spacing: 0;
+}
+.invite-msg {
+  font-size: 0.8rem; color: var(--sub); margin: 8px 0 4px;
+  padding: 8px 12px; border-left: 2px solid var(--blue); background: var(--panel);
+  border-radius: 0 4px 4px 0;
+}
+
+/* ── Font size slider ── */
+#font-ctrl {
+  display: flex; align-items: center; gap: 6px; color: var(--muted);
+}
+#font-ctrl .fa { font-size: 0.72rem; }
+#font-ctrl .fb { font-size: 1.0rem; }
+#font-slider {
+  width: 64px; cursor: pointer; accent-color: var(--accent);
+  height: 3px; vertical-align: middle;
+}
+
+/* ── Column resizer ── */
+#col-resizer {
+  width: 5px; flex-shrink: 0; cursor: col-resize;
+  background: var(--border); transition: background 0.15s;
+}
+#col-resizer:hover, #col-resizer.dragging { background: var(--accent); }
+
+/* ── Layout ── */
+#idle {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; position: relative; z-index: 1;
+}
+.idle-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 40px 48px; width: 420px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; gap: 20px;
+}
+.idle-card h1 { font-size: 1.4rem; color: var(--accent); letter-spacing: 3px; }
+.idle-card .sub { color: var(--muted); font-size: 0.82rem; }
+.field label { display: block; font-size: 0.76rem; color: var(--sub); margin-bottom: 6px; letter-spacing: 1px; text-transform: uppercase; }
+.field input {
+  width: 100%; padding: 10px 12px; background: var(--bg);
+  border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; font-family: inherit; font-size: 0.9rem;
+  transition: border-color .2s;
+}
+.field input:focus { outline: none; border-color: var(--accent); }
+.btn-primary {
+  padding: 11px; background: var(--accent); border: none;
+  color: #111; border-radius: 5px; font-size: 0.9rem; font-weight: bold;
+  letter-spacing: 1px; transition: background .2s;
+}
+.btn-primary:hover { background: #ef4444; }
+.idle-footer { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--muted); }
+.idle-footer a { color: var(--sub); }
+.idle-footer a:hover { color: var(--accent); }
+.btn-link {
+  background: none; border: none; color: var(--muted); font-size: 0.8rem;
+  cursor: pointer; padding: 0; font-family: inherit;
+}
+.btn-link:hover { color: var(--accent); }
+
+/* ── Main (post-start) ── */
+#main { display: none; flex-direction: column; height: 100vh; position: relative; z-index: 1; }
+
+/* Header */
+#app-header {
+  background: var(--panel); border-bottom: 1px solid var(--border);
+  padding: 0 20px; height: 48px; display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+#app-header h1 { font-size: 0.9rem; color: var(--accent); letter-spacing: 2px; margin-right: 8px; }
+.meta-chips { display: flex; gap: 8px; align-items: center; }
+.chip {
+  padding: 2px 10px; background: var(--surface); border-radius: 12px;
+  font-size: 0.74rem; color: var(--sub); transition: color .3s;
+}
+.chip.active { color: var(--text); }
+#timer { font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.header-links { margin-left: auto; display: flex; gap: 16px; font-size: 0.8rem; }
+.header-links a { color: var(--muted); }
+.header-links a:hover { color: var(--accent); }
+
+/* Setup panel */
+#setup {
+  flex: 1; display: flex; flex-direction: column;
+  max-width: 700px; margin: 0 auto; padding: 24px 20px; width: 100%;
+}
+#setup-output { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.setup-msg { font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap; padding: 2px 0; }
+.setup-msg.system { color: var(--muted); font-style: italic; font-size: 0.78rem; }
+#setup-input-row {
+  display: none; gap: 8px; align-items: center;
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);
+}
+#setup-inp {
+  flex: 1; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; font-family: inherit; font-size: 0.9rem;
+}
+#setup-inp:focus { outline: none; border-color: var(--accent); }
+.btn-send {
+  padding: 10px 16px; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; font-size: 0.85rem;
+}
+.btn-send:hover { background: var(--accent); color: #111; border-color: var(--accent); }
+
+/* Session (two-column) */
+#session { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+.session-inner { display: flex; flex: 1; }
+
+/* Left column: writing */
+#left-col {
+  flex: 3; display: flex; flex-direction: column;
+  border-right: 1px solid var(--border); overflow: hidden;
+}
+#topic-box {
+  display: none; padding: 14px 20px; background: var(--panel);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+#topic-box .topic-title { color: var(--bright); font-size: 0.92rem; margin-bottom: 4px; }
+#topic-box .topic-req   { color: var(--muted);  font-size: 0.78rem; }
+#writing-pad {
+  flex: 1; padding: 24px 28px; background: #0d1117; color: #e6edf3;
+  border: none; resize: none; font-family: 'Georgia', Georgia, serif;
+  font-size: 1.05rem; line-height: 1.85; outline: none;
+}
+#writing-pad::placeholder { color: #444d56; }
+#writing-pad:disabled { opacity: 0.55; }
+#left-footer {
+  padding: 10px 20px; background: var(--panel); border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+#word-count { font-size: 0.78rem; color: var(--muted); }
+.btn-submit {
+  padding: 8px 18px; background: var(--accent); border: none;
+  color: #111; border-radius: 5px; font-size: 0.82rem; font-weight: bold;
+  transition: background .2s;
+}
+.btn-submit:hover   { background: #ef4444; }
+.btn-submit:disabled { background: var(--surface); color: var(--muted); cursor: default; }
+
+/* Eval progress overlay */
+#eval-overlay {
+  display: none; flex-direction: column; gap: 10px;
+  padding: 20px 28px; border-top: 1px solid var(--border);
+  background: var(--panel); flex-shrink: 0;
+}
+.prog-item { font-size: 0.82rem; color: var(--sub); }
+.prog-item.active { color: var(--accent); }
+.prog-item.done   { color: var(--green); }
+
+/* Right column: tutor panel */
+#right-col {
+  flex: 2; display: flex; flex-direction: column;
+  background: var(--bg); overflow: hidden;
+}
+#tutor-output {
+  flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 6px;
+}
+.tmsg { padding: 8px 12px; border-radius: 4px; font-size: 0.84rem; line-height: 1.55; white-space: pre-wrap; }
+.tmsg.tutor    { background: var(--panel); border-left: 3px solid var(--accent); }
+.tmsg.btw-q    { background: rgba(96,165,250,.08); border-left: 3px solid var(--blue); color: var(--blue); }
+.tmsg.btw-a    { background: rgba(96,165,250,.05); border-left: 3px solid rgba(96,165,250,.3); }
+.tmsg.progress { color: var(--muted); font-size: 0.78rem; padding: 3px 12px; }
+.tmsg.system   { color: var(--muted); font-style: italic; font-size: 0.78rem; text-align: center; }
+.tmsg.section  { border-left: 3px solid var(--surface); background: transparent;
+                  color: var(--sub); font-size: 0.78rem; letter-spacing: 1px; }
+
+#btw-row {
+  padding: 10px 12px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: center; flex-shrink: 0; background: var(--panel);
+}
+#btw-inp {
+  flex: 1; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; font-family: inherit; font-size: 0.82rem;
+}
+#btw-inp:focus { outline: none; border-color: var(--blue); }
+#btw-inp::placeholder { color: var(--muted); }
+.btn-ask {
+  padding: 8px 12px; background: var(--surface); border: 1px solid var(--border);
+  color: var(--sub); border-radius: 5px; font-size: 0.8rem;
+}
+.btn-ask:hover { background: var(--blue); color: #111; border-color: var(--blue); }
+
+/* Done banner */
+#done-banner {
+  display: none; padding: 12px 20px; background: var(--panel);
+  border-top: 1px solid var(--border); text-align: center; flex-shrink: 0;
+}
+#done-banner a { color: var(--accent); font-size: 0.85rem; }
+
+/* Confetti */
+@keyframes confetti-fall {
+  0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(100vh)  rotate(720deg); opacity: 0; }
+}
+.confetti-piece {
+  position: fixed; width: 8px; height: 8px; border-radius: 2px;
+  animation: confetti-fall linear forwards; pointer-events: none; z-index: 9999;
+}
+</style>
+</head>
+<body>
+<div class="bg-layer"></div>
+
+<!-- ── Idle ── -->
+<div id="idle">
+  <div class="idle-card">
+    <div>
+      <h1>GERMANTUTOR</h1>
+      <p class="sub">AI-powered language coaching</p>
+    </div>
+    <div class="field">
+      <label>User ID</label>
+      <input id="user-id" type="text" placeholder="student" autocomplete="off" />
+    </div>
+    <button class="btn-primary" onclick="startSession()">START SESSION</button>
+    <div class="idle-footer">
+      <a href="/sessions">View past sessions &rarr;</a>
+      <button class="btn-link" onclick="cycleTheme()" title="Switch background">🎲 theme</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main (after start) ── -->
+<div id="main">
+  <header id="app-header">
+    <h1>GERMANTUTOR</h1>
+    <div class="meta-chips">
+      <span class="chip" id="chip-module">—</span>
+      <span class="chip" id="chip-lang">—</span>
+      <span class="chip" id="chip-level">—</span>
+      <span id="timer">—</span>
+    </div>
+    <div class="header-links">
+      <a href="/sessions">Sessions</a>
+      <a href="/" onclick="return confirmLeave()">New</a>
+      <button class="btn-link" onclick="cycleTheme()" title="Switch background">🎲</button>
+    </div>
+  </header>
+
+  <div id="setup">
+    <div id="setup-output"></div>
+    <div id="setup-input-row">
+      <input id="setup-inp" type="text" autocomplete="off" />
+      <button class="btn-send" onclick="submitSetup()">Send ↵</button>
+    </div>
+  </div>
+
+  <div id="session">
+    <div class="session-inner">
+      <div id="left-col">
+        <div id="topic-box">
+          <div class="topic-title" id="topic-title"></div>
+          <div class="topic-req"   id="topic-req"></div>
+        </div>
+        <textarea id="writing-pad" placeholder="Begin writing here…&#10;&#10;Type line by line. Submit when ready."></textarea>
+        <div id="eval-overlay">
+          <div class="prog-item" id="p1">[1/6] Estimating text level</div>
+          <div class="prog-item" id="p2">[2/6] Detecting mistakes</div>
+          <div class="prog-item" id="p3">[3/6] Classifying mistakes</div>
+          <div class="prog-item" id="p4">[4/6] Adding explanations</div>
+          <div class="prog-item" id="p5">[5/6] Writing corrected version</div>
+          <div class="prog-item" id="p6">[6/6] Generating summary and tips</div>
+        </div>
+        <div id="left-footer">
+          <span id="word-count">0 words</span>
+          <div id="font-ctrl">
+            <span class="fa">A</span>
+            <input type="range" id="font-slider" min="12" max="20" value="16" step="1">
+            <span class="fb">A</span>
+          </div>
+          <button class="btn-submit" id="submit-btn" onclick="submitWriting()">Submit  Ctrl+↵</button>
+        </div>
+        <div id="done-banner">
+          <a href="/">Start a new session &rarr;</a>
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          <a href="/sessions">View all sessions &rarr;</a>
+        </div>
+      </div>
+      <div id="col-resizer"></div>
+      <div id="right-col">
+        <div id="tutor-output"></div>
+        <div id="btw-row">
+          <input id="btw-inp" type="text" placeholder="Ask the tutor… (during writing)" autocomplete="off" />
+          <button class="btn-ask" id="btw-btn" onclick="sendBtw()">Ask</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

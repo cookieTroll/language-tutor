@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Session — GermanTutor</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+@media print {
+  header, .no-print { display: none !important; }
+  body { background: white; color: black; }
+  .block, .mistake { background: #f5f5f5 !important; }
+}
+header {
+  background: var(--panel); border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 48px; display: flex; align-items: center; gap: 16px;
+}
+header h1 { font-size: 0.9rem; color: var(--accent); letter-spacing: 2px; }
+header a  { color: var(--muted); font-size: 0.82rem; }
+header a:hover { color: var(--accent); }
+.header-right { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+main { max-width: 900px; margin: 0 auto; padding: 28px 24px; }
+.meta { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 28px; }
+.badge { display: inline-block; padding: 3px 10px; background: var(--panel);
+         border-radius: 12px; font-size: 0.76rem; color: var(--sub); }
+section { margin: 22px 0; }
+h2 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted);
+     margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--panel); }
+.block { background: var(--panel); padding: 16px 18px; border-radius: 6px;
+         white-space: pre-wrap; line-height: 1.7; font-size: 0.9rem; }
+.block-sub { color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
+.copy-btn {
+  float: right; padding: 3px 10px; background: var(--surface); border: 1px solid var(--border);
+  color: var(--sub); border-radius: 4px; font-size: 0.74rem; cursor: pointer; font-family: inherit;
+}
+.copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+.mistake { margin: 8px 0; padding: 12px 14px; background: var(--panel);
+           border-left: 3px solid var(--border); border-radius: 0 6px 6px 0; }
+.mistake.critical { border-color: var(--accent); }
+.mistake.expected { border-color: var(--yellow); }
+.mistake.minor    { border-color: var(--blue); }
+.frag  { color: var(--accent); font-weight: bold; }
+.corr  { color: var(--green); }
+.tag   { font-size: 0.72rem; color: var(--muted); margin: 4px 0; }
+.expl  { margin-top: 7px; line-height: 1.55; font-size: 0.85rem; }
+.tip   { padding: 5px 0; font-size: 0.88rem; line-height: 1.5; }
+.tip::before { content: "• "; color: var(--accent); }
+.btw-entry { margin: 8px 0; padding: 12px 14px; background: var(--panel); border-radius: 6px;
+             border-left: 3px solid rgba(96,165,250,.4); }
+.btw-q { color: var(--blue); margin-bottom: 6px; font-size: 0.84rem; }
+.btw-a { line-height: 1.6; font-size: 0.88rem; }
+.flag  { font-size: 0.74rem; color: var(--muted); margin-top: 4px; }
+/* diff */
+.diff-wrap { background: var(--panel); padding: 16px 18px; border-radius: 6px;
+             line-height: 1.8; font-size: 0.9rem; white-space: pre-wrap; font-family: 'Courier New', monospace; }
+.del { background: rgba(248,113,113,.2); color: var(--accent); text-decoration: line-through; border-radius: 2px; padding: 0 2px; }
+.ins { background: rgba(52,211,153,.2); color: var(--green); border-radius: 2px; padding: 0 2px; }
+/* actions */
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 28px 0 0; padding-top: 20px; border-top: 1px solid var(--border); }
+.action-btn {
+  padding: 8px 16px; background: var(--panel); border: 1px solid var(--border);
+  color: var(--sub); border-radius: 5px; font-size: 0.82rem; font-family: inherit;
+  text-decoration: none; display: inline-block; transition: color .2s, border-color .2s;
+}
+.action-btn:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
+.action-btn.primary { background: var(--accent); color: #111; border-color: var(--accent); }
+.action-btn.primary:hover { background: #ef4444; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GERMANTUTOR</h1>
+  <a href="/sessions">&larr; Sessions</a>
+  <div class="header-right no-print">
+    <a href="#" onclick="window.print(); return false;">Print / PDF</a>
+    <a href="/">New Session</a>
+  </div>
+</header>
+<main>
+  <div class="meta">
+    {% if session.get('date') %}<span class="badge">{{ session['date'][:16] }}</span>{% endif %}
+    {% if session.get('user_id') %}<span class="badge">{{ session['user_id'] }}</span>{% endif %}
+    {% if session.get('language') %}<span class="badge">{{ session['language'].upper() }}</span>{% endif %}
+    {% if session.get('level') %}<span class="badge">{{ session['level'].upper() }}</span>{% endif %}
+    {% if session.get('module') %}<span class="badge">{{ session['module'] }}</span>{% endif %}
+    {% if session.get('status') %}<span class="badge">{{ session['status'] }}</span>{% endif %}
+    {% if session.get('text_level_estimate') %}
+      <span class="badge">estimated {{ session['text_level_estimate'].upper() }}</span>
+    {% endif %}
+  </div>
+
+  {% if session.get('topic') %}
+  <section>
+    <h2>Topic</h2>
+    <div class="block">{{ session['topic'] }}<div class="block-sub">{{ session.get('requirements','') }}</div></div>
+  </section>
+  {% endif %}
+
+  {% if session.get('user_text') %}
+  <section>
+    <h2>Your Text</h2>
+    <div class="block">{{ session['user_text'] }}</div>
+  </section>
+  {% endif %}
+
+  {% set mistakes = session.get('mistakes', []) %}
+  {% if mistakes %}
+  <section>
+    <h2>Mistakes ({{ mistakes|length }})</h2>
+    {% for m in mistakes %}
+    <div class="mistake {{ m.get('severity','') }}">
+      <div><span class="frag">{{ m.get('fragment','') }}</span> &rarr; <span class="corr">{{ m.get('correction','') }}</span></div>
+      <div class="tag">[{{ m.get('error_tag','') }}]{% if m.get('severity') %} &middot; {{ m['severity'] }}{% endif %}</div>
+      <div class="expl">{{ m.get('explanation','') }}</div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if session.get('user_text') and session.get('corrected_text') and session.get('corrected_text') != session.get('user_text') %}
+  <section>
+    <h2>Changes (diff)</h2>
+    <div class="diff-wrap" id="diff-view">Computing diff…</div>
+  </section>
+  {% endif %}
+
+  {% if session.get('corrected_text') %}
+  <section>
+    <h2>Corrected Text
+      <button class="copy-btn no-print" onclick="copyText('corrected-text-block')">Copy</button>
+    </h2>
+    <div class="block" id="corrected-text-block">{{ session['corrected_text'] }}</div>
+  </section>
+  {% endif %}
+
+  {% if session.get('session_summary') %}
+  <section>
+    <h2>Summary</h2>
+    <div class="block">{{ session['session_summary'] }}</div>
+  </section>
+  {% endif %}
+
+  {% if session.get('tips') %}
+  <section>
+    <h2>Tips</h2>
+    {% for tip in session['tips'] %}
+    <div class="tip">{{ tip }}</div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% set btw_log = session.get('btw_log', []) %}
+  {% if btw_log %}
+  <section>
+    <h2>/btw Log</h2>
+    {% for entry in btw_log %}
+    <div class="btw-entry">
+      <div class="btw-q">Q: {{ entry.get('question','') }}</div>
+      <div class="btw-a">{{ entry.get('answer','') }}</div>
+      {% if entry.get('flagged_word') %}<div class="flag">Flagged: {{ entry['flagged_word'] }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <div class="actions no-print">
+    <a class="action-btn primary" href="/" onclick="setPracticeTopic('{{ session.get('topic','') | e }}')">Practice again</a>
+    <a class="action-btn" href="/sessions">&larr; All sessions</a>
+    <a class="action-btn" href="/">New session</a>
+  </div>
+</main>
+
+<script>
+const origText = {{ session.get('user_text', '') | tojson }};
+const corrText = {{ session.get('corrected_text', '') | tojson }};
+</script>
+<script src="/static/diff.js"></script>
+</body>
+</html>

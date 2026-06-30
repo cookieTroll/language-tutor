@@ -1,0 +1,20 @@
+:root {
+  --bg:      #111827;
+  --panel:   #1f2937;
+  --surface: #374151;
+  --border:  #374151;
+  --muted:   #6b7280;
+  --sub:     #9ca3af;
+  --text:    #d1d5db;
+  --bright:  #f9fafb;
+  --accent:  #f87171;
+  --green:   #34d399;
+  --blue:    #60a5fa;
+  --yellow:  #fbbf24;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Courier New', monospace; background: var(--bg); color: var(--text);
+       min-height: 100vh; position: relative; overflow-x: hidden; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font-family: inherit; cursor: pointer; }
