@@ -1,0 +1,4 @@
+FROM gemma2:9b
+PARAMETER num_ctx 4096
+PARAMETER stop <start_of_turn>
+PARAMETER stop <end_of_turn>

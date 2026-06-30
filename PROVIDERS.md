@@ -19,6 +19,30 @@ If `LTUT_CONFIG` is not set, `config.yaml` is used (currently: Ollama).
 
 ---
 
+## Ollama performance (6 GB GPU)
+
+Set `OLLAMA_FLASH_ATTENTION` before launching the app — the app auto-starts Ollama if it isn't running yet, so the flag just needs to be in the same terminal session:
+
+```powershell
+$env:OLLAMA_FLASH_ATTENTION = "1"
+python -m ui.app
+```
+
+If Ollama is already running (started without the flag), restart it first:
+
+```powershell
+$env:OLLAMA_FLASH_ATTENTION = "1"
+ollama serve
+```
+
+`num_ctx: 2048` in `config.yaml` keeps the KV cache small enough for `gemma2:9b` to fit fully in 6 GB VRAM. Verify GPU utilisation after loading:
+
+```powershell
+ollama ps   # should show 100% GPU; if CPU% > 0, lower num_ctx further
+```
+
+---
+
 ## API keys
 
 Keys are never stored in config files. The config references them via `${VAR_NAME}` placeholders resolved at load time.

@@ -244,3 +244,4 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 ## LLM Throughput Optimization
 
 - [x] [x] [ ] Investigate writing evaluation latency — per-step profiling via `StepTiming` dataclass; latency log written to `data/logs/skill_latency.jsonl` per session
+- [x] [x] [ ] Parallelise independent pipeline steps — steps 1+2 run concurrently, steps 5+6 run concurrently via `ThreadPoolExecutor`; `total_wall_s` recorded in latency log

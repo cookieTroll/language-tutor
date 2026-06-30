@@ -32,10 +32,6 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ---
 
-## Layer 1b — User Personalization + Topic Picker
-
----
-
 ## Orchestrator Refactor (post-1b)
 
 - [ ] [ ] [ ] Move `WritingModule._print_evaluation()` to `ui/` layer (blocked on `IOHandler` — see Layer 1c); method already has a comment noting this
@@ -128,7 +124,6 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 - [ ] [ ] [ ] Identify and evaluate the LLM inference optimization package (cache efficiency + low-level throughput improvements); assess fit with `llm/` abstraction layer and document findings in `docs/llm_backends.md`
 - [ ] [ ] [ ] Investigate `/btw` response latency — measure time from question submission to answer; evaluate whether prompt size, token budget, or the Gemini API cold path is the dominant factor
-- [ ] [ ] [ ] Evaluate batching or parallelising independent pipeline steps (Step 5 is already independent of Steps 1–4); profiling data now available in `data/logs/skill_latency.jsonl`
 
 ---
 

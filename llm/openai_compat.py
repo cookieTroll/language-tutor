@@ -40,7 +40,7 @@ class OpenAICompatibleLLM(BaseLLM):
             try:
                 extra = {}
                 if self.config.num_ctx is not None:
-                    extra["extra_body"] = {"num_ctx": self.config.num_ctx}
+                    extra["extra_body"] = {"options": {"num_ctx": self.config.num_ctx}}
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=formatted_messages,
