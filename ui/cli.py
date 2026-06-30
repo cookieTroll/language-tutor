@@ -64,7 +64,7 @@ def main():
     while True:
         try:
             # Run the full session flow (includes startup check, active language selection, etc.)
-            orchestrator.run_session(user_id, language=None, on_language_warning=_language_config_warning)
+            orchestrator.run_session(user_id, language=None, on_language_warning=_language_config_warning, extra_parameters={"ui_mode": "cli"})
         except KeyboardInterrupt:
             print("\n\nExiting active tutoring session. Goodbye!")
             break

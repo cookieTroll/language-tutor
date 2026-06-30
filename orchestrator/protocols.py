@@ -29,7 +29,7 @@ class OrchestratorProtocol(Protocol):
         """Cold start → DEFAULT_RECOMMENDATION. Otherwise LLM over summary."""
         ...
 
-    def run_session(self, user_id: str, language: str) -> None:
+    def run_session(self, user_id: str, language: str, on_language_warning=None, extra_parameters: dict | None = None) -> None:
         """
         0.  Check interrupted sessions → resume / log / discard
         1.  summarize_progress(user_id, language) — may return None

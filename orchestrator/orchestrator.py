@@ -8,6 +8,8 @@ from modules.protocols import ModuleContext
 from llm.base import BaseLLM, LLMMessage
 from orchestrator.protocols import OrchestratorProtocol, ProgressSummary, ExerciseRecommendation
 from orchestrator.prompts import INTERRUPTION_SUMMARY_PROMPT
+from skills.summarize_progress.skill import SummarizeProgressSkill
+from skills.protocols import SkillInput
 from modules.registry import MODULE_REGISTRY, get_registry_description
 from lang.loader import using_defaults
 
@@ -25,56 +27,54 @@ class Orchestrator(OrchestratorProtocol):
         self._warned_languages: set[str] = set()
 
     def summarize_progress(self, user_id: str, language: str) -> ProgressSummary | None:
-        """
-        Summarizes progress. Returns None if completed sessions are below cold_start_threshold.
-        """
-        recent = self.store.get_recent_sessions(user_id, language, n=10)
-        completed = [s for s in recent if s.status == "completed"]
-        
-        if len(completed) < self.config.cold_start_threshold:
+        """Returns None if below cold_start_threshold; otherwise calls SummarizeProgressSkill."""
+        agg = self.store.get_session_aggregate(user_id, language)
+        total_completed = sum(agg.sessions_by_module.values())
+
+        if total_completed < self.config.cold_start_threshold:
             return None
 
-        # Build basic summary structure for PoC
-        error_freq = self.store.get_error_frequency(user_id, language)
-        sorted_errors = sorted(error_freq.items(), key=lambda x: x[1], reverse=True)
-        recurring_errors = [k for k, v in sorted_errors if v >= 2]
-        
-        vocab_flags = self.store.get_vocab_flags(user_id, language)
-        recent_topics = self.store.get_recent_topics(user_id, language, module="writing", n=5)
+        level = self.store.get_current_level(user_id)
+        available_modules = list(MODULE_REGISTRY.keys())
 
-        sessions_by_module = {}
-        total_time_by_module = {}
-        days_since_module = {}
-        for s in completed:
-            sessions_by_module[s.module] = sessions_by_module.get(s.module, 0) + 1
-            total_time_by_module[s.module] = total_time_by_module.get(s.module, 0.0) + (s.duration_minutes or 0.0)
-            
-        return ProgressSummary(
-            language=language,
-            sessions_by_module=sessions_by_module,
-            days_since_module=days_since_module,
-            total_time_by_module=total_time_by_module,
-            recurring_errors=recurring_errors,
-            vocab_flag_count=len(vocab_flags),
-            recent_topics=recent_topics,
-            weakest_module="writing",
-            recommendation_reason="PoC Mode Summary"
+        skill = SummarizeProgressSkill()
+        out = skill.run(
+            SkillInput(
+                user_id=user_id,
+                level=level,
+                parameters={
+                    "aggregate": agg.model_dump(),
+                    "modules": available_modules,
+                },
+            ),
+            self.llm,
         )
 
-    def recommend_exercise(
-        self, summary: ProgressSummary | None
-    ) -> ExerciseRecommendation:
-        """
-        Recommends next exercise. Defaults to writing under cold start.
-        """
+        weakest_module = out.metadata.get("weakest_module", "writing")
+        if weakest_module not in MODULE_REGISTRY:
+            weakest_module = "writing"
+        reason = out.metadata.get("recommendation_reason", "")
+
+        return ProgressSummary(
+            language=language,
+            sessions_by_module=agg.sessions_by_module,
+            days_since_module={k: int(v) for k, v in agg.days_since_module.items()},
+            total_time_by_module=agg.total_time_by_module,
+            recurring_errors=agg.recurring_errors,
+            vocab_flag_count=agg.vocab_flag_count,
+            recent_topics=agg.recent_topics,
+            weakest_module=weakest_module,
+            recommendation_reason=reason,
+        )
+
+    def recommend_exercise(self, summary: ProgressSummary | None) -> ExerciseRecommendation:
         if summary is None:
             return DEFAULT_RECOMMENDATION
-            
-        # PoC: just recommend writing if summary exists
+
         return ExerciseRecommendation(
-            module="writing",
-            reason="Continuing practice. Let's work on your writing output.",
-            suggested_focus=summary.recurring_errors[0] if summary.recurring_errors else None
+            module=summary.weakest_module,
+            reason=summary.recommendation_reason,
+            suggested_focus=summary.recurring_errors[0] if summary.recurring_errors else None,
         )
 
     def _handle_interruption(self, user_id: str):
@@ -142,10 +142,11 @@ class Orchestrator(OrchestratorProtocol):
             else:
                 print(f"[!] Invalid option '{choice}'. Please enter 'l' to log or 'd' to discard.")
 
-    def run_session(self, user_id: str, language: str, on_language_warning=None) -> None:
+    def run_session(self, user_id: str, language: str, on_language_warning=None, extra_parameters: dict | None = None) -> None:
         """
         Executes a full interactive session lifecycle.
         on_language_warning: optional callable(language, missing_maps) for UI to display config warnings.
+        extra_parameters: caller-supplied context (e.g. {"ui_mode": "cli"}) merged into ModuleContext.parameters.
         """
         # 0. Check interrupted sessions
         self._handle_interruption(user_id)
@@ -157,6 +158,7 @@ class Orchestrator(OrchestratorProtocol):
         # 2 & 3. Summarize and recommend
         summary = self.summarize_progress(user_id, selected_lang)
         recommendation = self.recommend_exercise(summary)
+        suggested_focus = recommendation.suggested_focus
 
         # 4. Present recommendation, confirm or override
         module_key = self._get_confirmed_module(recommendation)
@@ -166,7 +168,10 @@ class Orchestrator(OrchestratorProtocol):
         session_id = self._init_write_ahead_log(user_id, selected_lang, module_key, profile)
 
         # 6. ContextRequest fulfillment
-        ctx = self._build_module_context(user_id, selected_lang, module_key, profile, module.context_request())
+        parameters = dict(extra_parameters or {})
+        if suggested_focus:
+            parameters["suggested_focus"] = suggested_focus
+        ctx = self._build_module_context(user_id, selected_lang, module_key, profile, module.context_request(), parameters)
 
         # Create checkpoint directory & initial checkpoint setup
         checkpoint_dir = os.path.join(self.config.data_root, "checkpoints", user_id)
@@ -257,6 +262,8 @@ class Orchestrator(OrchestratorProtocol):
     def _get_confirmed_module(self, recommendation: ExerciseRecommendation) -> str:
         print(f"\n[Recommendation]: We suggest using the '{recommendation.module.upper()}' module.")
         print(f"Reason: {recommendation.reason}")
+        if recommendation.suggested_focus:
+            print(f"Suggested focus: {recommendation.suggested_focus}")
         
         confirm = input("\nStart this module? [Y/n]: ").strip().lower()
         module_key = recommendation.module
@@ -292,22 +299,23 @@ class Orchestrator(OrchestratorProtocol):
         return session_id
 
     def _build_module_context(
-        self, user_id: str, selected_lang: str, module_key: str, profile: UserProfile, req
+        self, user_id: str, selected_lang: str, module_key: str, profile: UserProfile, req,
+        parameters: dict | None = None,
     ) -> ModuleContext:
         recent_sessions = []
         if req.recent_sessions_n > 0:
             recent_sessions = self.store.get_recent_sessions(user_id, selected_lang, req.recent_sessions_n)
             if req.module_filter:
                 recent_sessions = [s for s in recent_sessions if s.module == req.module_filter]
-                
+
         error_frequency = {}
         if req.include_error_frequency:
             error_frequency = self.store.get_error_frequency(user_id, selected_lang, req.module_filter)
-            
+
         recent_topics = []
         if req.include_recent_topics:
             recent_topics = self.store.get_recent_topics(user_id, selected_lang, module_key, n=5)
-            
+
         vocab_flags = []
         if req.include_vocab_flags:
             vocab_flags = [
@@ -323,7 +331,7 @@ class Orchestrator(OrchestratorProtocol):
             error_frequency=error_frequency,
             recent_topics=recent_topics,
             vocab_flags=vocab_flags,
-            parameters={"ui_mode": "cli"}
+            parameters=parameters or {},
         )
 
     def _finalize_session(
