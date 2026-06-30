@@ -9,6 +9,7 @@ class WritingPrompt(BaseModel):
     topic: str
     requirements: str
     min_words: int
+    task_label: str = "writing_free"
     suggested_focus: str | None = None
 
 
