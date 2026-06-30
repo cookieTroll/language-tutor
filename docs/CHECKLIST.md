@@ -63,14 +63,14 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [x] [x] [ ] Unit test: stated level overrides config default; most recent row returned by `get_current_level()`
 
 ### Session History Aggregation
-- [ ] [ ] [ ] `storage.get_session_aggregate()` — structured profile: sessions by skill, recency, recurring errors, recent topics, vocab flag count
+- [x] [ ] [ ] `storage.get_session_aggregate()` — structured profile: sessions by skill, recency, recurring errors, recent topics, vocab flag count
 - [ ] [ ] [ ] Convert progress summary logic into `skills/summarize_progress/` (LLM-driven aggregation & analysis)
 - [ ] [ ] [ ] Orchestrator uses `summarize_progress` skill to build progress summary
 - [ ] [ ] [ ] `WritingModule.context_request()` — return full `ContextRequest` (recent 5 writing sessions, error frequency, recent topics, vocab flags)
 - [ ] [ ] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
 - [ ] [ ] [ ] Evaluator Step 1 prompt primed with recurring errors from context
 - [ ] [ ] [ ] `suggested_focus` recorded in session file for traceability
-- [ ] [ ] [ ] Unit test: aggregate computed correctly from mixed session history
+- [x] [ ] [ ] Unit test: aggregate computed correctly from mixed session history
 
 ### Topic Picker + Orchestrator LLM Routing
 - [ ] [ ] [ ] `modules/writing/topic_picker.py` — takes level, `suggested_focus`, `recent_topics`; returns `WritingPrompt` dataclass; user can bypass with own topic

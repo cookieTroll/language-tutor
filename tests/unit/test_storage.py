@@ -283,6 +283,62 @@ def test_write_file_atomic(storage):
     assert data["session_id"] == "sess_f1"
     assert data["user_id"] == "user1"
 
+def test_session_aggregate():
+    import shutil, tempfile
+    temp_dir = tempfile.mkdtemp()
+    try:
+        store = SQLiteSessionStore(data_root=temp_dir)
+        user_id = "u1"
+        now = datetime.now()
+
+        store.write_user_profile(UserProfile(
+            user_id=user_id, language="german", level="b1", level_source="stated",
+            active=True, created_at=now, updated_at=now,
+        ))
+
+        def _make_session(sid, module, task_label, errors, days_ago, status="completed", minutes=30.0):
+            dt = now - timedelta(days=days_ago)
+            return SessionLog(
+                user_id=user_id, session_id=sid, language="german", module=module,
+                task_label=task_label, task_description="", comment="", errors=errors,
+                level="b1", date=dt, file_path=f"p/{sid}.yaml", status=status,
+                started_at=dt, completed_at=dt if status == "completed" else None,
+                duration_minutes=minutes,
+            )
+
+        store.write_session(_make_session("s1", "writing", "daily_routine", [
+            {"error_tag": "dative_case", "fragment": "f", "explanation": "e"},
+            {"error_tag": "word_order",  "fragment": "f", "explanation": "e"},
+        ], days_ago=5))
+        store.write_session(_make_session("s2", "writing", "holiday_trip", [
+            {"error_tag": "dative_case", "fragment": "f", "explanation": "e"},
+        ], days_ago=2))
+        store.write_session(_make_session("s3", "grammar", "adjective_endings", [], days_ago=1))
+        store.write_session(_make_session("s4", "writing", "pending", [], days_ago=0, status="in_progress"))
+
+        store.write_vocab_flag(VocabFlag(
+            flag_id="v1", user_id=user_id, language="german", word="buch", translation="book",
+            source="btw", first_seen=now, last_seen=now, occurrence_count=1,
+        ))
+        store.write_vocab_flag(VocabFlag(
+            flag_id="v2", user_id=user_id, language="german", word="haus", translation="house",
+            source="btw", first_seen=now, last_seen=now, occurrence_count=1,
+        ))
+
+        agg = store.get_session_aggregate(user_id, "german")
+
+        assert agg.sessions_by_module == {"writing": 2, "grammar": 1}
+        assert agg.total_time_by_module["writing"] == pytest.approx(60.0)
+        assert agg.total_time_by_module["grammar"] == pytest.approx(30.0)
+        assert agg.days_since_module["writing"] == pytest.approx(2.0, abs=0.1)
+        assert agg.days_since_module["grammar"] == pytest.approx(1.0, abs=0.1)
+        assert agg.recurring_errors == ["dative_case"]   # freq=2; word_order freq=1 excluded
+        assert agg.recent_topics == ["holiday_trip", "daily_routine"]
+        assert agg.vocab_flag_count == 2
+    finally:
+        shutil.rmtree(temp_dir)
+
+
 def test_pydantic_contract_validation():
     from pydantic import ValidationError
     

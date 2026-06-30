@@ -4,6 +4,7 @@ import yaml
 from datetime import datetime
 from memory.protocols import (
     BaseSessionStore,
+    SessionAggregate,
     SessionLog,
     BtwEntry,
     VocabFlag,
@@ -238,6 +239,60 @@ class SQLiteSessionStore(BaseSessionStore):
                 (user_id, language, module, n)
             ).fetchall()
             return [r["task_label"] for r in rows]
+        finally:
+            conn.close()
+
+    def get_session_aggregate(self, user_id: str, language: str) -> SessionAggregate:
+        conn = self._get_conn()
+        try:
+            now = datetime.now()
+            rows = conn.execute(
+                """
+                SELECT module,
+                       COUNT(*) AS count,
+                       MAX(completed_at) AS last_completed,
+                       SUM(duration_minutes) AS total_minutes
+                FROM sessions
+                WHERE user_id = ? AND language = ? AND status = 'completed'
+                GROUP BY module
+                """,
+                (user_id, language),
+            ).fetchall()
+
+            sessions_by_module: dict[str, int] = {}
+            days_since_module: dict[str, float] = {}
+            total_time_by_module: dict[str, float] = {}
+            for r in rows:
+                mod = r["module"]
+                sessions_by_module[mod] = r["count"]
+                total_time_by_module[mod] = float(r["total_minutes"] or 0)
+                last_dt = self._str_to_dt(r["last_completed"])
+                if last_dt:
+                    days_since_module[mod] = (now - last_dt).total_seconds() / 86400.0
+
+            error_freq = self.get_error_frequency(user_id, language)
+            recurring_errors = [
+                tag
+                for tag, freq in sorted(error_freq.items(), key=lambda x: -x[1])
+                if freq >= 2
+            ]
+
+            recent_topics = self.get_recent_topics(user_id, language, module="writing", n=5)
+
+            vocab_row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM vocab_flags WHERE user_id = ? AND language = ?",
+                (user_id, language),
+            ).fetchone()
+            vocab_flag_count = vocab_row["cnt"] if vocab_row else 0
+
+            return SessionAggregate(
+                sessions_by_module=sessions_by_module,
+                days_since_module=days_since_module,
+                total_time_by_module=total_time_by_module,
+                recurring_errors=recurring_errors,
+                recent_topics=recent_topics,
+                vocab_flag_count=vocab_flag_count,
+            )
         finally:
             conn.close()
 
