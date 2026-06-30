@@ -64,7 +64,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ### Session History Aggregation
 - [x] [ ] [ ] `storage.get_session_aggregate()` — structured profile: sessions by skill, recency, recurring errors, recent topics, vocab flag count
-- [ ] [ ] [ ] Convert progress summary logic into `skills/summarize_progress/` (LLM-driven aggregation & analysis)
+- [x] [ ] [ ] Convert progress summary logic into `skills/summarize_progress/` (LLM-driven aggregation & analysis)
 - [ ] [ ] [ ] Orchestrator uses `summarize_progress` skill to build progress summary
 - [ ] [ ] [ ] `WritingModule.context_request()` — return full `ContextRequest` (recent 5 writing sessions, error frequency, recent topics, vocab flags)
 - [ ] [ ] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
