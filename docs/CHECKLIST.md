@@ -32,17 +32,8 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ---
 
-## Orchestrator Refactor (post-1b)
-
-- [ ] [ ] [ ] Move `WritingModule._print_evaluation()` to `ui/` layer (blocked on `IOHandler` — see Layer 1c); method already has a comment noting this
-
----
-
 ## Layer 1c — Local Frontend
 
-- [ ] [ ] [ ] Move evaluation rendering out of `WritingModule._print_evaluation()` into `TerminalIOHandler` — module returns structured data only
-- [ ] [ ] [ ] Move `SessionTimer` display into `TerminalIOHandler`; add timer widget in web UI
-- [ ] [ ] [ ] Manual test: complete full session via browser, verify session file renders correctly
 
 ---
 

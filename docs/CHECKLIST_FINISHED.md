@@ -225,6 +225,13 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 
 ---
 
+## Orchestrator Refactor (post-1b)
+
+- [x] [x] [ ] Move `WritingModule._print_evaluation()` to `IOHandler` layer — `TerminalIOHandler.render_evaluation(data)` handles terminal formatting; `WebIOHandler.render_evaluation(data)` emits SSE event; removes `hasattr(io, "data")` guard
+- [x] [x] [ ] Move `SessionTimer` into `TerminalIOHandler.start_timer/stop_timer`; `WebIOHandler` stubs are no-ops (JS manages web timer)
+
+---
+
 ## Layer 1c — Local Frontend
 
 - [x] [x] [ ] Choose framework — Flask
@@ -238,6 +245,7 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
   - [x] [x] [ ] `/session/{session_id}` — individual session view
   - [x] [x] [ ] Thin JS for multi-line text input and SSE streaming display
 - [x] [x] [ ] Verify runs locally on `localhost` with no external dependencies
+- [x] [x] [ ] Manual test: complete full session via browser, verify session file renders correctly
 
 ---
 
