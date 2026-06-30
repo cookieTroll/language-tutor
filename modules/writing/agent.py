@@ -1,3 +1,5 @@
+import json
+import os
 import uuid
 from datetime import datetime
 from modules.protocols import ModuleProtocol, ContextRequest, ModuleContext, ModuleResult, WritingPrompt
@@ -61,10 +63,31 @@ class WritingModule(ModuleProtocol):
         completed_at = datetime.now()
         duration_minutes = (completed_at - started_at).total_seconds() / 60.0
 
-        io.output("\n[*] Evaluating your text. Please wait...")
         user_text = "\n".join(user_lines)
-        pipeline = self._pipeline.run(ctx, user_text, writing_prompt, min_words, llm)
+        pipeline = self._pipeline.run(
+            ctx, user_text, writing_prompt, min_words, llm, io=io,
+            enable_timing=not bool(os.environ.get("PYTEST_CURRENT_TEST")),
+        )
+        self._write_latency_log(pipeline, ctx, session_id)
         self._print_evaluation(pipeline, stated_level=ctx.level, io=io)
+
+        # Send structured evaluation data for client-side annotated view
+        if hasattr(io, "data"):
+            io.data({
+                "event": "evaluation_complete",
+                "user_text": user_text,
+                "corrected_text": pipeline.corrected_text,
+                "mistakes": [
+                    {
+                        "fragment":   m.get("fragment", ""),
+                        "error_tag":  m.get("error_tag", ""),
+                        "correction": m.get("correction", ""),
+                    }
+                    for m in pipeline.explained_mistakes
+                ],
+            })
+
+        self._follow_up_phase(ctx, topic, user_lines, llm, io)
 
         return self._build_results(
             ctx, session_id, wp, writing_prompt,
@@ -290,6 +313,44 @@ class WritingModule(ModuleProtocol):
             )
 
         io.output("==================================================\n")
+
+    def _follow_up_phase(
+        self, ctx: ModuleContext, topic: str, user_lines: list[str], llm: BaseLLM, io: IOHandler
+    ) -> None:
+        io.output("\n💬 Unsure about a mistake? Ask me here — or press Enter to finish.")
+        while True:
+            try:
+                line = io.prompt("> ").strip()
+            except EOFError:
+                break
+            if not line:
+                break
+            self._handle_btw(ctx, topic, user_lines, line, llm, io)
+
+    def _write_latency_log(self, pipeline, ctx: ModuleContext, session_id: str) -> None:
+        if not pipeline.step_timings:
+            return
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        log_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "data", "logs",
+        )
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "skill_latency.jsonl")
+        ts = datetime.now().isoformat(timespec="seconds")
+        with open(log_path, "a", encoding="utf-8") as f:
+            for t in pipeline.step_timings:
+                f.write(json.dumps({
+                    "timestamp":   ts,
+                    "session_id":  session_id[:8],
+                    "user_id":     ctx.user_id,
+                    "language":    ctx.language,
+                    "level":       ctx.level,
+                    "step":        t.step,
+                    "skill":       t.skill,
+                    "duration_s":  t.duration_s,
+                }) + "\n")
 
     def _build_results(
         self,
