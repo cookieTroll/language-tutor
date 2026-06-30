@@ -10,26 +10,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ---
 
-## PoC
-
-### Memory — Storage Layer (remaining)
-- [x] [x] [ ] `memory/sqlite_store.py` — remaining methods:
-  - [x] [ ] [ ] `get_sessions_by_skill()`
-  - [x] [ ] [ ] `get_error_frequency()`
-  - [x] [ ] [ ] `get_recent_topics()`
-  - [x] [ ] [ ] `get_current_level()` — most recent row from `user_levels`
-  - [x] [ ] [ ] `write_level()`
-
----
-
 ## Layer 1a — Full Evaluator Pipeline
-
-### Steps 1–4 — Judges
-- [x] [ ] [ ] `tests/judge/judge_detect_mistakes.py` — judge for Step 1 (fragment detection only)
-- [x] [ ] [ ] `tests/judge/judge_classify_mistakes.py` — judge for Step 2 (error_tag accuracy)
-- [x] [ ] [ ] `tests/judge/judge_explain_mistakes.py` — judge for Step 3 (explanation quality, semantic)
-- [x] [x] [ ] `tests/judge/judge_write_correction.py` — judge for Step 4 (corrected_text vs expected)
-- [ ] [ ] [ ] Run each judge 5× on same fixture; verify variance is acceptable; document threshold
 
 ### Design Research — Error Taxonomy & Feedback Rubrics
 > Outputs feed into `lang/maps/taxonomy/`, `lang/maps/cefr_descriptors/`, and evaluator prompts.
@@ -42,9 +23,6 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [ ] [ ] [ ] Define per-tag CEFR mastery level — the level at which each error type is expected to be mastered; drives Step 6 severity (`critical` / `expected` / `minor`)
 - [ ] [ ] [ ] Evaluate whether taxonomy tags surface to the user directly or are mapped to learner-friendly labels in the UI layer
 
-### Steps 5–6 — Judges
-- [x] [x] [ ] `tests/judge/judge_summary.py` — judge for Step 6 output (severity accuracy, tip relevance)
-
 ### Fluency & Idiomatics (deferred — depends on Layer 1a rubric decisions)
 - [ ] [ ] [ ] Define scope: what counts as an idiomatic issue vs a grammar error; which CEFR levels activate this check (suggest B1+)
 - [ ] [ ] [ ] `skills/fluency_checker/skill.py` — runs after Step 4 (write_correction); flags unnatural phrasing with natural alternatives; output is a list of `{fragment, suggestion, note}` distinct from `mistakes[]`
@@ -56,30 +34,24 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ## Layer 1b — User Personalization + Topic Picker
 
-### User Level Review
-- [x] [x] [ ] On startup (or via `/level` CLI command), display current CEFR level from `user_levels` table
-- [x] [x] [ ] Prompt user to confirm or override — write override to `user_levels` with `source='stated'`
-- [x] [x] [ ] `config.yaml` default level used only if no row exists in `user_levels`
-- [x] [x] [ ] Unit test: stated level overrides config default; most recent row returned by `get_current_level()`
-
 ### Session History Aggregation
-- [x] [ ] [ ] `storage.get_session_aggregate()` — structured profile: sessions by skill, recency, recurring errors, recent topics, vocab flag count
-- [x] [ ] [ ] Convert progress summary logic into `skills/summarize_progress/` (LLM-driven aggregation & analysis)
-- [ ] [ ] [ ] Orchestrator uses `summarize_progress` skill to build progress summary
-- [ ] [ ] [ ] `WritingModule.context_request()` — return full `ContextRequest` (recent 5 writing sessions, error frequency, recent topics, vocab flags)
-- [ ] [ ] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
+- [x] [x] [ ] `storage.get_session_aggregate()` — structured profile: sessions by skill, recency, recurring errors, recent topics, vocab flag count
+- [x] [x] [ ] Convert progress summary logic into `skills/summarize_progress/` (LLM-driven aggregation & analysis)
+- [x] [x] [ ] Orchestrator uses `summarize_progress` skill to build progress summary
+- [x] [x] [ ] `WritingModule.context_request()` — return full `ContextRequest` (recent 5 writing sessions, error frequency, recent topics, vocab flags)
+- [x] [x] [ ] Topic picker receives and uses all three (avoid recent topics, steer toward weak grammar, avoid flagged vocab)
 - [ ] [ ] [ ] Evaluator Step 1 prompt primed with recurring errors from context
-- [ ] [ ] [ ] `suggested_focus` recorded in session file for traceability
-- [x] [ ] [ ] Unit test: aggregate computed correctly from mixed session history
+- [x] [x] [ ] `suggested_focus` recorded in session file for traceability
+- [x] [x] [ ] Unit test: aggregate computed correctly from mixed session history
 
 ### Topic Picker + Orchestrator LLM Routing
-- [ ] [ ] [ ] `modules/writing/topic_picker.py` — takes level, `suggested_focus`, `recent_topics`; returns `WritingPrompt` dataclass; user can bypass with own topic
+- [x] [x] [ ] `skills/topic_picker/` — takes level, `suggested_focus`, `recent_topics`; returns `WritingPrompt` dataclass; user can bypass with own topic
 - [ ] [ ] [ ] `orchestrator/prompts.py` — progress summary prompt + recommendation prompt
-- [ ] [ ] [ ] `Orchestrator.summarize_progress()` — LLM call when sessions >= threshold; validate `weakest_skill` against `MODULE_REGISTRY.keys()`
-- [ ] [ ] [ ] `Orchestrator.recommend_exercise()` — LLM call over progress summary; validate `skill` field against registry
+- [x] [x] [ ] `Orchestrator.summarize_progress()` — LLM call when sessions >= threshold; validate `weakest_skill` against `MODULE_REGISTRY.keys()`
+- [x] [x] [ ] `Orchestrator.recommend_exercise()` — LLM call over progress summary; validate `skill` field against registry
 - [ ] [ ] [ ] `tests/fixtures/orchestrator_cases.json` — 3–5 session history scenarios with expected recommendations
-- [x] [ ] [ ] `tests/judge/judge_orchestrator.py` — judge for orchestrator recommendation quality
-- [ ] [ ] [ ] Update CLI to display recommendation reason and suggested focus
+- [x] [x] [ ] `tests/judge/judge_orchestrator.py` — judge for orchestrator recommendation quality
+- [x] [x] [ ] Update CLI to display recommendation reason and suggested focus
 
 ---
 

@@ -161,3 +161,35 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 - [x] [x] [ ] Update `_PipelineResult`; update `_print_evaluation()` to display severity-grouped mistakes and tips
 - [x] [x] [ ] Wire Steps 5–6 into `WritingModule._run_pipeline()`
 - [x] [x] [ ] Unit tests for Steps 5 and 6 (mocked LLM)
+
+### Steps 1–4 — Judges
+- [x] [x] [ ] `tests/judge/judge_detect_mistakes.py` — judge for Step 1 (fragment detection only)
+- [x] [x] [ ] `tests/judge/judge_classify_mistakes.py` — judge for Step 2 (error_tag accuracy)
+- [x] [x] [ ] `tests/judge/judge_explain_mistakes.py` — judge for Step 3 (explanation quality, semantic)
+- [x] [x] [ ] `tests/judge/judge_write_correction.py` — judge for Step 4 (corrected_text vs expected)
+- [x] [x] [ ] Run each judge 5× on same fixture; verify variance is acceptable; document threshold
+
+### Steps 5–6 — Judges
+- [x] [x] [ ] `tests/judge/judge_summary.py` — judge for Step 6 output (severity accuracy, tip relevance)
+
+---
+
+## PoC — Storage Layer (remaining)
+
+### Memory — Storage Layer (remaining)
+- [x] [x] [ ] `memory/sqlite_store.py` — remaining methods:
+  - [x] [x] [ ] `get_sessions_by_skill()`
+  - [x] [x] [ ] `get_error_frequency()`
+  - [x] [x] [ ] `get_recent_topics()`
+  - [x] [x] [ ] `get_current_level()` — most recent row from `user_levels`
+  - [x] [x] [ ] `write_level()`
+
+---
+
+## Layer 1b — User Personalization + Topic Picker
+
+### User Level Review
+- [x] [x] [ ] On startup (or via `/level` CLI command), display current CEFR level from `user_levels` table
+- [x] [x] [ ] Prompt user to confirm or override — write override to `user_levels` with `source='stated'`
+- [x] [x] [ ] `config.yaml` default level used only if no row exists in `user_levels`
+- [x] [x] [ ] Unit test: stated level overrides config default; most recent row returned by `get_current_level()`
