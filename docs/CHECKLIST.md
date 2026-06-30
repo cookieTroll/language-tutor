@@ -38,11 +38,6 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ## Orchestrator Refactor (post-1b)
 
-- [ ] [ ] [ ] Extract `SessionManager(store, config)` — absorbs `_init_write_ahead_log`, `_build_module_context`, `_finalize_session`; `Orchestrator.run_session` delegates to it
-- [ ] [ ] [ ] Break up `_handle_interruption` — currently mixes console I/O, LLM summarisation, checkpoint cleanup, and DB updates in one method; separate concerns into named steps
-- [ ] [ ] [ ] Split `StorageProtocol` into domain-specific sub-protocols: `SessionStore`, `LevelStore`, `BtwLogStore`, `VocabStore`, `ProfileStore` — 23-method kitchen-sink interface cascades bloat to every implementation
-- [ ] [ ] [ ] Add `_hydrate_session_log(row) -> SessionLog` helper to `SQLiteSessionStore` — `SessionLog` reconstruction is duplicated ~5 times across query methods
-- [ ] [ ] [ ] Extract `WritingPipeline` class from `WritingModule._run_pipeline()` — 114-line method sequencing 6 skill calls with error routing and metadata threading; should be its own unit
 - [ ] [ ] [ ] Move `WritingModule._print_evaluation()` to `ui/` layer (blocked on `IOHandler` — see Layer 1c); method already has a comment noting this
 
 ---
@@ -103,6 +98,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ## Layer 3a — Vocab Skill
 
+- [ ] [ ] [ ] `/add_vocab <word>` CLI command — lets user manually flag a word mid-session; module appends it to `vocab_signals` in `ModuleResult.metadata` (same path as `/btw`-flagged words); `SessionManager.finalize_session` then calls `write_vocab_flag()` — module stays storage-free, memory boundary stays in orchestrator
 - [ ] [ ] [ ] `modules/vocab/word_lists/greetings.yaml` — word, translation, example, difficulty
 - [ ] [ ] [ ] `modules/vocab/word_lists/daily_routine.yaml`
 - [ ] [ ] [ ] (Optional) `modules/vocab/word_lists/food.yaml`

@@ -212,3 +212,13 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 - [x] [x] [ ] `tests/fixtures/orchestrator_cases.json` — 4 session history scenarios with expected module and focus
 - [x] [x] [ ] `tests/judge/judge_orchestrator.py` — judge for orchestrator recommendation quality (4/4 PASS)
 - [x] [x] [ ] Update CLI to display recommendation reason and suggested focus
+
+---
+
+## Orchestrator Refactor (post-1b)
+
+- [x] [x] [ ] Extract `SessionManager(store, config)` — absorbs `_init_write_ahead_log`, `_build_module_context`, `_finalize_session`; `Orchestrator.run_session` delegates to it
+- [x] [x] [ ] Break up `_handle_interruption` — currently mixes console I/O, LLM summarisation, checkpoint cleanup, and DB updates in one method; separate concerns into named steps
+- [x] [x] [ ] Split `StorageProtocol` into domain-specific sub-protocols: `SessionStore`, `LevelStore`, `BtwLogStore`, `VocabStore`, `ProfileStore` — 23-method kitchen-sink interface cascades bloat to every implementation
+- [x] [x] [ ] Add `_hydrate_session_log(row) -> SessionLog` helper to `SQLiteSessionStore` — `SessionLog` reconstruction is duplicated ~5 times across query methods
+- [x] [x] [ ] Extract `WritingPipeline` class from `WritingModule._run_pipeline()` — 114-line method sequencing 6 skill calls with error routing and metadata threading; should be its own unit
