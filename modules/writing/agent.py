@@ -339,18 +339,18 @@ class WritingModule(ModuleProtocol):
         os.makedirs(log_dir, exist_ok=True)
         log_path = os.path.join(log_dir, "skill_latency.jsonl")
         ts = datetime.now().isoformat(timespec="seconds")
+        base = {
+            "timestamp":  ts,
+            "session_id": session_id[:8],
+            "user_id":    ctx.user_id,
+            "language":   ctx.language,
+            "level":      ctx.level,
+        }
         with open(log_path, "a", encoding="utf-8") as f:
             for t in pipeline.step_timings:
-                f.write(json.dumps({
-                    "timestamp":   ts,
-                    "session_id":  session_id[:8],
-                    "user_id":     ctx.user_id,
-                    "language":    ctx.language,
-                    "level":       ctx.level,
-                    "step":        t.step,
-                    "skill":       t.skill,
-                    "duration_s":  t.duration_s,
-                }) + "\n")
+                f.write(json.dumps({**base, "step": t.step, "skill": t.skill, "duration_s": t.duration_s}) + "\n")
+            if pipeline.total_wall_s is not None:
+                f.write(json.dumps({**base, "step": "total", "skill": "pipeline", "duration_s": pipeline.total_wall_s}) + "\n")
 
     def _build_results(
         self,

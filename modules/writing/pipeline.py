@@ -1,3 +1,5 @@
+import concurrent.futures
+import threading
 import time
 from dataclasses import dataclass, field
 from llm.base import BaseLLM
@@ -23,6 +25,7 @@ class PipelineResult:
     text_level_estimate: str | None = None
     comparison_note: str | None = None
     step_timings: list[StepTiming] = field(default_factory=list)
+    total_wall_s: float | None = None
 
 
 class WritingPipeline:
@@ -79,32 +82,37 @@ class WritingPipeline:
                 io.output(msg)
 
         timings: list[StepTiming] = []
+        _lock = threading.Lock()
+        _wall_start = time.perf_counter()
 
         def _timed(step: int, skill_name: str, skill_input: SkillInput):
             if not enable_timing:
                 return self.skills[skill_name].run(skill_input, llm)
             t0 = time.perf_counter()
             result = self.skills[skill_name].run(skill_input, llm)
-            timings.append(StepTiming(step=step, skill=skill_name, duration_s=round(time.perf_counter() - t0, 3)))
+            with _lock:
+                timings.append(StepTiming(step=step, skill=skill_name, duration_s=round(time.perf_counter() - t0, 3)))
             return result
 
-        # Step 5: estimate text CEFR level — independent of error pipeline, run first
+        # Steps 1 + 2 in parallel — both only need user_text/writing_prompt
         _progress("[1/6] Estimating text level…")
-        level_output = _timed(1, "estimate_text_level", SkillInput(
-            user_id=ctx.user_id, level=ctx.level,
-            parameters={"user_text": user_text, "writing_prompt": writing_prompt, "language": ctx.language},
-        ))
+        _progress("[2/6] Detecting mistakes…")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            f1 = ex.submit(_timed, 1, "estimate_text_level", SkillInput(
+                user_id=ctx.user_id, level=ctx.level,
+                parameters={"user_text": user_text, "writing_prompt": writing_prompt, "language": ctx.language},
+            ))
+            f2 = ex.submit(_timed, 2, "detect_mistakes", SkillInput(
+                user_id=ctx.user_id, level=ctx.level,
+                parameters={
+                    "user_text": user_text, "writing_prompt": writing_prompt,
+                    "recurring_errors": list(ctx.error_frequency.keys()), "language": ctx.language,
+                },
+            ))
+        level_output    = f1.result()
+        detector_output = f2.result()
         text_level_estimate = level_output.metadata.get("text_level_estimate")
 
-        # Step 1: detect raw mistakes
-        _progress("[2/6] Detecting mistakes…")
-        detector_output = _timed(2, "detect_mistakes", SkillInput(
-            user_id=ctx.user_id, level=ctx.level,
-            parameters={
-                "user_text": user_text, "writing_prompt": writing_prompt,
-                "recurring_errors": list(ctx.error_frequency.keys()), "language": ctx.language,
-            },
-        ))
         if not detector_output.success:
             return PipelineResult(
                 detector_success=False,
@@ -115,10 +123,11 @@ class WritingPipeline:
                 session_summary="",
                 text_level_estimate=text_level_estimate,
                 step_timings=timings,
+                total_wall_s=round(time.perf_counter() - _wall_start, 3) if enable_timing else None,
             )
         raw_mistakes = detector_output.metadata.get("raw_mistakes", [])
 
-        # Step 2: classify against taxonomy
+        # Step 3: classify against taxonomy
         _progress("[3/6] Classifying mistakes…")
         classify_output = _timed(3, "classify_mistakes", SkillInput(
             user_id=ctx.user_id, level=ctx.level,
@@ -126,7 +135,7 @@ class WritingPipeline:
         ))
         classified_mistakes = classify_output.metadata.get("classified_mistakes", [])
 
-        # Step 3: add pedagogical explanations
+        # Step 4: add pedagogical explanations
         _progress("[4/6] Adding explanations…")
         explain_output = _timed(4, "explain_mistakes", SkillInput(
             user_id=ctx.user_id, level=ctx.level,
@@ -134,28 +143,28 @@ class WritingPipeline:
         ))
         explained_mistakes = explain_output.metadata.get("explained_mistakes", [])
 
-        # Step 4: write corrected text
+        # Steps 5 + 6 in parallel — both only need explained_mistakes from step 4
         _progress("[5/6] Writing corrected version…")
-        correction_output = _timed(5, "write_correction", SkillInput(
-            user_id=ctx.user_id, level=ctx.level,
-            parameters={"user_text": user_text, "explained_mistakes": explained_mistakes, "language": ctx.language},
-        ))
-        corrected_text = correction_output.metadata.get("corrected_text", user_text)
-
-        # Step 6: enrich mistakes with severity, generate summary and tips
         _progress("[6/6] Generating summary and tips…")
-        summary_output = _timed(6, "summarise_writing_session", SkillInput(
-            user_id=ctx.user_id,
-            level=ctx.level,
-            parameters={
-                "user_text": user_text,
-                "explained_mistakes": explained_mistakes,
-                "text_level_estimate": text_level_estimate,
-                "writing_prompt": writing_prompt,
-                "min_words": min_words,
-                "language": ctx.language,
-            },
-        ))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            f5 = ex.submit(_timed, 5, "write_correction", SkillInput(
+                user_id=ctx.user_id, level=ctx.level,
+                parameters={"user_text": user_text, "explained_mistakes": explained_mistakes, "language": ctx.language},
+            ))
+            f6 = ex.submit(_timed, 6, "summarise_writing_session", SkillInput(
+                user_id=ctx.user_id, level=ctx.level,
+                parameters={
+                    "user_text": user_text,
+                    "explained_mistakes": explained_mistakes,
+                    "text_level_estimate": text_level_estimate,
+                    "writing_prompt": writing_prompt,
+                    "min_words": min_words,
+                    "language": ctx.language,
+                },
+            ))
+        correction_output = f5.result()
+        summary_output    = f6.result()
+        corrected_text = correction_output.metadata.get("corrected_text", user_text)
         return PipelineResult(
             detector_success=True,
             detector_error="",
@@ -166,4 +175,5 @@ class WritingPipeline:
             text_level_estimate=text_level_estimate,
             comparison_note=summary_output.metadata.get("comparison_note"),
             step_timings=timings,
+            total_wall_s=round(time.perf_counter() - _wall_start, 3) if enable_timing else None,
         )
