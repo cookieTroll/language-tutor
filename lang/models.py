@@ -86,6 +86,24 @@ class CEFRDescriptorMap(BaseModel):
         return "\n".join(lines)
 
 
+class WritingMinWordsMap(BaseModel):
+    """Minimum word count per CEFR level for writing sessions.
+
+    Loaded from lang/maps/writing_word_ranges/*.yaml.
+    Each field is the minimum word count expected at that level.
+    """
+
+    a1: int = 40
+    a2: int = 60
+    b1: int = 100
+    b2: int = 150
+    c1: int = 200
+    c2: int = 250
+
+    def get(self, level: str) -> int:
+        return getattr(self, level.lower(), self.b1)
+
+
 class LanguageConfig(BaseModel):
     """Top-level language config — maps learning concepts to versioned content maps.
 
@@ -98,3 +116,4 @@ class LanguageConfig(BaseModel):
     cefr_hints: str              # → lang/maps/cefr/{cefr_hints}.yaml
     taxonomy: str                # → lang/maps/taxonomy/{taxonomy}.yaml
     cefr_descriptors: str = "default"  # → lang/maps/cefr_descriptors/{cefr_descriptors}.yaml
+    writing_word_ranges: str = "default"  # → lang/maps/writing_word_ranges/{name}.yaml

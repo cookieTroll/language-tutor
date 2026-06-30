@@ -1,0 +1,10 @@
+# Minimum word count per CEFR level for a single writing session.
+# Language-agnostic fallback — create a language-specific file and reference it
+# in lang/languages/{language}.yaml to override for a particular language.
+
+a1: 40
+a2: 60
+b1: 100
+b2: 150
+c1: 200
+c2: 250

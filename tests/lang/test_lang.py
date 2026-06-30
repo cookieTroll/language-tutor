@@ -37,6 +37,9 @@ def _minimal_registry(tmp_path: Path) -> _Registry:
     _write_yaml(tmp_path / "maps/cefr_descriptors/default.yaml", {
         "a1": "Very basic phrases.", "b1": "Connected text.", "default": "Assess writing."
     })
+    _write_yaml(tmp_path / "maps/writing_word_ranges/default.yaml", {
+        "a1": 40, "a2": 60, "b1": 100, "b2": 150, "c1": 200, "c2": 250
+    })
     _write_yaml(tmp_path / "languages/testlang.yaml", {
         "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1"
     })

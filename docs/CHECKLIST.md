@@ -43,7 +43,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [ ] [ ] [ ] Evaluate whether taxonomy tags surface to the user directly or are mapped to learner-friendly labels in the UI layer
 
 ### Steps 5–6 — Judges
-- [ ] [ ] [ ] `tests/judge/judge_summary.py` — judge for Step 6 output (severity accuracy, tip relevance)
+- [x] [x] [ ] `tests/judge/judge_summary.py` — judge for Step 6 output (severity accuracy, tip relevance)
 
 ### Fluency & Idiomatics (deferred — depends on Layer 1a rubric decisions)
 - [ ] [ ] [ ] Define scope: what counts as an idiomatic issue vs a grammar error; which CEFR levels activate this check (suggest B1+)

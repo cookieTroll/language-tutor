@@ -4,6 +4,14 @@ from pydantic import BaseModel
 from llm.base import BaseLLM
 from memory.protocols import SessionFileContent
 
+class WritingPrompt(BaseModel):
+    """Exercise specification returned by topic_picker and consumed by WritingModule."""
+    topic: str
+    requirements: str
+    min_words: int
+    suggested_focus: str | None = None
+
+
 class ContextRequest(BaseModel):
     """Declares what a module needs from memory. Orchestrator fulfills it."""
     recent_sessions_n: int = 5

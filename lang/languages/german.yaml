@@ -7,3 +7,4 @@ name: german
 cefr_hints: cefr_map1          # → lang/maps/cefr/cefr_map1.yaml
 taxonomy: german_taxonomy_v1   # → lang/maps/taxonomy/german_taxonomy_v1.yaml
 cefr_descriptors: default      # → lang/maps/cefr_descriptors/default.yaml
+writing_word_ranges: default   # → lang/maps/writing_word_ranges/default.yaml

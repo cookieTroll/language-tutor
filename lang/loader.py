@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from lang.models import CEFRDescriptorMap, CEFRMap, LanguageConfig, TaxonomyMap
+from lang.models import CEFRDescriptorMap, CEFRMap, LanguageConfig, TaxonomyMap, WritingMinWordsMap
 
 _LANG_DIR = Path(__file__).parent
 _MAPS_DIR = _LANG_DIR / "maps"
@@ -24,6 +24,7 @@ class _Registry:
         self._cefr_maps: dict[str, CEFRMap] = {}
         self._taxonomy_maps: dict[str, TaxonomyMap] = {}
         self._cefr_descriptor_maps: dict[str, CEFRDescriptorMap] = {}
+        self._writing_min_words_maps: dict[str, WritingMinWordsMap] = {}
         self._languages: dict[str, LanguageConfig] = {}
         self._load()
 
@@ -39,6 +40,10 @@ class _Registry:
         for path in (self._maps_dir / "cefr_descriptors").glob("*.yaml"):
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
             self._cefr_descriptor_maps[path.stem] = CEFRDescriptorMap.model_validate(data)
+
+        for path in (self._maps_dir / "writing_word_ranges").glob("*.yaml"):
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            self._writing_min_words_maps[path.stem] = WritingMinWordsMap.model_validate(data)
 
         for path in self._languages_dir.glob("*.yaml"):
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -61,6 +66,11 @@ class _Registry:
             raise ValueError(
                 f"Language '{config.name}' references unknown cefr_descriptors map "
                 f"'{config.cefr_descriptors}'. Available: {sorted(self._cefr_descriptor_maps)}"
+            )
+        if config.writing_word_ranges not in self._writing_min_words_maps:
+            raise ValueError(
+                f"Language '{config.name}' references unknown writing_word_ranges map "
+                f"'{config.writing_word_ranges}'. Available: {sorted(self._writing_min_words_maps)}"
             )
 
     def is_default(self, language: str) -> dict[str, bool]:
@@ -85,6 +95,17 @@ class _Registry:
         config = self._languages.get(language.lower())
         map_name = config.taxonomy if config else "default"
         return self._taxonomy_maps.get(map_name) or self._taxonomy_maps.get("default")
+
+    def get_writing_min_words(self, language: str, level: str) -> int:
+        config = self._languages.get(language.lower())
+        map_name = config.writing_word_ranges if config else "default"
+        wmap = (
+            self._writing_min_words_maps.get(map_name)
+            or self._writing_min_words_maps.get("default")
+        )
+        if wmap is None:
+            return 100
+        return wmap.get(level)
 
     def get_cefr_descriptors(self, language: str) -> str:
         config = self._languages.get(language.lower())
@@ -114,6 +135,11 @@ def get_taxonomy(language: str) -> TaxonomyMap | None:
 def get_cefr_descriptors(language: str) -> str:
     """Return formatted CEFR level descriptions for the given language, for prompt injection."""
     return _registry.get_cefr_descriptors(language)
+
+
+def get_writing_min_words(language: str, level: str) -> int:
+    """Return the minimum word count for a writing session at the given CEFR level."""
+    return _registry.get_writing_min_words(language, level)
 
 
 def using_defaults(language: str) -> dict[str, bool]:

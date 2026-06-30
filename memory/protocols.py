@@ -112,6 +112,16 @@ class UserProfile(BaseModel):
             raise ValueError(f"Invalid CEFR level: '{v}'. Allowed: {valid_levels}")
         return v.lower()
 
+class SessionAggregate(BaseModel):
+    """Aggregated session profile for a (user, language) pair. Used by progress summariser."""
+    sessions_by_module: dict[str, int]      # module → completed session count
+    days_since_module: dict[str, float]     # module → days since last completed session
+    total_time_by_module: dict[str, float]  # module → total minutes
+    recurring_errors: list[str]             # error tags with freq >= 2, sorted by freq desc
+    recent_topics: list[str]               # last 5 writing task_labels
+    vocab_flag_count: int
+
+
 class StorageProtocol(Protocol):
     # Session lifecycle
     def write_session(self, log: SessionLog) -> None: ...
@@ -125,6 +135,10 @@ class StorageProtocol(Protocol):
     def get_sessions_by_module(self, user_id: str, language: str, module: str) -> list[SessionLog]: ...
     def get_error_frequency(self, user_id: str, language: str, module: str | None = None) -> dict[str, int]: ...
     def get_recent_topics(self, user_id: str, language: str, module: str, n: int = 5) -> list[str]: ...
+    def get_session_aggregate(self, user_id: str, language: str) -> "SessionAggregate":
+        """Return a structured profile bundling session counts, error frequency, topics, and vocab flags."""
+        ...
+
     def get_interrupted_sessions(self, user_id: str, timeout_minutes: int) -> list[SessionLog]:
         """Not language-scoped — surface all interrupted sessions regardless of language."""
         ...
