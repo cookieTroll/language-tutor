@@ -6,15 +6,18 @@ from llm.base import BaseLLM, LLMResponse, LLMMessage
 from memory.protocols import BtwEntry
 from skills.btw_handler.skill import BtwHandlerSkill
 from skills.protocols import SkillInput
+from shared.io import TerminalIOHandler
 
-@patch("modules.writing.agent.input")
-def test_writing_module_run(mock_input):
+def test_writing_module_run():
     # Simulate user interaction inside the module's input loop:
     # 1. Write first sentence
     # 2. Ask a vocabulary question mid-session via /btw (regex extracts "aufstehen")
     # 3. Write second sentence
     # 4. Press Enter (empty line) to submit and finish
-    mock_input.side_effect = [
+    from shared.io import IOHandler
+    mock_io = MagicMock(spec=IOHandler)
+    mock_io.show_cli_hints = True
+    mock_io.prompt.side_effect = [
         "Mein Morgen",                        # user provides own topic → no LLM call for topic
         "Ich aufstehen um 7 Uhr.",
         "/btw what does aufstehen mean?",
@@ -76,7 +79,7 @@ def test_writing_module_run(mock_input):
     )
 
     module = WritingModule()
-    result, session_content = module.run(ctx, llm)
+    result, session_content = module.run(ctx, llm, mock_io)
 
     # Core module result assertions
     assert result.module == "writing"

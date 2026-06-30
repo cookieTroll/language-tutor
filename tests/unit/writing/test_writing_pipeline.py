@@ -7,6 +7,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from llm.base import BaseLLM, LLMResponse
+from modules.protocols import ModuleContext
 from skills.protocols import SkillInput
 
 
@@ -301,16 +302,18 @@ class TestEstimateTextLevelSkill:
 
 class TestFullPipeline:
 
-    @patch("modules.writing.agent.input")
-    def test_full_pipeline_populates_session_content(self, mock_input):
+    def test_full_pipeline_populates_session_content(self):
         """
-        Run WritingModule.run() with mocked input and mocked LLM responses for
-        all 4 pipeline steps. Verify WritingSessionContent has no stub values.
+        Run WritingModule.run() with mocked IOHandler and mocked LLM responses for
+        all pipeline steps. Verify WritingSessionContent has no stub values.
         """
         from modules.writing.agent import WritingModule
         from modules.protocols import ModuleContext
+        from shared.io import IOHandler
 
-        mock_input.side_effect = [
+        mock_io = MagicMock(spec=IOHandler)
+        mock_io.show_cli_hints = True
+        mock_io.prompt.side_effect = [
             "Mein Morgen",              # user provides own topic → no LLM call for topic
             "Ich aufstehen um 7 Uhr.",
             "",  # submit
@@ -380,7 +383,7 @@ class TestFullPipeline:
         )
 
         module = WritingModule()
-        result, session_content = module.run(ctx, llm)
+        result, session_content = module.run(ctx, llm, mock_io)
 
         # Verify mistakes are fully populated (not stubs)
         assert len(session_content.mistakes) == 1
@@ -536,3 +539,87 @@ class TestSummariseWritingSessionSkill:
         assert llm.complete.call_count == 1
         assert out.metadata["mistakes"] == []
         assert out.metadata["session_summary"] == "No errors — excellent work!"
+
+
+# ---------------------------------------------------------------------------
+# WritingPipeline unit tests
+# ---------------------------------------------------------------------------
+
+def _make_ctx(**kwargs) -> ModuleContext:
+    defaults = dict(
+        user_id="u1",
+        language="german",
+        level="a1",
+        recent_sessions=[],
+        error_frequency={},
+        recent_topics=[],
+        vocab_flags=[],
+        parameters={},
+    )
+    defaults.update(kwargs)
+    return ModuleContext(**defaults)
+
+
+def _make_pipeline_llm(responses: list[str]) -> MagicMock:
+    llm = MagicMock(spec=BaseLLM)
+    llm.config = MagicMock()
+    llm.config.max_skill_retries = 3
+    llm.config.show_incomplete_responses = False
+    llm.config.show_cut_by_limit_tag = True
+    llm.complete.side_effect = [LLMResponse(text=t, model="test-model") for t in responses]
+    return llm
+
+
+class TestWritingPipeline:
+
+    def test_detector_failure_short_circuits(self):
+        """If detect_mistakes fails, pipeline returns immediately with detector_success=False."""
+        from modules.writing.pipeline import WritingPipeline
+        from modules.writing.skills import get_writing_skills
+
+        # Only the estimator (short text → no LLM call) and detector run;
+        # detector returns bad JSON → fail after retries.
+        bad = "not json at all"
+        llm = _make_pipeline_llm([bad, bad, bad])
+
+        pipeline = WritingPipeline(get_writing_skills())
+        ctx = _make_ctx()
+        result = pipeline.run(ctx, "Ich bin müde.", "Describe your morning.", min_words=50, llm=llm)
+
+        assert result.detector_success is False
+        assert result.explained_mistakes == []
+        assert result.tips == []
+        assert result.session_summary == ""
+
+    def test_happy_path_returns_enriched_result(self):
+        """Full pipeline run with all skills mocked returns correct PipelineResult."""
+        from modules.writing.pipeline import WritingPipeline
+        from modules.writing.skills import get_writing_skills
+
+        user_text = " ".join(["Ich"] * 30)  # >25 words → estimator makes LLM call
+
+        resp_estimate = json.dumps({"text_level_estimate": "a2"})
+        resp_detect = json.dumps({"mistakes": [{"fragment": "foo", "error_type_hint": "bar"}]})
+        resp_classify = json.dumps({"classified": [{"fragment": "foo", "error_tag": "verb_conjugation", "correction": "baz"}]})
+        resp_explain = json.dumps({"explained": [{"fragment": "foo", "error_tag": "verb_conjugation", "correction": "baz", "explanation": "reason"}]})
+        resp_correct = json.dumps({"corrected_text": "Corrected.", "recommendations": [], "comment": ""})
+        resp_summarise = json.dumps({
+            "session_summary": "Good attempt.",
+            "mistakes": [{"fragment": "foo", "error_tag": "verb_conjugation", "correction": "baz", "explanation": "reason", "severity": "expected"}],
+            "tips": ["Keep going."],
+            "comparison_note": None,
+        })
+
+        llm = _make_pipeline_llm([resp_estimate, resp_detect, resp_classify, resp_explain, resp_correct, resp_summarise])
+        pipeline = WritingPipeline(get_writing_skills())
+        ctx = _make_ctx()
+        result = pipeline.run(ctx, user_text, "Write something.", min_words=20, llm=llm)
+
+        assert result.detector_success is True
+        assert result.text_level_estimate == "a2"
+        assert len(result.explained_mistakes) == 1
+        assert result.explained_mistakes[0]["severity"] == "expected"
+        assert result.corrected_text == "Corrected."
+        assert result.session_summary == "Good attempt."
+        assert result.tips == ["Keep going."]
+        assert result.comparison_note is None
