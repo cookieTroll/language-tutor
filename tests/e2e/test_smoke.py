@@ -29,13 +29,15 @@ def test_full_writing_session():
     #   4. confirm writing module (Enter = yes)
     #   5. one line of essay text
     #   6. empty line = submit
-    #   7. decline another session
+    #   7. empty line = exit follow-up phase
+    #   8. decline another session
     inputs = "\n".join([
         user_id,
         "german",
         "a2",
         "",
         "Ich stehe morgens um sieben Uhr auf. Dann frühstücke ich mit meiner Familie.",
+        "",
         "",
         "n",
     ]) + "\n"

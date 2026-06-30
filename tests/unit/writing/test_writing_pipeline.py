@@ -316,7 +316,8 @@ class TestFullPipeline:
         mock_io.prompt.side_effect = [
             "Mein Morgen",              # user provides own topic → no LLM call for topic
             "Ich aufstehen um 7 Uhr.",
-            "",  # submit
+            "",                         # submit writing
+            "",                         # end follow-up phase
         ]
 
         llm = MagicMock(spec=BaseLLM)

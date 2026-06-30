@@ -22,7 +22,8 @@ def test_writing_module_run():
         "Ich aufstehen um 7 Uhr.",
         "/btw what does aufstehen mean?",
         "Ich esse Fruhstuck.",
-        ""
+        "",                                   # submit writing
+        "",                                   # end follow-up phase
     ]
 
     llm = MagicMock(spec=BaseLLM)
