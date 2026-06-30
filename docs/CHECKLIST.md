@@ -78,7 +78,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [ ] [ ] [ ] `Orchestrator.summarize_progress()` — LLM call when sessions >= threshold; validate `weakest_skill` against `MODULE_REGISTRY.keys()`
 - [ ] [ ] [ ] `Orchestrator.recommend_exercise()` — LLM call over progress summary; validate `skill` field against registry
 - [ ] [ ] [ ] `tests/fixtures/orchestrator_cases.json` — 3–5 session history scenarios with expected recommendations
-- [ ] [ ] [ ] `tests/judge/judge_orchestrator.py` — judge for orchestrator recommendation quality
+- [x] [ ] [ ] `tests/judge/judge_orchestrator.py` — judge for orchestrator recommendation quality
 - [ ] [ ] [ ] Update CLI to display recommendation reason and suggested focus
 
 ---

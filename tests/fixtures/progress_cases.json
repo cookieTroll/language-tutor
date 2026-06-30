@@ -1,0 +1,62 @@
+[
+  {
+    "id": "prog_new_learner",
+    "description": "No sessions yet — should recommend writing as the starting point",
+    "level": "b1",
+    "modules": ["writing", "grammar"],
+    "aggregate": {
+      "sessions_by_module": {},
+      "days_since_module": {},
+      "total_time_by_module": {},
+      "recurring_errors": [],
+      "recent_topics": [],
+      "vocab_flag_count": 0
+    },
+    "expected_module": "writing"
+  },
+  {
+    "id": "prog_grammar_neglected",
+    "description": "Learner has done 8 writing sessions but zero grammar — should recommend grammar",
+    "level": "b1",
+    "modules": ["writing", "grammar"],
+    "aggregate": {
+      "sessions_by_module": {"writing": 8},
+      "days_since_module": {"writing": 1.0},
+      "total_time_by_module": {"writing": 240.0},
+      "recurring_errors": ["word_order", "dative_case"],
+      "recent_topics": ["daily_routine", "holiday_trip", "school_day", "hobbies", "food"],
+      "vocab_flag_count": 3
+    },
+    "expected_module": "grammar"
+  },
+  {
+    "id": "prog_stale_writing",
+    "description": "Grammar done recently, writing session was 21 days ago — should recommend writing",
+    "level": "a2",
+    "modules": ["writing", "grammar"],
+    "aggregate": {
+      "sessions_by_module": {"writing": 3, "grammar": 5},
+      "days_since_module": {"writing": 21.0, "grammar": 2.0},
+      "total_time_by_module": {"writing": 90.0, "grammar": 150.0},
+      "recurring_errors": [],
+      "recent_topics": ["weekend", "family", "pets"],
+      "vocab_flag_count": 1
+    },
+    "expected_module": "writing"
+  },
+  {
+    "id": "prog_recurring_errors",
+    "description": "Writing sessions are frequent and recent, but dative_case errors recur across 4 sessions — should recommend grammar",
+    "level": "b2",
+    "modules": ["writing", "grammar"],
+    "aggregate": {
+      "sessions_by_module": {"writing": 10, "grammar": 2},
+      "days_since_module": {"writing": 0.5, "grammar": 14.0},
+      "total_time_by_module": {"writing": 300.0, "grammar": 60.0},
+      "recurring_errors": ["dative_case", "genitive_case", "verb_tense"],
+      "recent_topics": ["work_email", "travel_plan", "opinion_piece", "news_summary", "letter"],
+      "vocab_flag_count": 8
+    },
+    "expected_module": "grammar"
+  }
+]
