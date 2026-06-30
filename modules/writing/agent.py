@@ -1,10 +1,12 @@
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from modules.protocols import ModuleProtocol, ContextRequest, ModuleContext, ModuleResult
+from modules.protocols import ModuleProtocol, ContextRequest, ModuleContext, ModuleResult, WritingPrompt
 from memory.protocols import WritingSessionContent, BtwEntry
 from llm.base import BaseLLM
+from lang.loader import get_writing_min_words
 from skills.protocols import SkillInput
+from skills.topic_picker.skill import TopicPickerSkill
 from modules.writing.skills import get_writing_skills
 from shared.timer import SessionTimer
 
@@ -50,7 +52,12 @@ class WritingModule(ModuleProtocol):
     ) -> tuple[ModuleResult, WritingSessionContent]:
         session_id = str(uuid.uuid4())
 
-        topic, requirements, writing_prompt, min_words = self._setup_topic()
+        wp = self._pick_topic(ctx, llm)
+        topic, requirements, writing_prompt, min_words = (
+            wp.topic, wp.requirements,
+            f"Topic: {wp.topic}\nRequirements: {wp.requirements}",
+            wp.min_words,
+        )
         self._print_exercise_header(ctx, topic, requirements)
 
         started_at = datetime.now()  # writing clock starts after topic is shown
@@ -68,7 +75,7 @@ class WritingModule(ModuleProtocol):
         self._print_evaluation(pipeline, stated_level=ctx.level)
 
         return self._build_results(
-            ctx, session_id, topic, requirements, writing_prompt,
+            ctx, session_id, wp, writing_prompt,
             user_lines, btw_entries, vocab_signals,
             pipeline, started_at, completed_at, duration_minutes,
         )
@@ -77,12 +84,56 @@ class WritingModule(ModuleProtocol):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _setup_topic(self) -> tuple[str, str, str, int]:
-        # PoC: hardcoded — replaced by topic_picker in Layer 1b
-        topic = "Describe your morning routine"
-        requirements = "150-200 words, use Perfekt tense, include 3 separable verbs"
-        min_words = 150
-        return topic, requirements, f"Topic: {topic}\nRequirements: {requirements}", min_words
+    def _pick_topic(self, ctx: ModuleContext, llm: BaseLLM) -> WritingPrompt:
+        min_words = get_writing_min_words(ctx.language, ctx.level)
+        suggested_focus: str | None = ctx.parameters.get("suggested_focus")
+
+        print("\nEnter your own topic, or press Enter for a suggestion:")
+        user_input = input("> ").strip()
+
+        if user_input:
+            requirements = f"Minimum {min_words} words."
+            if suggested_focus:
+                requirements += f" Try to practise: {suggested_focus}."
+            return WritingPrompt(
+                topic=user_input,
+                requirements=requirements,
+                min_words=min_words,
+                suggested_focus=suggested_focus,
+            )
+
+        skill = TopicPickerSkill()
+        out = skill.run(
+            SkillInput(
+                user_id=ctx.user_id,
+                level=ctx.level,
+                parameters={
+                    "language": ctx.language,
+                    "recent_topics": ctx.recent_topics,
+                    "error_tags": list(ctx.error_frequency.keys())[:5],
+                    "suggested_focus": suggested_focus,
+                    "min_words": min_words,
+                },
+            ),
+            llm,
+        )
+
+        if out.success:
+            return WritingPrompt(
+                topic=out.metadata["topic"],
+                requirements=out.metadata["requirements"],
+                min_words=min_words,
+                task_label=out.metadata.get("task_label", "writing_free"),
+                suggested_focus=suggested_focus,
+            )
+
+        # Fallback if skill fails
+        return WritingPrompt(
+            topic="Describe your day",
+            requirements=f"Minimum {min_words} words.",
+            min_words=min_words,
+            suggested_focus=suggested_focus,
+        )
 
     def _print_exercise_header(self, ctx: ModuleContext, topic: str, requirements: str) -> None:
         language_label = ctx.language.capitalize()
@@ -96,6 +147,7 @@ class WritingModule(ModuleProtocol):
         print("Type your text below. To submit, press Enter on an empty line.")
         if ctx.parameters.get("ui_mode", "cli") == "cli":
             print("To ask a question mid-writing, prefix it with '/btw ' (e.g. /btw what does aufstehen mean?).")
+            print("Type /word_count to see your current word count.")
             print("To quit or interrupt the session at any point, press Ctrl + C.")
         print("==================================================\n")
 
@@ -121,6 +173,11 @@ class WritingModule(ModuleProtocol):
                 btw_entries.append(entry)
                 if entry.flagged_word:
                     vocab_signals.append(entry.flagged_word)
+                continue
+
+            if line == "/word_count":
+                count = sum(len(l.split()) for l in user_lines)
+                print(f"[Word count: {count}]")
                 continue
 
             if line in ("/end", ""):
@@ -350,8 +407,7 @@ class WritingModule(ModuleProtocol):
         self,
         ctx: ModuleContext,
         session_id: str,
-        topic: str,
-        requirements: str,
+        wp: WritingPrompt,
         writing_prompt: str,
         user_lines: list[str],
         btw_entries: list[BtwEntry],
@@ -361,6 +417,7 @@ class WritingModule(ModuleProtocol):
         completed_at: datetime,
         duration_minutes: float,
     ) -> tuple[ModuleResult, WritingSessionContent]:
+        topic, requirements = wp.topic, wp.requirements
         user_text = "\n".join(user_lines)
         errors = [
             {"error_tag": m["error_tag"], "fragment": m["fragment"], "explanation": m["explanation"]}
@@ -372,7 +429,7 @@ class WritingModule(ModuleProtocol):
             user_id=ctx.user_id,
             language=ctx.language,
             module=self.name,
-            task_label="writing_free",
+            task_label=wp.task_label,
             date=started_at.strftime("%Y-%m-%dT%H:%M:%S"),
             level=ctx.level,
             status="completed",
@@ -396,7 +453,7 @@ class WritingModule(ModuleProtocol):
                 {"word": word, "source": "btw", "occurrence_count": 1}
                 for word in vocab_signals
             ],
-            suggested_focus=None,
+            suggested_focus=wp.suggested_focus,
             text_level_estimate=pipeline.text_level_estimate,
             comparison_note=pipeline.comparison_note,
         )
@@ -404,7 +461,7 @@ class WritingModule(ModuleProtocol):
         result = ModuleResult(
             session_id=session_id,
             module=self.name,
-            task_label="writing_free",
+            task_label=wp.task_label,
             task_description=writing_prompt,
             errors=errors,
             comment=pipeline.session_summary,

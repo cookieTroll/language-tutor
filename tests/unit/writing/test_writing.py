@@ -15,6 +15,7 @@ def test_writing_module_run(mock_input):
     # 3. Write second sentence
     # 4. Press Enter (empty line) to submit and finish
     mock_input.side_effect = [
+        "Mein Morgen",                        # user provides own topic → no LLM call for topic
         "Ich aufstehen um 7 Uhr.",
         "/btw what does aufstehen mean?",
         "Ich esse Fruhstuck.",

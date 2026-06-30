@@ -311,6 +311,7 @@ class TestFullPipeline:
         from modules.protocols import ModuleContext
 
         mock_input.side_effect = [
+            "Mein Morgen",              # user provides own topic → no LLM call for topic
             "Ich aufstehen um 7 Uhr.",
             "",  # submit
         ]
