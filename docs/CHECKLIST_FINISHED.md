@@ -263,3 +263,6 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 - [x] [x] [ ] `errors.module` column — `memory/schema.sql`, populate in `write_session()`, simplify `get_error_frequency()`'s module-filter branch to a flat `WHERE` instead of the `sessions` JOIN
 - [x] [x] [ ] `lang/maps/grammar_topics/` map type — `lang/models.py` (new `GrammarTopicsMap`), `lang/loader.py` (`get_grammar_topics()` + cross-validation, same pattern as `taxonomy`/`cefr_hints`), `lang/languages/german.yaml` gets `grammar_topics: german_a1_b2` key. Wired now against a small seed file (`lang/maps/grammar_topics/german_a1_b2.yaml`, 5 hand-picked topics) — 2a-ii replaces it with the full reviewed Goethe curriculum compilation
 - [x] [x] [ ] `TerminalIOHandler` — multi-line `prompt()` variant (read until blank line) so the CLI can collect a block answer; `WebIOHandler` needs no change (already returns one opaque string per `send_input()`)
+
+### 2a-ii — Grammar topics content
+- [x] [x] [x] `lang/maps/grammar_topics/german_a1_b2.yaml` — curated major topics compiled from Goethe Institut A1–B2 curriculum, `scope: major`, `related_error_tags` cross-checked against `lang/maps/taxonomy/german_taxonomy_v1.yaml`; review for accuracy before use

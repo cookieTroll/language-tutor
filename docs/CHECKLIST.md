@@ -41,9 +41,6 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 > See `docs/grammar.md` for full skill/module design. Split into sub-stages so each is independently reviewable; do 2a-i → 2a-vi before 2a-vii (cross-module bridge) and 2a-viii (UI).
 
-### 2a-ii — Grammar topics content
-- [x] [ ] [ ] `lang/maps/grammar_topics/german_a1_b2.yaml` — curated major topics compiled from Goethe Institut A1–B2 curriculum, `scope: major`, `related_error_tags` cross-checked against `lang/maps/taxonomy/german_taxonomy_v1.yaml`; review for accuracy before use
-
 ### 2a-iii — Skills
 - [ ] [ ] [ ] `skills/select_grammar/` — outline + `tests/fixtures/select_grammar_cases.json` + `tests/judge/judge_select_grammar.py`
 - [ ] [ ] [ ] Manual topic override — mirrors `WritingModule._pick_topic`'s "Enter your own topic, or press Enter for a suggestion" pattern (`modules/writing/agent.py:102-107`). Module prompts for a free-text topic before calling `select_grammar`; if given, resolve it against `get_grammar_topics(language)` (match a `scope: major` entry for `difficulty`/`related_error_tags`, else treat as an ad hoc `scope: minor` topic at the user's stated level) and skip the `select_grammar` call entirely — same "skip the step when forced" shape as 2a-vii's `forced_recommendation`. No new `ModuleContext` field needed; carried the same way `suggested_focus` already is, via `ctx.parameters`
