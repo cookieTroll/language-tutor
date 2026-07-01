@@ -1,0 +1,129 @@
+[
+  {
+    "id": "grx_praeteritum_b1",
+    "description": "B1 narrative past — one already_known_wrong exact-match item, plus llm-graded transformation/error_correction items (one right, one wrong)",
+    "level": "b1",
+    "language": "german",
+    "topic": "Präteritum — narrative past for all verbs",
+    "items": [
+      {
+        "index": 0,
+        "prompt": "Er ___ (gehen) gestern ins Kino.",
+        "correct_answer": "ging",
+        "error_tag": "verb_tense",
+        "topic": "Präteritum — narrative past for all verbs",
+        "user_answer": "gehte",
+        "already_known_wrong": true,
+        "expected_correct": false
+      },
+      {
+        "index": 1,
+        "prompt": "Rewrite in Präteritum: Ich esse einen Apfel.",
+        "correct_answer": "Ich aß einen Apfel.",
+        "error_tag": "verb_tense",
+        "topic": "Präteritum — narrative past for all verbs",
+        "user_answer": "Ich aß einen Apfel.",
+        "already_known_wrong": false,
+        "expected_correct": true
+      },
+      {
+        "index": 2,
+        "prompt": "Find and fix the error: Er hat gestern nach Hause gegeht.",
+        "correct_answer": "Er ist gestern nach Hause gegangen.",
+        "error_tag": "verb_tense",
+        "topic": "Präteritum — narrative past for all verbs",
+        "user_answer": "Er ist gestern nach Hause gegangen.",
+        "already_known_wrong": false,
+        "expected_correct": true
+      },
+      {
+        "index": 3,
+        "prompt": "Rewrite in Präteritum: Ich esse einen Apfel.",
+        "correct_answer": "Ich aß einen Apfel.",
+        "error_tag": "verb_tense",
+        "topic": "Präteritum — narrative past for all verbs",
+        "user_answer": "Ich esse einen Apfel.",
+        "already_known_wrong": false,
+        "expected_correct": false
+      }
+    ]
+  },
+  {
+    "id": "grx_two_way_prepositions_a2",
+    "description": "A2 two-way prepositions — motion (accusative) vs location (dative) distinction",
+    "level": "a2",
+    "language": "german",
+    "topic": "Two-way prepositions (Wechselpräpositionen) — dative vs accusative",
+    "items": [
+      {
+        "index": 0,
+        "prompt": "Ich lege das Buch ___ den Tisch. (on top of, motion)",
+        "correct_answer": "auf",
+        "error_tag": "noun_declension",
+        "topic": "Two-way prepositions (Wechselpräpositionen) — dative vs accusative",
+        "user_answer": "an",
+        "already_known_wrong": true,
+        "expected_correct": false
+      },
+      {
+        "index": 1,
+        "prompt": "Complete naturally with a two-way preposition phrase: Die Katze schläft ___.",
+        "correct_answer": "auf dem Sofa",
+        "error_tag": "noun_declension",
+        "topic": "Two-way prepositions (Wechselpräpositionen) — dative vs accusative",
+        "user_answer": "unter dem Bett",
+        "already_known_wrong": false,
+        "expected_correct": true
+      },
+      {
+        "index": 2,
+        "prompt": "Change to indicate motion (accusative): 'Die Lampe steht auf dem Tisch.' → 'Ich stelle die Lampe ...'",
+        "correct_answer": "auf den Tisch",
+        "error_tag": "noun_declension",
+        "topic": "Two-way prepositions (Wechselpräpositionen) — dative vs accusative",
+        "user_answer": "auf dem Tisch",
+        "already_known_wrong": false,
+        "expected_correct": false
+      }
+    ]
+  },
+  {
+    "id": "grx_passive_modal_b2",
+    "description": "B2 passive with modal verbs — already_known_wrong true_false plus two correct llm-graded transformations",
+    "level": "b2",
+    "language": "german",
+    "topic": "Passive voice with modal verbs",
+    "items": [
+      {
+        "index": 0,
+        "prompt": "True or false: \"muss...werden\" expresses passive necessity.",
+        "correct_answer": "richtig",
+        "error_tag": "verb_tense",
+        "topic": "Passive voice with modal verbs",
+        "user_answer": "falsch",
+        "already_known_wrong": true,
+        "expected_correct": false
+      },
+      {
+        "index": 1,
+        "prompt": "Rewrite in passive with modal 'müssen': Man muss die Fenster schließen.",
+        "correct_answer": "Die Fenster müssen geschlossen werden.",
+        "error_tag": "verb_tense",
+        "topic": "Passive voice with modal verbs",
+        "user_answer": "Die Fenster müssen geschlossen werden.",
+        "already_known_wrong": false,
+        "expected_correct": true
+      },
+      {
+        "index": 2,
+        "prompt": "Find and fix the error: Die Aufgabe muss gemacht sein.",
+        "correct_answer": "Die Aufgabe muss gemacht werden.",
+        "error_tag": "verb_tense",
+        "topic": "Passive voice with modal verbs",
+        "user_answer": "Die Aufgabe muss gemacht werden.",
+        "already_known_wrong": false,
+        "expected_correct": true
+      }
+    ]
+  }
+]

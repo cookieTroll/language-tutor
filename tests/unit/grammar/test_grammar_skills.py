@@ -399,4 +399,165 @@ class TestGenerateExercisesSkill:
 
         assert out.success is False
         assert out.metadata["exercises"] == []
+
+
+# ---------------------------------------------------------------------------
+# GradeExercisesSkill
+# ---------------------------------------------------------------------------
+
+def _item(**overrides) -> dict:
+    base = {
+        "index": 0,
+        "prompt": "Ich fahre ___ meinem Freund. (with)",
+        "correct_answer": "mit",
+        "error_tag": "noun_declension",
+        "topic": "Dative case",
+        "user_answer": "bei",
+        "already_known_wrong": True,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestGradeExercisesSkill:
+
+    def test_empty_items_short_circuits_without_llm_call(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        llm = make_llm([])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=[], language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["results"] == []
+        llm.complete.assert_not_called()
+
+    def test_grades_mixed_batch(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [
+            _item(index=0, already_known_wrong=True),
+            _item(index=1, already_known_wrong=False, user_answer="Heute lerne ich Deutsch."),
+        ]
+        payload = json.dumps({"results": [
+            {"index": 0, "correct": False, "feedback": "'bei' takes dative but doesn't mean 'with' here; use 'mit'."},
+            {"index": 1, "correct": True, "feedback": ""},
+        ]})
+        llm = make_llm([payload])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is True
+        results = {r["index"]: r for r in out.metadata["results"]}
+        assert results[0]["correct"] is False
+        assert results[0]["feedback"]
+        assert results[1]["correct"] is True
+        assert results[1]["feedback"] == ""
+
+    def test_already_known_wrong_forced_false_even_if_model_disagrees(self):
+        """already_known_wrong items were already scored by Python string
+        comparison — the model must not be trusted to overturn that verdict."""
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [_item(index=0, already_known_wrong=True)]
+        payload = json.dumps({"results": [
+            {"index": 0, "correct": True, "feedback": "actually this is fine"},
+        ]})
+        llm = make_llm([payload])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["results"][0]["correct"] is False
+
+    def test_feedback_forced_empty_when_correct(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [_item(index=0, already_known_wrong=False)]
+        payload = json.dumps({"results": [
+            {"index": 0, "correct": True, "feedback": "stray text that should be dropped"},
+        ]})
+        llm = make_llm([payload])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["results"][0]["feedback"] == ""
+
+    def test_missing_feedback_for_incorrect_item_triggers_retry(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [_item(index=0, already_known_wrong=False)]
+        bad = json.dumps({"results": [{"index": 0, "correct": False, "feedback": ""}]})
+        good = json.dumps({"results": [{"index": 0, "correct": False, "feedback": "explanation"}]})
+        llm = make_llm([bad, good])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["results"][0]["feedback"] == "explanation"
+        assert llm.complete.call_count == 2
+
+    def test_count_mismatch_triggers_retry(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [_item(index=0), _item(index=1, already_known_wrong=False)]
+        too_few = json.dumps({"results": [{"index": 0, "correct": False, "feedback": "x"}]})
+        full = json.dumps({"results": [
+            {"index": 0, "correct": False, "feedback": "x"},
+            {"index": 1, "correct": True, "feedback": ""},
+        ]})
+        llm = make_llm([too_few, full])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is True
+        assert len(out.metadata["results"]) == 2
+        assert llm.complete.call_count == 2
+
+    def test_unknown_index_triggers_retry(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [_item(index=0)]
+        bad = json.dumps({"results": [{"index": 7, "correct": False, "feedback": "x"}]})
+        good = json.dumps({"results": [{"index": 0, "correct": False, "feedback": "x"}]})
+        llm = make_llm([bad, good])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["results"][0]["index"] == 0
+        assert llm.complete.call_count == 2
+
+    def test_duplicate_index_triggers_retry(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [_item(index=0), _item(index=1, already_known_wrong=False)]
+        bad = json.dumps({"results": [
+            {"index": 0, "correct": False, "feedback": "x"},
+            {"index": 0, "correct": False, "feedback": "x"},
+        ]})
+        good = json.dumps({"results": [
+            {"index": 0, "correct": False, "feedback": "x"},
+            {"index": 1, "correct": True, "feedback": ""},
+        ]})
+        llm = make_llm([bad, good])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is True
+        assert llm.complete.call_count == 2
+
+    def test_missing_key_fails_after_retries_exhausted(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [_item(index=0)]
+        bad = json.dumps({"results": [{"index": 0}]})  # missing 'correct'
+        llm = make_llm([bad, bad, bad])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is False
+        assert out.metadata["results"] == []
+        assert "error" in out.metadata
         assert "error" in out.metadata
