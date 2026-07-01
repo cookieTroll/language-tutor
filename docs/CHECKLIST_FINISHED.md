@@ -253,3 +253,13 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 
 - [x] [x] [ ] Investigate writing evaluation latency — per-step profiling via `StepTiming` dataclass; latency log written to `data/logs/skill_latency.jsonl` per session
 - [x] [x] [ ] Parallelise independent pipeline steps — steps 1+2 run concurrently, steps 5+6 run concurrently via `ThreadPoolExecutor`; `total_wall_s` recorded in latency log
+
+---
+
+## Layer 2a — Grammar Module
+
+### 2a-i — Contracts & schema
+- [x] [x] [ ] `GrammarSessionContent` — update in `memory/protocols.py` and `docs/contracts.md` (kept in sync): `topic`, `scope`, `explanation`, `items` (`prompt`, `exercise_type`, `grading`, `user_answer`, `correct_answer`, `correct`, `feedback`, `error_tag`), `score`, `btw_log`. `items` holds *every* exercise, correct and incorrect alike, each explicitly tagged via `correct: bool` — not just the misses (more useful for later session browsing, mirrors why the writing session file keeps full `corrected_text` rather than just a diff list)
+- [x] [x] [ ] `errors.module` column — `memory/schema.sql`, populate in `write_session()`, simplify `get_error_frequency()`'s module-filter branch to a flat `WHERE` instead of the `sessions` JOIN
+- [x] [x] [ ] `lang/maps/grammar_topics/` map type — `lang/models.py` (new `GrammarTopicsMap`), `lang/loader.py` (`get_grammar_topics()` + cross-validation, same pattern as `taxonomy`/`cefr_hints`), `lang/languages/german.yaml` gets `grammar_topics: german_a1_b2` key. Wired now against a small seed file (`lang/maps/grammar_topics/german_a1_b2.yaml`, 5 hand-picked topics) — 2a-ii replaces it with the full reviewed Goethe curriculum compilation
+- [x] [x] [ ] `TerminalIOHandler` — multi-line `prompt()` variant (read until blank line) so the CLI can collect a block answer; `WebIOHandler` needs no change (already returns one opaque string per `send_input()`)

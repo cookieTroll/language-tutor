@@ -41,24 +41,19 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 > See `docs/grammar.md` for full skill/module design. Split into sub-stages so each is independently reviewable; do 2a-i → 2a-vi before 2a-vii (cross-module bridge) and 2a-viii (UI).
 
-### 2a-i — Contracts & schema
-- [x] [ ] [ ] `GrammarSessionContent` — update in `memory/protocols.py` and `docs/contracts.md` (kept in sync): `topic`, `scope`, `explanation`, `items` (`prompt`, `exercise_type`, `grading`, `user_answer`, `correct_answer`, `correct`, `feedback`, `error_tag`), `score`, `btw_log`. `items` holds *every* exercise, correct and incorrect alike, each explicitly tagged via `correct: bool` — not just the misses (more useful for later session browsing, mirrors why the writing session file keeps full `corrected_text` rather than just a diff list)
-- [x] [ ] [ ] `errors.module` column — `memory/schema.sql`, populate in `write_session()`, simplify `get_error_frequency()`'s module-filter branch to a flat `WHERE` instead of the `sessions` JOIN
-- [x] [ ] [ ] `lang/maps/grammar_topics/` map type — `lang/models.py` (new `GrammarTopicsMap`), `lang/loader.py` (`get_grammar_topics()` + cross-validation, same pattern as `taxonomy`/`cefr_hints`), `lang/languages/german.yaml` gets `grammar_topics: german_a1_b2` key. Wired now against a small seed file (`lang/maps/grammar_topics/german_a1_b2.yaml`, 5 hand-picked topics) — 2a-ii replaces it with the full reviewed Goethe curriculum compilation
-- [x] [ ] [ ] `TerminalIOHandler` — multi-line `prompt()` variant (read until blank line) so the CLI can collect a block answer; `WebIOHandler` needs no change (already returns one opaque string per `send_input()`)
-
 ### 2a-ii — Grammar topics content
 - [ ] [ ] [ ] `lang/maps/grammar_topics/german_a1_b2.yaml` — curated major topics compiled from Goethe Institut A1–B2 curriculum, `scope: major`, `related_error_tags` cross-checked against `lang/maps/taxonomy/german_taxonomy_v1.yaml`; review for accuracy before use
 
 ### 2a-iii — Skills
 - [ ] [ ] [ ] `skills/select_grammar/` — outline + `tests/fixtures/select_grammar_cases.json` + `tests/judge/judge_select_grammar.py`
+- [ ] [ ] [ ] Manual topic override — mirrors `WritingModule._pick_topic`'s "Enter your own topic, or press Enter for a suggestion" pattern (`modules/writing/agent.py:102-107`). Module prompts for a free-text topic before calling `select_grammar`; if given, resolve it against `get_grammar_topics(language)` (match a `scope: major` entry for `difficulty`/`related_error_tags`, else treat as an ad hoc `scope: minor` topic at the user's stated level) and skip the `select_grammar` call entirely — same "skip the step when forced" shape as 2a-vii's `forced_recommendation`. No new `ModuleContext` field needed; carried the same way `suggested_focus` already is, via `ctx.parameters`
 - [ ] [ ] [ ] `skills/dump_grammar/` — outline + fixtures + judge
 - [ ] [ ] [ ] `skills/generate_exercises/` — outline (exercise types, `grading` field, `correct_answer`/`accepted_answers`); validate each generated `error_tag` against `TaxonomyMap.validate_tag()` with `call_with_self_correction` retry (same as `classify_mistakes` does for writing) — an unvalidated hallucinated tag would silently corrupt `error_frequency`/`select_grammar` downstream + fixtures + judge
 - [ ] [ ] [ ] `skills/grade_exercises/` — outline: batched call covers *all* wrong answers regardless of grading mode (LLM judgment for `grading: llm` items, feedback-only phrasing for already-known-wrong `grading: exact` items) — replaces the separate `explain_grammar` utility for this path entirely; + fixtures + judge
 - [ ] [ ] [ ] ~~`skills/explain_grammar/`~~ — dropped from 2a scope; `grade_exercises` absorbs its only required use. Move to Backlog in `docs/grammar.md` as a possible future standalone utility. Fix stale claim in `docs/LAYERS.md:101` ("already built in Layer 1a" — it was never built; `explain_mistakes` is a different skill)
 
 ### 2a-iv — Module
-- [ ] [ ] [ ] `modules/grammar/agent.py` — `context_request()`; `run()`: select → dump → generate → display block → collect block → partition exact/llm → validate (Python) + grade (one batched `grade_exercises` call) → log errors → score → `GrammarSessionContent`. `ModuleResult.metadata` carries only `{btw_entries}` — `score`/`topic` are not duplicated there, they're already typed fields on `GrammarSessionContent` and grammar sessions produce no `vocab_signals`
+- [ ] [ ] [ ] `modules/grammar/agent.py` — `context_request()`; `run()`: **pick topic (manual override or `select_grammar`)** → dump → generate → display block → collect block → partition exact/llm → validate (Python) + grade (one batched `grade_exercises` call) → log errors → score → `GrammarSessionContent`. `ModuleResult.metadata` carries only `{btw_entries}` — `score`/`topic` are not duplicated there, they're already typed fields on `GrammarSessionContent` and grammar sessions produce no `vocab_signals`
 - [ ] [ ] [ ] `modules/grammar/skills.py` — skill injection
 - [ ] [ ] [ ] `modules/grammar/module.md`
 - [ ] [ ] [ ] Answer-block parsing (split by newline, pad/truncate to exercise count) — own test item, this is the fragile part
