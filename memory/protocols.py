@@ -44,10 +44,11 @@ class WritingSessionContent(SessionFileContent):
 
 class GrammarSessionContent(SessionFileContent):  # Layer 2a
     topic: str
-    exercise_type: str
-    items: list[dict]         # [{prompt, user_answer, correct, correction, error_tag}]
+    scope: Literal["major", "minor"]
+    explanation: str
+    items: list[dict]         # [{prompt, exercise_type, grading, user_answer, correct_answer, correct, feedback, error_tag}]
     score: float
-    btw_log: list[dict]
+    btw_log: list[dict]       # [{question, answer, flagged_word, timestamp}]
 
 class SessionLog(BaseModel):
     user_id: str
