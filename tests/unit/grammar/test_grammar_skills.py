@@ -182,3 +182,72 @@ class TestResolveManualTopic:
         result = resolve_manual_topic("Some topic", level="a1", language="klingon")
         assert result["scope"] == "minor"
         assert result["difficulty"] == "a1"
+
+
+# ---------------------------------------------------------------------------
+# DumpGrammarSkill
+# ---------------------------------------------------------------------------
+
+class TestDumpGrammarSkill:
+
+    def test_produces_markdown_explanation(self):
+        from skills.dump_grammar.skill import DumpGrammarSkill
+        explanation = "# Dative case\n\n## Rule\n...\n\n| Case | Article |\n|---|---|"
+        llm = make_llm([explanation])
+
+        skill = DumpGrammarSkill()
+        out = skill.run(
+            make_input(level="b1", topic="Dative case — prepositions", language="german"), llm,
+        )
+
+        assert out.success is True
+        assert out.metadata["explanation"] == explanation
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "Dative case — prepositions" in prompt_text
+        assert "B1" in prompt_text
+
+    def test_empty_topic_short_circuits_without_llm_call(self):
+        from skills.dump_grammar.skill import DumpGrammarSkill
+        llm = make_llm([])
+
+        skill = DumpGrammarSkill()
+        out = skill.run(make_input(level="b1", topic="   ", language="german"), llm)
+
+        assert out.success is False
+        assert out.metadata["explanation"] == ""
+        llm.complete.assert_not_called()
+
+    def test_truncated_response_appends_tag(self):
+        from skills.dump_grammar.skill import DumpGrammarSkill
+        llm = MagicMock(spec=BaseLLM)
+        llm.config = MagicMock()
+        llm.config.show_cut_by_limit_tag = True
+        llm.complete.return_value = LLMResponse(text="Partial explanation...", model="test-model", truncated=True)
+
+        skill = DumpGrammarSkill()
+        out = skill.run(make_input(level="b1", topic="Dative case", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["explanation"].endswith("[TRUNCATED BY LIMIT]")
+
+    def test_empty_response_fails(self):
+        from skills.dump_grammar.skill import DumpGrammarSkill
+        llm = make_llm(["   "])
+
+        skill = DumpGrammarSkill()
+        out = skill.run(make_input(level="b1", topic="Dative case", language="german"), llm)
+
+        assert out.success is False
+        assert "error" in out.metadata
+
+    def test_llm_exception_fails_gracefully(self):
+        from skills.dump_grammar.skill import DumpGrammarSkill
+        llm = MagicMock(spec=BaseLLM)
+        llm.config = MagicMock()
+        llm.complete.side_effect = RuntimeError("connection refused")
+
+        skill = DumpGrammarSkill()
+        out = skill.run(make_input(level="b1", topic="Dative case", language="german"), llm)
+
+        assert out.success is False
+        assert "connection refused" in out.metadata["error"]

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "dg_present_tense_a1",
+    "description": "A1 foundational topic — regular verb conjugation, no case table needed",
+    "level": "a1",
+    "language": "german",
+    "topic": "Present tense — regular verbs",
+    "needs_table": true,
+    "table_hint": "conjugation table (ich/du/er-sie-es/wir/ihr/sie-Sie endings)"
+  },
+  {
+    "id": "dg_two_way_prepositions_a2",
+    "description": "A2 topic with a genuine dative-vs-accusative decision rule (Wechselpräpositionen)",
+    "level": "a2",
+    "language": "german",
+    "topic": "Two-way prepositions (Wechselpräpositionen) — dative vs accusative",
+    "needs_table": true,
+    "table_hint": "list of the nine two-way prepositions with the wohin?/wo? (accusative/dative) test"
+  },
+  {
+    "id": "dg_konjunktiv_ii_b1",
+    "description": "B1 topic — polite requests and hypotheticals, more abstract, still needs a form table",
+    "level": "b1",
+    "language": "german",
+    "topic": "Konjunktiv II — polite requests and hypotheticals",
+    "needs_table": true,
+    "table_hint": "würde + infinitive and irregular Konjunktiv II forms (wäre, hätte, könnte...)"
+  },
+  {
+    "id": "dg_passive_modal_b2",
+    "description": "B2 advanced topic — passive voice combined with modal verbs",
+    "level": "b2",
+    "language": "german",
+    "topic": "Passive voice with modal verbs",
+    "needs_table": true,
+    "table_hint": "modal + Partizip II + werden/worden word order pattern"
+  }
+]
