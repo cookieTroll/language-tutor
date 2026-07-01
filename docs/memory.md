@@ -171,13 +171,17 @@ vocab_updates:
 
 ```yaml
 topic: "Dative case — prepositions"
-exercise_type: fill_in_the_blank
+scope: major
+explanation: "..."
 items:
   - prompt: "Ich fahre ___ meinem Freund. (with)"
+    exercise_type: fill_in_the_blank
+    grading: exact
     user_answer: "mit meinen"
+    correct_answer: "mit meinem"
     correct: false
-    correction: "mit meinem"
-    error_tag: dative_case
+    feedback: "'mit' takes the dative case — 'meinen' is accusative."
+    error_tag: noun_declension
 score: 0.6
 btw_log: []
 ```

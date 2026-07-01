@@ -70,6 +70,13 @@ class IOHandler(Protocol):
         """Display a prompt and return the user's input."""
         ...
 
+    def prompt_block(self, text: str = "") -> str:
+        """Collect a multi-line answer as one opaque string (e.g. grammar exercise
+        block answers). TerminalIOHandler reads until a blank line; WebIOHandler
+        just delegates to prompt() since the client already posts the full
+        textarea value in one send_input() call."""
+        ...
+
 class TerminalIOHandler:
     """Concrete implementation for the local CLI."""
     show_cli_hints = True
@@ -201,10 +208,11 @@ class WritingSessionContent(SessionFileContent):
 
 class GrammarSessionContent(SessionFileContent):  # Layer 2a
     topic: str
-    exercise_type: str
-    items: list[dict]         # [{prompt, user_answer, correct, correction, error_tag}]
+    scope: Literal["major", "minor"]
+    explanation: str
+    items: list[dict]         # [{prompt, exercise_type, grading, user_answer, correct_answer, correct, feedback, error_tag}]
     score: float
-    btw_log: list[dict]
+    btw_log: list[dict]       # [{question, answer, flagged_word, timestamp}]
 ```
 
 ---

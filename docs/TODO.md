@@ -55,7 +55,7 @@ Items that arose during design discussion but are deferred decisions, known risk
 ## Quality & Polish (post-PoC)
 
 - [ ] **Error taxonomy review** — German taxonomy v1 (`lang/maps/taxonomy/german_taxonomy_v1.yaml`) has 8 tags: `noun_declension`, `adjective_declension`, `article`, `verb_conjugation`, `verb_tense`, `vocabulary`, `spelling`, `other`. Review against real session output; add new versions as a new YAML file (e.g. `german_taxonomy_v2.yaml`) rather than modifying in place — old sessions reference the version they were tagged with.
-- [ ] **German topic list for grammar** — curate A1–B2 grammar topics from a standard syllabus (e.g. Goethe Institut curriculum). Store in `skills/grammar/topics/a1_b2_topics.yaml`. Review for completeness before Layer 2a.
+- [ ] **German topic list for grammar** — curate A1–B2 grammar topics from a standard syllabus (e.g. Goethe Institut curriculum). Store in `lang/maps/grammar_topics/german_a1_b2.yaml` (versioned-map pattern, same as `taxonomy`/`cefr_hints`). Review for completeness before Layer 2a.
 - [ ] **Vocab word lists** — compile 2–3 thematic units (greetings, daily routine, food) in `skills/vocab/word_lists/`. Include: word, translation, example sentence, difficulty tag. Review for accuracy.
 - [ ] **Frontend file browser** — Layer 1c session file browser should render YAML files in a readable format, not raw YAML. Decide rendering approach (parse and template, or simple markdown-style display).
 - [ ] **Config schema validation** — `config.yaml` is loaded at startup but not validated in design. Add schema validation (e.g. with `pydantic`) to catch misconfiguration early.

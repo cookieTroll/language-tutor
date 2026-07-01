@@ -39,16 +39,55 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ## Layer 2a — Grammar Module
 
-- [ ] [ ] [ ] `modules/grammar/topics/a1_b2_topics.yaml` — curated grammar topic list, reviewed for accuracy
-- [ ] [ ] [ ] `GrammarSessionContent` dataclass (subclass of `SessionFileContent`)
-- [ ] [ ] [ ] `modules/grammar/selector.py` — picks topic given progress summary + error frequency
-- [ ] [ ] [ ] `modules/grammar/dump.py` — comprehensive grammar explanation prompt
-- [ ] [ ] [ ] `modules/grammar/explainer.py` — lightweight contextual explainer (utility, not standalone session)
-- [ ] [ ] [ ] `modules/grammar/exercises.py` — fill-in, transformation, error correction; validates answers; logs errors with `error_tag`
-- [ ] [ ] [ ] `GrammarModule.run()` — selector → dump or exercises → `GrammarSessionContent`
+> See `docs/grammar.md` for full skill/module design. Split into sub-stages so each is independently reviewable; do 2a-i → 2a-vi before 2a-vii (cross-module bridge) and 2a-viii (UI).
+
+### 2a-i — Contracts & schema
+- [x] [ ] [ ] `GrammarSessionContent` — update in `memory/protocols.py` and `docs/contracts.md` (kept in sync): `topic`, `scope`, `explanation`, `items` (`prompt`, `exercise_type`, `grading`, `user_answer`, `correct_answer`, `correct`, `feedback`, `error_tag`), `score`, `btw_log`. `items` holds *every* exercise, correct and incorrect alike, each explicitly tagged via `correct: bool` — not just the misses (more useful for later session browsing, mirrors why the writing session file keeps full `corrected_text` rather than just a diff list)
+- [x] [ ] [ ] `errors.module` column — `memory/schema.sql`, populate in `write_session()`, simplify `get_error_frequency()`'s module-filter branch to a flat `WHERE` instead of the `sessions` JOIN
+- [x] [ ] [ ] `lang/maps/grammar_topics/` map type — `lang/models.py` (new `GrammarTopicsMap`), `lang/loader.py` (`get_grammar_topics()` + cross-validation, same pattern as `taxonomy`/`cefr_hints`), `lang/languages/german.yaml` gets `grammar_topics: german_a1_b2` key. Wired now against a small seed file (`lang/maps/grammar_topics/german_a1_b2.yaml`, 5 hand-picked topics) — 2a-ii replaces it with the full reviewed Goethe curriculum compilation
+- [x] [ ] [ ] `TerminalIOHandler` — multi-line `prompt()` variant (read until blank line) so the CLI can collect a block answer; `WebIOHandler` needs no change (already returns one opaque string per `send_input()`)
+
+### 2a-ii — Grammar topics content
+- [ ] [ ] [ ] `lang/maps/grammar_topics/german_a1_b2.yaml` — curated major topics compiled from Goethe Institut A1–B2 curriculum, `scope: major`, `related_error_tags` cross-checked against `lang/maps/taxonomy/german_taxonomy_v1.yaml`; review for accuracy before use
+
+### 2a-iii — Skills
+- [ ] [ ] [ ] `skills/select_grammar/` — outline + `tests/fixtures/select_grammar_cases.json` + `tests/judge/judge_select_grammar.py`
+- [ ] [ ] [ ] `skills/dump_grammar/` — outline + fixtures + judge
+- [ ] [ ] [ ] `skills/generate_exercises/` — outline (exercise types, `grading` field, `correct_answer`/`accepted_answers`); validate each generated `error_tag` against `TaxonomyMap.validate_tag()` with `call_with_self_correction` retry (same as `classify_mistakes` does for writing) — an unvalidated hallucinated tag would silently corrupt `error_frequency`/`select_grammar` downstream + fixtures + judge
+- [ ] [ ] [ ] `skills/grade_exercises/` — outline: batched call covers *all* wrong answers regardless of grading mode (LLM judgment for `grading: llm` items, feedback-only phrasing for already-known-wrong `grading: exact` items) — replaces the separate `explain_grammar` utility for this path entirely; + fixtures + judge
+- [ ] [ ] [ ] ~~`skills/explain_grammar/`~~ — dropped from 2a scope; `grade_exercises` absorbs its only required use. Move to Backlog in `docs/grammar.md` as a possible future standalone utility. Fix stale claim in `docs/LAYERS.md:101` ("already built in Layer 1a" — it was never built; `explain_mistakes` is a different skill)
+
+### 2a-iv — Module
+- [ ] [ ] [ ] `modules/grammar/agent.py` — `context_request()`; `run()`: select → dump → generate → display block → collect block → partition exact/llm → validate (Python) + grade (one batched `grade_exercises` call) → log errors → score → `GrammarSessionContent`. `ModuleResult.metadata` carries only `{btw_entries}` — `score`/`topic` are not duplicated there, they're already typed fields on `GrammarSessionContent` and grammar sessions produce no `vocab_signals`
+- [ ] [ ] [ ] `modules/grammar/skills.py` — skill injection
+- [ ] [ ] [ ] `modules/grammar/module.md`
+- [ ] [ ] [ ] Answer-block parsing (split by newline, pad/truncate to exercise count) — own test item, this is the fragile part
+- [ ] [ ] [ ] `tests/unit/test_grammar.py` — module loop logic (partitioning, string-normalize compare, block parsing), no LLM
+- [ ] [ ] [ ] `tests/fixtures/grammar_cases.json` + `tests/judge/judge_grammar_module.py` (mirrors `judge_orchestrator.py`)
+
+### 2a-v — Registry & orchestrator wiring
 - [ ] [ ] [ ] Register `GrammarModule` in `MODULE_REGISTRY`
-- [ ] [ ] [ ] Update orchestrator routing to include grammar
-- [ ] [ ] [ ] Wire grammar explainer into writing evaluator Step 3 (inline "why is this wrong?" note)
+- [ ] [ ] [ ] Confirm `get_registry_description()` picks it up automatically (iterates the registry — likely free)
+- [ ] [ ] [ ] Confirm orchestrator routing / `recommend_exercise` works generically via registry validation, or needs a prompt update
+
+### 2a-vi — Writing module fix (independent of grammar module — can happen anytime)
+- [ ] [ ] [ ] Thread `pipeline.explained_mistakes` / `corrected_text` / `tips` / `session_summary` into `_handle_btw`'s `session_context` (`modules/writing/agent.py:90` → `_follow_up_phase` → `_handle_btw:222-228`) — currently only `user_text_so_far` is passed, so post-evaluation `/btw` answers about "why is this wrong" aren't grounded in the actual structured mistake data already shown to the user
+- [ ] [ ] [ ] Test: extend `tests/unit/test_writing.py` (or wherever `_handle_btw` is covered) to assert `session_context` includes the evaluation fields once a pipeline result exists — regression guard against this silently reverting
+
+### 2a-vii — Cross-module bridge: writing → grammar on error (depends on 2a-i…v; needs a short design pass, not a drop-in item)
+- [ ] [ ] [ ] `NextActionSignal(module, reason, suggested_focus)` — new model in `memory/protocols.py` (kept separate from `orchestrator.protocols.ExerciseRecommendation` to respect the memory→orchestrator dependency direction, despite the shape overlap)
+- [ ] [ ] [ ] `SessionFileContent.next_actions: list[NextActionSignal] = []` — on the *base* class in `memory/protocols.py` + `docs/contracts.md`, so any module can populate it later, not just writing
+- [ ] [ ] [ ] `SessionManager.finalize_session()` (`orchestrator/session_manager.py:105`) — add an `error_frequency: dict[str, int]` parameter (the same dict `build_module_context()` already fetched at session start via `ctx.error_frequency`, not re-queried) so the standing aggregate is available alongside `result`/`file_content`. Before the existing `write_file()` call at line 116: gate the suggestion on *both* signals — `result.errors` used only as a cheap existence check ("did any tag from this session map to a grammar topic at all?"), `error_frequency` used as the actual judgment ("is that tag already recurring, freq ≥ 2, per `SessionAggregate.recurring_errors`'s existing threshold — not a one-off?"). Only set `file_content.next_actions` when both hold. Keeps the raw per-mistake log (`result.errors`) and the recommendation judgment (`error_frequency`) as separate inputs — one triggers, the other decides — rather than deriving the suggestion straight from the raw log. Confirmed intentional: `ctx.error_frequency` for a writing session is fetched with `module_filter="writing"` (`WritingModule.context_request()`), so the recurrence gate is writing-scoped by design, not a cross-module aggregate — keep it that way, don't "fix" it to be cross-module later
+- [ ] [ ] [ ] `run_session(forced_recommendation: ExerciseRecommendation | None = None)` — when set, skip steps 2–4 (summarize_progress → recommend_exercise → confirm) and go straight to write-ahead with the forced recommendation
+- [ ] [ ] [ ] Orchestrator: after `finalize_session()` returns, if `file_content.next_actions` is non-empty, prompt via `IOHandler` ("Session complete. Start '{topic}' grammar practice now? This will begin a new session. [Y/n]")
+- [ ] [ ] [ ] Caller changes (`ui/cli.py`'s `while True` loop; web `/api/start`): on accept, re-invoke `run_session()` with `forced_recommendation` set instead of showing the normal "start another session?" prompt
+- [ ] [ ] [ ] Design only for one signal now; data model (`list[NextActionSignal]`) and control flow already support multiple — only the confirmation UI (pick one of N vs. yes/no) would need extending later, not the underlying shape
+- [ ] [ ] [ ] Test: `tests/unit/test_orchestrator.py` (or a new file) — unit-test the gate in isolation: tag present in `result.errors` but not recurring in `error_frequency` → no signal; recurring in `error_frequency` but absent from this session's `result.errors` → no signal; both present → signal set. This is the piece most likely to misfire (nagging the user over noise), so it gets its own coverage rather than relying on the module-level judge
+
+### 2a-viii — UI (after 2a-i…vii work end-to-end via CLI)
+- [ ] [ ] [ ] `ui/static/app.js` + `ui/templates/index.html` — exercise display panel + block-answer textarea + results rendering
+- [ ] [ ] [ ] `ui/templates/session.html` — render `GrammarSessionContent` (explanation, exercises, score) + `next_actions` if present (session *history* view)
+- [ ] [ ] [ ] Live "Start grammar practice now?" prompt in the *active* session UI (`index.html`/`app.js`) — the interactive accept/decline surfaced right after a writing session ends when `next_actions` is non-empty; distinct from the history-view rendering above, and what the 2a-vii "web `/api/start`" caller change assumes exists
 
 ---
 

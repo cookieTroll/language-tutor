@@ -118,8 +118,8 @@ skills/
 ├── cefr_estimator/         # session skill (Layer 2c, planned)
 ├── select_grammar/         # session skill (Layer 2a, planned)
 ├── dump_grammar/           # session skill (Layer 2a, planned)
-├── explain_grammar/        # utility skill (Layer 2a, planned)
 ├── generate_exercises/     # session skill (Layer 2a, planned)
+├── grade_exercises/        # session skill (Layer 2a, planned) — batched grading + feedback
 └── drill_vocab/            # session skill (Layer 3a, planned)
 ```
 
@@ -244,8 +244,8 @@ language-tutor/
 │   ├── cefr_estimator/     # Layer 2c
 │   ├── select_grammar/     # Layer 2a
 │   ├── dump_grammar/       # Layer 2a
-│   ├── explain_grammar/    # Layer 2a utility
 │   ├── generate_exercises/ # Layer 2a
+│   ├── grade_exercises/    # Layer 2a — batched grading + feedback
 │   └── drill_vocab/        # Layer 3a
 │
 ├── memory/

@@ -96,15 +96,19 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 
 ## Layer 2a — Grammar Module
 
+See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii for the staged build order.
+
+- `lang/maps/grammar_topics/german_a1_b2.yaml` + `lang/models.py`/`lang/loader.py` support (same versioned-map pattern as `taxonomy`/`cefr_hints`)
 - `skills/select_grammar/`
 - `skills/dump_grammar/`
-- `skills/explain_grammar/` — already built in Layer 1a; grammar module injects it for exercise feedback
 - `skills/generate_exercises/`
+- `skills/grade_exercises/` — batched grading + feedback for all wrong answers (exact-match and open-ended); replaces the previously planned `explain_grammar` utility, which was dropped (never actually built — `explain_mistakes`, a different Layer 1a skill, was)
 - `modules/grammar/agent.py`
 - `modules/grammar/skills.py`
 - `modules/grammar/module.md`
-- `memory/protocols.py` — updated: `GrammarSessionContent` added
+- `memory/protocols.py` — updated: `GrammarSessionContent` added, `errors.module` column, `SessionFileContent.next_actions`
 - `modules/registry.py` — updated: grammar module registered
+- Writing → grammar cross-module bridge (`NextActionSignal`, `run_session(forced_recommendation=...)`) — depends on the above; see 2a-vii
 
 ---
 
