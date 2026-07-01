@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sg_dative_recurring",
+    "description": "noun_declension recurring, one unrelated recent topic — expect a major noun_declension topic, not the recent one",
+    "level": "b1",
+    "language": "german",
+    "error_frequency": {"noun_declension": 5, "word_order": 1},
+    "recent_topics": ["Präteritum — narrative past for all verbs"],
+    "expected_scope": "major",
+    "dominant_tag": "noun_declension"
+  },
+  {
+    "id": "sg_avoid_recent_topics",
+    "description": "verb_conjugation recurring but both A1 verb_conjugation topics were just covered — expect a different major verb_conjugation topic",
+    "level": "a1",
+    "language": "german",
+    "error_frequency": {"verb_conjugation": 6},
+    "recent_topics": ["Present tense — regular verbs", "Present tense — sein and haben"],
+    "expected_scope": "major",
+    "dominant_tag": "verb_conjugation"
+  },
+  {
+    "id": "sg_idiomatic_minor",
+    "description": "'other'-tagged errors recurring but both curated 'other' major topics already covered recently — expect a proposed minor topic instead of forcing a stale major one",
+    "level": "b2",
+    "language": "german",
+    "error_frequency": {"other": 4},
+    "recent_topics": ["Negation — nicht and kein", "Ordinal numbers and dates"],
+    "expected_scope": "minor",
+    "dominant_tag": "other"
+  },
+  {
+    "id": "sg_fresh_no_errors",
+    "description": "No session history yet — should still return a reasonable foundational A1 major topic",
+    "level": "a1",
+    "language": "german",
+    "error_frequency": {},
+    "recent_topics": [],
+    "expected_scope": "major",
+    "dominant_tag": null
+  },
+  {
+    "id": "sg_higher_level_recurring",
+    "description": "adjective_declension recurring at B2, B1-level adjective topic already covered — expect the B2 adjective_declension major topic instead",
+    "level": "b2",
+    "language": "german",
+    "error_frequency": {"adjective_declension": 3, "vocabulary": 1},
+    "recent_topics": ["Adjective endings — all cases"],
+    "expected_scope": "major",
+    "dominant_tag": "adjective_declension"
+  },
+  {
+    "id": "sg_vocabulary_signal",
+    "description": "vocabulary errors recurring at B1 — only one curated B1 topic is vocabulary-tagged",
+    "level": "b1",
+    "language": "german",
+    "error_frequency": {"vocabulary": 5},
+    "recent_topics": [],
+    "expected_scope": "major",
+    "dominant_tag": "vocabulary"
+  }
+]
