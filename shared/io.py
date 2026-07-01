@@ -8,6 +8,9 @@ class IOHandler(Protocol):
 
     def output(self, text: str = "") -> None: ...
     def prompt(self, text: str = "") -> str: ...
+    def prompt_block(self, text: str = "") -> str:
+        """Collect a multi-line answer as one opaque string (e.g. a block of grammar exercise answers)."""
+        ...
     def render_evaluation(self, data: dict) -> None: ...
     def start_timer(self, label: str = "Writing") -> None: ...
     def stop_timer(self) -> None: ...
@@ -24,6 +27,19 @@ class TerminalIOHandler:
 
     def prompt(self, text: str = "") -> str:
         return input(text)
+
+    def prompt_block(self, text: str = "") -> str:
+        """Read lines until a blank line, joined with '\\n'. terminal only — WebIOHandler
+        already gets a full multi-line textarea value in one send_input() call."""
+        if text:
+            print(text)
+        lines: list[str] = []
+        while True:
+            line = input()
+            if line == "":
+                break
+            lines.append(line)
+        return "\n".join(lines)
 
     def start_timer(self, label: str = "Writing") -> None:
         self._timer = SessionTimer(label=label)
@@ -116,6 +132,10 @@ class WebIOHandler:
     def prompt(self, text: str = "") -> str:
         self._out_q.put({"type": "prompt", "text": text})
         return self._in_q.get()  # blocks until send_input() is called
+
+    def prompt_block(self, text: str = "") -> str:
+        """Web client already posts a full multi-line textarea value in one send_input() call."""
+        return self.prompt(text)
 
     def send_input(self, text: str) -> None:
         self._in_q.put(text)

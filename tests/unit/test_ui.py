@@ -5,7 +5,7 @@ import threading
 import pytest
 
 import ui.app as _ui_mod
-from shared.io import WebIOHandler
+from shared.io import TerminalIOHandler, WebIOHandler
 
 _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -47,6 +47,31 @@ class TestWebIOHandler:
 
     def test_show_cli_hints_false(self):
         assert WebIOHandler().show_cli_hints is False
+
+    def test_prompt_block_delegates_to_prompt(self):
+        io = WebIOHandler()
+        threading.Thread(target=lambda: io.send_input("line1\nline2"), daemon=True).start()
+        val = io.prompt_block("Answers?")
+        assert val == "line1\nline2"
+        ev = io.get_event(timeout=1.0)
+        assert ev == {"type": "prompt", "text": "Answers?"}
+
+
+# ── TerminalIOHandler ───────────────────────────────────────────────────────────
+
+class TestTerminalIOHandler:
+    def test_prompt_block_reads_until_blank_line(self, monkeypatch, capsys):
+        io = TerminalIOHandler()
+        lines = iter(["first", "second", ""])
+        monkeypatch.setattr("builtins.input", lambda: next(lines))
+        result = io.prompt_block("Enter answers:")
+        assert result == "first\nsecond"
+        assert "Enter answers:" in capsys.readouterr().out
+
+    def test_prompt_block_empty_first_line_returns_empty_string(self, monkeypatch):
+        io = TerminalIOHandler()
+        monkeypatch.setattr("builtins.input", lambda: "")
+        assert io.prompt_block() == ""
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
