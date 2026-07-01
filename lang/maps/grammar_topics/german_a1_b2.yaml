@@ -1,0 +1,28 @@
+# Seed list — small hand-picked set to unblock 2a-i infra end-to-end.
+# NOT curriculum-complete. Layer 2a-ii replaces this with the full,
+# reviewed Goethe Institut A1-B2 compilation (see docs/grammar.md).
+
+- topic: "Present tense — regular verbs"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["verb_conjugation"]
+
+- topic: "Articles — nominative case"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["article"]
+
+- topic: "Separable verbs — present tense"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["verb_conjugation", "word_order"]
+
+- topic: "Dative case — prepositions"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["noun_declension"]
+
+- topic: "Adjective endings — all cases"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["adjective_declension"]

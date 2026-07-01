@@ -1,4 +1,6 @@
-from pydantic import BaseModel, model_validator
+from typing import Literal
+
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class CEFRMap(BaseModel):
@@ -104,6 +106,39 @@ class WritingMinWordsMap(BaseModel):
         return getattr(self, level.lower(), self.b1)
 
 
+class GrammarTopic(BaseModel):
+    """A single curated grammar topic entry.
+
+    scope: 'major' — from the curated syllabus list.
+           'minor' — reserved for topics select_grammar proposes on the fly;
+           never appears in a loaded map, only in skill output.
+    """
+
+    topic: str
+    difficulty: str
+    scope: Literal["major", "minor"]
+    related_error_tags: list[str]
+
+    @field_validator("difficulty")
+    @classmethod
+    def validate_difficulty(cls, v: str) -> str:
+        valid_levels = {"a1", "a2", "b1", "b2", "c1", "c2"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"Invalid CEFR difficulty: '{v}'. Allowed: {valid_levels}")
+        return v.lower()
+
+
+class GrammarTopicsMap(BaseModel):
+    """Curated major grammar topics — the syllabus backbone for select_grammar.
+
+    Loaded from lang/maps/grammar_topics/*.yaml (a flat YAML list at the file root).
+    related_error_tags on each topic are cross-validated against the language's
+    TaxonomyMap at load time — see lang/loader.py.
+    """
+
+    topics: list[GrammarTopic]
+
+
 class LanguageConfig(BaseModel):
     """Top-level language config — maps learning concepts to versioned content maps.
 
@@ -117,3 +152,4 @@ class LanguageConfig(BaseModel):
     taxonomy: str                # → lang/maps/taxonomy/{taxonomy}.yaml
     cefr_descriptors: str = "default"  # → lang/maps/cefr_descriptors/{cefr_descriptors}.yaml
     writing_word_ranges: str = "default"  # → lang/maps/writing_word_ranges/{name}.yaml
+    grammar_topics: str | None = None  # → lang/maps/grammar_topics/{grammar_topics}.yaml; no map yet if unset

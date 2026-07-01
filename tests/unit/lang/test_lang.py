@@ -7,8 +7,14 @@ import yaml
 from pathlib import Path
 from pydantic import ValidationError
 
-from lang.models import CEFRMap, CEFRDescriptorMap, TaxonomyMap, TaxonomyError, LanguageConfig
-from lang.loader import _Registry, get_cefr_context, get_taxonomy, get_cefr_descriptors, using_defaults
+from lang.models import (
+    CEFRMap, CEFRDescriptorMap, TaxonomyMap, TaxonomyError, LanguageConfig,
+    GrammarTopic, GrammarTopicsMap,
+)
+from lang.loader import (
+    _Registry, get_cefr_context, get_taxonomy, get_cefr_descriptors, using_defaults,
+    get_grammar_topics,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +153,40 @@ class TestTaxonomyMap:
 
 
 # ---------------------------------------------------------------------------
+# GrammarTopic / GrammarTopicsMap models
+# ---------------------------------------------------------------------------
+
+class TestGrammarTopicsMap:
+
+    def test_valid_topic(self):
+        t = GrammarTopic(
+            topic="Dative case — prepositions", difficulty="B1", scope="major",
+            related_error_tags=["noun_declension"],
+        )
+        assert t.difficulty == "b1"  # normalised lowercase, mirrors level fields elsewhere
+        assert t.scope == "major"
+
+    def test_invalid_difficulty_raises(self):
+        with pytest.raises(ValidationError):
+            GrammarTopic(
+                topic="x", difficulty="z9", scope="major", related_error_tags=[],
+            )
+
+    def test_invalid_scope_raises(self):
+        with pytest.raises(ValidationError):
+            GrammarTopic(
+                topic="x", difficulty="a1", scope="medium", related_error_tags=[],
+            )
+
+    def test_map_holds_multiple_topics(self):
+        m = GrammarTopicsMap(topics=[
+            GrammarTopic(topic="a", difficulty="a1", scope="major", related_error_tags=["article"]),
+            GrammarTopic(topic="b", difficulty="b1", scope="major", related_error_tags=["word_order"]),
+        ])
+        assert len(m.topics) == 2
+
+
+# ---------------------------------------------------------------------------
 # LanguageConfig model
 # ---------------------------------------------------------------------------
 
@@ -170,6 +210,12 @@ class TestLanguageConfig:
     def test_missing_taxonomy_raises(self):
         with pytest.raises(ValidationError):
             LanguageConfig.model_validate({"name": "german", "cefr_hints": "map1"})
+
+    def test_grammar_topics_defaults_to_none(self):
+        cfg = LanguageConfig.model_validate({
+            "name": "german", "cefr_hints": "cefr_map1", "taxonomy": "german_taxonomy_v1"
+        })
+        assert cfg.grammar_topics is None
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +312,42 @@ class TestRegistry:
         with pytest.raises(ValidationError):
             _Registry(maps_dir=tmp_path / "maps", languages_dir=tmp_path / "languages")
 
+    def test_grammar_topics_unset_is_none(self, tmp_path):
+        reg = _minimal_registry(tmp_path)
+        assert reg.get_grammar_topics("testlang") is None
+
+    def test_grammar_topics_loads_and_resolves(self, tmp_path):
+        _minimal_registry(tmp_path)  # lays down the required base maps
+        _write_yaml(tmp_path / "maps/grammar_topics/gt1.yaml", [
+            {"topic": "Articles", "difficulty": "a1", "scope": "major", "related_error_tags": ["verb_conjugation"]},
+        ])
+        _write_yaml(tmp_path / "languages/testlang.yaml", {
+            "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1", "grammar_topics": "gt1"
+        })
+        reg = _Registry(maps_dir=tmp_path / "maps", languages_dir=tmp_path / "languages")
+        gt = reg.get_grammar_topics("testlang")
+        assert gt is not None
+        assert gt.topics[0].topic == "Articles"
+
+    def test_grammar_topics_unknown_reference_raises(self, tmp_path):
+        _minimal_registry(tmp_path)
+        _write_yaml(tmp_path / "languages/testlang.yaml", {
+            "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1", "grammar_topics": "nonexistent"
+        })
+        with pytest.raises(ValueError, match="grammar_topics"):
+            _Registry(maps_dir=tmp_path / "maps", languages_dir=tmp_path / "languages")
+
+    def test_grammar_topics_bad_error_tag_raises(self, tmp_path):
+        _minimal_registry(tmp_path)
+        _write_yaml(tmp_path / "maps/grammar_topics/gt1.yaml", [
+            {"topic": "Articles", "difficulty": "a1", "scope": "major", "related_error_tags": ["not_a_real_tag"]},
+        ])
+        _write_yaml(tmp_path / "languages/testlang.yaml", {
+            "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1", "grammar_topics": "gt1"
+        })
+        with pytest.raises(ValueError, match="not_a_real_tag"):
+            _Registry(maps_dir=tmp_path / "maps", languages_dir=tmp_path / "languages")
+
 
 # ---------------------------------------------------------------------------
 # Integration — real YAML files (german + cefr_map1 + german_taxonomy_v1)
@@ -322,3 +404,12 @@ class TestIntegration:
     def test_unknown_language_cefr_descriptors_falls_back_to_default(self):
         result = get_cefr_descriptors("french")
         assert result  # non-empty — served by default map
+
+    def test_german_grammar_topics_loads(self):
+        gt = get_grammar_topics("german")
+        assert gt is not None
+        assert len(gt.topics) > 0
+        assert all(t.scope == "major" for t in gt.topics)
+
+    def test_unknown_language_grammar_topics_returns_none(self):
+        assert get_grammar_topics("french") is None

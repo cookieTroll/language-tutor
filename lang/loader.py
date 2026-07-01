@@ -4,7 +4,14 @@ from pathlib import Path
 
 import yaml
 
-from lang.models import CEFRDescriptorMap, CEFRMap, LanguageConfig, TaxonomyMap, WritingMinWordsMap
+from lang.models import (
+    CEFRDescriptorMap,
+    CEFRMap,
+    GrammarTopicsMap,
+    LanguageConfig,
+    TaxonomyMap,
+    WritingMinWordsMap,
+)
 
 _LANG_DIR = Path(__file__).parent
 _MAPS_DIR = _LANG_DIR / "maps"
@@ -25,6 +32,7 @@ class _Registry:
         self._taxonomy_maps: dict[str, TaxonomyMap] = {}
         self._cefr_descriptor_maps: dict[str, CEFRDescriptorMap] = {}
         self._writing_min_words_maps: dict[str, WritingMinWordsMap] = {}
+        self._grammar_topics_maps: dict[str, GrammarTopicsMap] = {}
         self._languages: dict[str, LanguageConfig] = {}
         self._load()
 
@@ -44,6 +52,12 @@ class _Registry:
         for path in (self._maps_dir / "writing_word_ranges").glob("*.yaml"):
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
             self._writing_min_words_maps[path.stem] = WritingMinWordsMap.model_validate(data)
+
+        grammar_topics_dir = self._maps_dir / "grammar_topics"
+        if grammar_topics_dir.exists():
+            for path in grammar_topics_dir.glob("*.yaml"):
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+                self._grammar_topics_maps[path.stem] = GrammarTopicsMap(topics=data or [])
 
         for path in self._languages_dir.glob("*.yaml"):
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -72,6 +86,23 @@ class _Registry:
                 f"Language '{config.name}' references unknown writing_word_ranges map "
                 f"'{config.writing_word_ranges}'. Available: {sorted(self._writing_min_words_maps)}"
             )
+        if config.grammar_topics is not None:
+            grammar_topics_map = self._grammar_topics_maps.get(config.grammar_topics)
+            if grammar_topics_map is None:
+                raise ValueError(
+                    f"Language '{config.name}' references unknown grammar_topics map "
+                    f"'{config.grammar_topics}'. Available: {sorted(self._grammar_topics_maps)}"
+                )
+            taxonomy_map = self._taxonomy_maps.get(config.taxonomy)
+            if taxonomy_map is not None:
+                for topic in grammar_topics_map.topics:
+                    for tag in topic.related_error_tags:
+                        if tag not in taxonomy_map.tag_set:
+                            raise ValueError(
+                                f"Grammar topic '{topic.topic}' for language '{config.name}' "
+                                f"references unknown error tag '{tag}'. "
+                                f"Must be one of {sorted(taxonomy_map.tag_set)}"
+                            )
 
     def is_default(self, language: str) -> dict[str, bool]:
         """Return which maps are falling back to defaults for the given language."""
@@ -107,6 +138,12 @@ class _Registry:
             return 100
         return wmap.get(level)
 
+    def get_grammar_topics(self, language: str) -> GrammarTopicsMap | None:
+        config = self._languages.get(language.lower())
+        if config is None or config.grammar_topics is None:
+            return None
+        return self._grammar_topics_maps.get(config.grammar_topics)
+
     def get_cefr_descriptors(self, language: str) -> str:
         config = self._languages.get(language.lower())
         map_name = config.cefr_descriptors if config else "default"
@@ -130,6 +167,11 @@ def get_cefr_context(language: str, level: str) -> str:
 def get_taxonomy(language: str) -> TaxonomyMap | None:
     """Return the TaxonomyMap for the given language, falling back to the default map."""
     return _registry.get_taxonomy(language)
+
+
+def get_grammar_topics(language: str) -> GrammarTopicsMap | None:
+    """Return the curated GrammarTopicsMap for the given language, or None if unconfigured."""
+    return _registry.get_grammar_topics(language)
 
 
 def get_cefr_descriptors(language: str) -> str:
