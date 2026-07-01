@@ -172,11 +172,48 @@ def test_error_frequency(storage):
     freq = storage.get_error_frequency(user_id, "german")
     assert freq.get("dative_case") == 2
     assert freq.get("word_order") == 1
-    
+
     topics = storage.get_recent_topics(user_id, "german", "writing", n=5)
     assert len(topics) == 2
     assert topics[0] == "t2"  # Should sort most recent first
     assert topics[1] == "t1"
+
+def test_error_frequency_module_filter(storage):
+    user_id = "user1"
+    date_now = datetime.now()
+    storage.write_user_profile(
+        UserProfile(
+            user_id=user_id, language="german", level="a1", level_source="stated",
+            active=True, created_at=date_now, updated_at=date_now
+        )
+    )
+
+    log_writing = SessionLog(
+        user_id=user_id, session_id="sess_w", language="german", module="writing",
+        task_label="t1", task_description="d1", comment="",
+        errors=[{"error_tag": "dative_case", "fragment": "f1", "explanation": "e1"}],
+        level="a1", date=date_now, file_path="path1", status="completed"
+    )
+    log_grammar = SessionLog(
+        user_id=user_id, session_id="sess_g", language="german", module="grammar",
+        task_label="t2", task_description="d2", comment="",
+        errors=[
+            {"error_tag": "dative_case", "fragment": "f2", "explanation": "e2"},
+            {"error_tag": "word_order", "fragment": "f3", "explanation": "e3"},
+        ],
+        level="a1", date=date_now + timedelta(seconds=1), file_path="path2", status="completed"
+    )
+    storage.write_session(log_writing)
+    storage.write_session(log_grammar)
+
+    writing_freq = storage.get_error_frequency(user_id, "german", module="writing")
+    assert writing_freq == {"dative_case": 1}
+
+    grammar_freq = storage.get_error_frequency(user_id, "german", module="grammar")
+    assert grammar_freq == {"dative_case": 1, "word_order": 1}
+
+    total_freq = storage.get_error_frequency(user_id, "german")
+    assert total_freq == {"dative_case": 2, "word_order": 1}
 
 def test_interrupted_sessions(storage):
     user_id = "user1"

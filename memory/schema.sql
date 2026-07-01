@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS errors (
     error_id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     language TEXT NOT NULL,
+    module TEXT NOT NULL,
     error_tag TEXT NOT NULL,
     error_detail TEXT,
     source_text TEXT,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS errors (
 
 CREATE INDEX IF NOT EXISTS idx_errors_session ON errors (session_id);
 CREATE INDEX IF NOT EXISTS idx_errors_lang ON errors (language);
+CREATE INDEX IF NOT EXISTS idx_errors_module ON errors (module);
 
 CREATE TABLE IF NOT EXISTS btw_log (
     btw_id TEXT PRIMARY KEY,

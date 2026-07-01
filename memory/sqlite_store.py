@@ -122,11 +122,11 @@ class SQLiteSessionStore(BaseSessionStore):
                 error_id = str(uuid.uuid4())
                 conn.execute(
                     """
-                    INSERT INTO errors (error_id, session_id, language, error_tag, error_detail, source_text)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO errors (error_id, session_id, language, module, error_tag, error_detail, source_text)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        error_id, log.session_id, log.language, err["error_tag"],
+                        error_id, log.session_id, log.language, log.module, err["error_tag"],
                         err.get("error_detail") or err.get("explanation"),
                         err.get("source_text") or err.get("fragment")
                     )
@@ -180,28 +180,18 @@ class SQLiteSessionStore(BaseSessionStore):
     def get_error_frequency(self, user_id: str, language: str, module: str | None = None) -> dict[str, int]:
         conn = self._get_conn()
         try:
+            query = """
+                SELECT e.error_tag, COUNT(*) as freq
+                FROM errors e
+                JOIN sessions s ON e.session_id = s.session_id
+                WHERE s.user_id = ? AND s.language = ?
+            """
+            params: list = [user_id, language]
             if module:
-                rows = conn.execute(
-                    """
-                    SELECT e.error_tag, COUNT(*) as freq 
-                    FROM errors e
-                    JOIN sessions s ON e.session_id = s.session_id
-                    WHERE s.user_id = ? AND s.language = ? AND s.module = ?
-                    GROUP BY e.error_tag
-                    """,
-                    (user_id, language, module)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """
-                    SELECT e.error_tag, COUNT(*) as freq 
-                    FROM errors e
-                    JOIN sessions s ON e.session_id = s.session_id
-                    WHERE s.user_id = ? AND s.language = ?
-                    GROUP BY e.error_tag
-                    """,
-                    (user_id, language)
-                ).fetchall()
+                query += " AND e.module = ?"
+                params.append(module)
+            query += " GROUP BY e.error_tag"
+            rows = conn.execute(query, params).fetchall()
             return {r["error_tag"]: r["freq"] for r in rows}
         finally:
             conn.close()

@@ -77,6 +77,7 @@ class JSONSessionStore(BaseSessionStore):
                 "error_id": err_id,
                 "session_id": log.session_id,
                 "language": log.language,
+                "module": log.module,
                 "error_tag": err["error_tag"],
                 "error_detail": err.get("explanation") or err.get("error_detail"),
                 "source_text": err.get("fragment") or err.get("source_text"),
@@ -176,7 +177,7 @@ class JSONSessionStore(BaseSessionStore):
         for ev in errors.values():
             sess = sessions.get(ev["session_id"])
             if sess and sess["user_id"] == user_id and sess["language"] == language:
-                if module is None or sess["module"] == module:
+                if module is None or ev.get("module") == module:
                     tag = ev["error_tag"]
                     freq[tag] = freq.get(tag, 0) + 1
         return freq
