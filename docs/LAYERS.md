@@ -99,6 +99,7 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii for the staged build order.
 
 - `lang/maps/grammar_topics/german_a1_b2.yaml` + `lang/models.py`/`lang/loader.py` support (same versioned-map pattern as `taxonomy`/`cefr_hints`)
+- `lang/maps/exercise_types/default.yaml` — exercise type vocabulary (name/grading/description) for `generate_exercises`, same versioned-map pattern; language-agnostic pedagogy, not German-specific content
 - `skills/select_grammar/`
 - `skills/dump_grammar/`
 - `skills/generate_exercises/`

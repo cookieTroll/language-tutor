@@ -9,11 +9,11 @@ from pydantic import ValidationError
 
 from lang.models import (
     CEFRMap, CEFRDescriptorMap, TaxonomyMap, TaxonomyError, LanguageConfig,
-    GrammarTopic, GrammarTopicsMap,
+    GrammarTopic, GrammarTopicsMap, ExerciseType, ExerciseTypesMap,
 )
 from lang.loader import (
     _Registry, get_cefr_context, get_taxonomy, get_cefr_descriptors, using_defaults,
-    get_grammar_topics,
+    get_grammar_topics, get_exercise_types,
 )
 
 
@@ -46,6 +46,10 @@ def _minimal_registry(tmp_path: Path) -> _Registry:
     _write_yaml(tmp_path / "maps/writing_word_ranges/default.yaml", {
         "a1": 40, "a2": 60, "b1": 100, "b2": 150, "c1": 200, "c2": 250
     })
+    _write_yaml(tmp_path / "maps/exercise_types/default.yaml", [
+        {"type": "fill_in_the_blank", "grading": "exact", "description": "A blank to fill in."},
+        {"type": "transformation", "grading": "llm", "description": "Rewrite per an instruction."},
+    ])
     _write_yaml(tmp_path / "languages/testlang.yaml", {
         "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1"
     })
@@ -187,6 +191,42 @@ class TestGrammarTopicsMap:
 
 
 # ---------------------------------------------------------------------------
+# ExerciseTypesMap model
+# ---------------------------------------------------------------------------
+
+class TestExerciseTypesMap:
+
+    def test_invalid_grading_raises(self):
+        with pytest.raises(ValidationError):
+            ExerciseType(type="fill_in_the_blank", grading="fuzzy", description="x")
+
+    def test_grading_for_known_and_unknown_type(self):
+        m = ExerciseTypesMap(types=[
+            ExerciseType(type="fill_in_the_blank", grading="exact", description="x"),
+            ExerciseType(type="word_order", grading="llm", description="y"),
+        ])
+        assert m.grading_for("fill_in_the_blank") == "exact"
+        assert m.grading_for("word_order") == "llm"
+        assert m.grading_for("matching") is None
+
+    def test_type_names(self):
+        m = ExerciseTypesMap(types=[
+            ExerciseType(type="fill_in_the_blank", grading="exact", description="x"),
+            ExerciseType(type="translation", grading="llm", description="y"),
+        ])
+        assert m.type_names == frozenset({"fill_in_the_blank", "translation"})
+
+    def test_format_for_prompt_includes_type_grading_and_description(self):
+        m = ExerciseTypesMap(types=[
+            ExerciseType(type="true_false", grading="exact", description="richtig/falsch"),
+        ])
+        text = m.format_for_prompt()
+        assert "true_false" in text
+        assert "exact" in text
+        assert "richtig/falsch" in text
+
+
+# ---------------------------------------------------------------------------
 # LanguageConfig model
 # ---------------------------------------------------------------------------
 
@@ -216,6 +256,12 @@ class TestLanguageConfig:
             "name": "german", "cefr_hints": "cefr_map1", "taxonomy": "german_taxonomy_v1"
         })
         assert cfg.grammar_topics is None
+
+    def test_exercise_types_defaults_to_default(self):
+        cfg = LanguageConfig.model_validate({
+            "name": "german", "cefr_hints": "cefr_map1", "taxonomy": "german_taxonomy_v1"
+        })
+        assert cfg.exercise_types == "default"
 
 
 # ---------------------------------------------------------------------------
@@ -348,6 +394,32 @@ class TestRegistry:
         with pytest.raises(ValueError, match="not_a_real_tag"):
             _Registry(maps_dir=tmp_path / "maps", languages_dir=tmp_path / "languages")
 
+    def test_exercise_types_unconfigured_falls_back_to_default(self, tmp_path):
+        reg = _minimal_registry(tmp_path)
+        et = reg.get_exercise_types("testlang")
+        assert et is not None
+        assert et.type_names == {"fill_in_the_blank", "transformation"}
+
+    def test_exercise_types_loads_and_resolves(self, tmp_path):
+        _minimal_registry(tmp_path)
+        _write_yaml(tmp_path / "maps/exercise_types/et1.yaml", [
+            {"type": "translation", "grading": "llm", "description": "x"},
+        ])
+        _write_yaml(tmp_path / "languages/testlang.yaml", {
+            "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1", "exercise_types": "et1"
+        })
+        reg = _Registry(maps_dir=tmp_path / "maps", languages_dir=tmp_path / "languages")
+        et = reg.get_exercise_types("testlang")
+        assert et.type_names == {"translation"}
+
+    def test_exercise_types_unknown_reference_raises(self, tmp_path):
+        _minimal_registry(tmp_path)
+        _write_yaml(tmp_path / "languages/testlang.yaml", {
+            "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1", "exercise_types": "nonexistent"
+        })
+        with pytest.raises(ValueError, match="exercise_types"):
+            _Registry(maps_dir=tmp_path / "maps", languages_dir=tmp_path / "languages")
+
 
 # ---------------------------------------------------------------------------
 # Integration — real YAML files (german + cefr_map1 + german_taxonomy_v1)
@@ -413,3 +485,14 @@ class TestIntegration:
 
     def test_unknown_language_grammar_topics_returns_none(self):
         assert get_grammar_topics("french") is None
+
+    def test_german_exercise_types_loads_default_set(self):
+        et = get_exercise_types("german")
+        assert et is not None
+        for expected in ("fill_in_the_blank", "multiple_choice", "true_false", "word_order", "translation"):
+            assert expected in et.type_names
+
+    def test_unrecognized_language_exercise_types_falls_back_to_default(self):
+        et = get_exercise_types("klingon")
+        assert et is not None
+        assert "fill_in_the_blank" in et.type_names

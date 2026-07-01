@@ -7,6 +7,7 @@ import yaml
 from lang.models import (
     CEFRDescriptorMap,
     CEFRMap,
+    ExerciseTypesMap,
     GrammarTopicsMap,
     LanguageConfig,
     TaxonomyMap,
@@ -33,6 +34,7 @@ class _Registry:
         self._cefr_descriptor_maps: dict[str, CEFRDescriptorMap] = {}
         self._writing_min_words_maps: dict[str, WritingMinWordsMap] = {}
         self._grammar_topics_maps: dict[str, GrammarTopicsMap] = {}
+        self._exercise_types_maps: dict[str, ExerciseTypesMap] = {}
         self._languages: dict[str, LanguageConfig] = {}
         self._load()
 
@@ -58,6 +60,10 @@ class _Registry:
             for path in grammar_topics_dir.glob("*.yaml"):
                 data = yaml.safe_load(path.read_text(encoding="utf-8"))
                 self._grammar_topics_maps[path.stem] = GrammarTopicsMap(topics=data or [])
+
+        for path in (self._maps_dir / "exercise_types").glob("*.yaml"):
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            self._exercise_types_maps[path.stem] = ExerciseTypesMap(types=data or [])
 
         for path in self._languages_dir.glob("*.yaml"):
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -85,6 +91,11 @@ class _Registry:
             raise ValueError(
                 f"Language '{config.name}' references unknown writing_word_ranges map "
                 f"'{config.writing_word_ranges}'. Available: {sorted(self._writing_min_words_maps)}"
+            )
+        if config.exercise_types not in self._exercise_types_maps:
+            raise ValueError(
+                f"Language '{config.name}' references unknown exercise_types map "
+                f"'{config.exercise_types}'. Available: {sorted(self._exercise_types_maps)}"
             )
         if config.grammar_topics is not None:
             grammar_topics_map = self._grammar_topics_maps.get(config.grammar_topics)
@@ -144,6 +155,11 @@ class _Registry:
             return None
         return self._grammar_topics_maps.get(config.grammar_topics)
 
+    def get_exercise_types(self, language: str) -> ExerciseTypesMap | None:
+        config = self._languages.get(language.lower())
+        map_name = config.exercise_types if config else "default"
+        return self._exercise_types_maps.get(map_name) or self._exercise_types_maps.get("default")
+
     def get_cefr_descriptors(self, language: str) -> str:
         config = self._languages.get(language.lower())
         map_name = config.cefr_descriptors if config else "default"
@@ -172,6 +188,11 @@ def get_taxonomy(language: str) -> TaxonomyMap | None:
 def get_grammar_topics(language: str) -> GrammarTopicsMap | None:
     """Return the curated GrammarTopicsMap for the given language, or None if unconfigured."""
     return _registry.get_grammar_topics(language)
+
+
+def get_exercise_types(language: str) -> ExerciseTypesMap | None:
+    """Return the ExerciseTypesMap for the given language, falling back to the default map."""
+    return _registry.get_exercise_types(language)
 
 
 def get_cefr_descriptors(language: str) -> str:

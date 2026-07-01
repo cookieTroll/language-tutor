@@ -139,6 +139,45 @@ class GrammarTopicsMap(BaseModel):
     topics: list[GrammarTopic]
 
 
+class ExerciseType(BaseModel):
+    """A single exercise type vocabulary entry for generate_exercises.
+
+    grading is fixed per type — never chosen by the LLM — so the skill derives
+    each generated exercise's grading mode from this map instead of trusting
+    a self-reported field.
+    """
+
+    type: str
+    grading: Literal["exact", "llm"]
+    description: str
+
+
+class ExerciseTypesMap(BaseModel):
+    """Exercise type vocabulary for generate_exercises.
+
+    Loaded from lang/maps/exercise_types/*.yaml (a flat YAML list at the file root).
+    Pedagogically universal (not tied to a specific target language), but kept in
+    the same per-language-resolved map pattern as taxonomy/cefr_hints so a future
+    language could override the mix without touching skill code.
+    """
+
+    types: list[ExerciseType]
+
+    @property
+    def type_names(self) -> frozenset[str]:
+        return frozenset(t.type for t in self.types)
+
+    def grading_for(self, exercise_type: str) -> str | None:
+        for t in self.types:
+            if t.type == exercise_type:
+                return t.grading
+        return None
+
+    def format_for_prompt(self) -> str:
+        """Format types with grading mode and description for the generator prompt."""
+        return "\n".join(f"  - {t.type} ({t.grading}): {t.description.strip()}" for t in self.types)
+
+
 class LanguageConfig(BaseModel):
     """Top-level language config — maps learning concepts to versioned content maps.
 
@@ -153,3 +192,4 @@ class LanguageConfig(BaseModel):
     cefr_descriptors: str = "default"  # → lang/maps/cefr_descriptors/{cefr_descriptors}.yaml
     writing_word_ranges: str = "default"  # → lang/maps/writing_word_ranges/{name}.yaml
     grammar_topics: str | None = None  # → lang/maps/grammar_topics/{grammar_topics}.yaml; no map yet if unset
+    exercise_types: str = "default"  # → lang/maps/exercise_types/{exercise_types}.yaml

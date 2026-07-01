@@ -251,3 +251,152 @@ class TestDumpGrammarSkill:
 
         assert out.success is False
         assert "connection refused" in out.metadata["error"]
+
+
+# ---------------------------------------------------------------------------
+# GenerateExercisesSkill
+# ---------------------------------------------------------------------------
+
+def _exercise(**overrides) -> dict:
+    base = {
+        "prompt": "Ich fahre ___ meinem Freund. (with)",
+        "type": "fill_in_the_blank",
+        "correct_answer": "mit",
+        "accepted_answers": [],
+        "error_tag": "noun_declension",
+        "distractor_hint": "Students often confuse 'mit' + accusative",
+    }
+    base.update(overrides)
+    return base
+
+
+class TestGenerateExercisesSkill:
+
+    def test_generates_mixed_exercises_with_derived_grading(self):
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        payload = json.dumps({"exercises": [
+            _exercise(type="fill_in_the_blank", error_tag="noun_declension"),
+            _exercise(
+                type="word_order", error_tag="word_order",
+                prompt="Reorder: heute / ich / Deutsch / lerne",
+                correct_answer="Heute lerne ich Deutsch.",
+            ),
+        ]})
+        llm = make_llm([payload])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(
+            make_input(level="a1", topic="Dative case", language="german", exercise_count=2), llm,
+        )
+
+        assert out.success is True
+        exercises = out.metadata["exercises"]
+        assert len(exercises) == 2
+        assert exercises[0]["exercise_type"] == "fill_in_the_blank"
+        assert exercises[0]["grading"] == "exact"
+        assert exercises[1]["exercise_type"] == "word_order"
+        assert exercises[1]["grading"] == "llm"
+
+    def test_empty_topic_short_circuits_without_llm_call(self):
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        llm = make_llm([])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(make_input(level="a1", topic="  ", language="german"), llm)
+
+        assert out.success is False
+        assert out.metadata["exercises"] == []
+        llm.complete.assert_not_called()
+
+    def test_unrecognized_language_falls_back_to_default_taxonomy(self):
+        """No language config means get_taxonomy falls back to the default map
+        (grammar/vocabulary/spelling/other) — the skill must still call the LLM
+        and validate tags against that fallback, not fail outright."""
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        payload = json.dumps({"exercises": [_exercise(error_tag="vocabulary")]})
+        llm = make_llm([payload])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(make_input(level="a1", topic="Dative case", language="klingon"), llm)
+
+        assert out.success is True
+        assert out.metadata["exercises"][0]["error_tag"] == "vocabulary"
+
+    def test_invalid_error_tag_triggers_retry(self):
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        bad = json.dumps({"exercises": [_exercise(error_tag="made_up_tag")]})
+        good = json.dumps({"exercises": [_exercise(error_tag="noun_declension")]})
+        llm = make_llm([bad, good])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["exercises"][0]["error_tag"] == "noun_declension"
+        assert llm.complete.call_count == 2
+
+    def test_null_error_tag_triggers_retry(self):
+        """Model occasionally emits error_tag: null on hard topics — must retry
+        with a clear message, not silently coerce None to the string 'None'."""
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        bad = json.dumps({"exercises": [_exercise(error_tag=None)]})
+        good = json.dumps({"exercises": [_exercise(error_tag="noun_declension")]})
+        llm = make_llm([bad, good])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["exercises"][0]["error_tag"] == "noun_declension"
+        assert llm.complete.call_count == 2
+
+    def test_invalid_exercise_type_triggers_retry(self):
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        bad = json.dumps({"exercises": [_exercise(type="matching")]})
+        good = json.dumps({"exercises": [_exercise(type="fill_in_the_blank")]})
+        llm = make_llm([bad, good])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["exercises"][0]["exercise_type"] == "fill_in_the_blank"
+        assert llm.complete.call_count == 2
+
+    def test_no_exercises_returned_triggers_retry(self):
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        empty = json.dumps({"exercises": []})
+        good = json.dumps({"exercises": [_exercise()]})
+        llm = make_llm([empty, good])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+
+        assert out.success is True
+        assert len(out.metadata["exercises"]) == 1
+        assert llm.complete.call_count == 2
+
+    def test_missing_accepted_answers_defaults_to_empty_list(self):
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        item = _exercise()
+        del item["accepted_answers"]
+        payload = json.dumps({"exercises": [item]})
+        llm = make_llm([payload])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["exercises"][0]["accepted_answers"] == []
+
+    def test_missing_key_fails_after_retries_exhausted(self):
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        bad = json.dumps({"exercises": [{"prompt": "x", "type": "fill_in_the_blank"}]})  # missing correct_answer/error_tag
+        llm = make_llm([bad, bad, bad])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+
+        assert out.success is False
+        assert out.metadata["exercises"] == []
+        assert "error" in out.metadata

@@ -1,0 +1,62 @@
+# Exercise type vocabulary for generate_exercises — see docs/grammar.md for the
+# original design discussion and split rationale (exact vs llm grading).
+# grading is authoritative here — the skill derives it from this map rather
+# than trusting the model's own say-so, since a single-token/discrete-choice
+# answer (exact) has one unambiguous correct string, while a whole-sentence
+# answer (llm) has multiple valid phrasings that string equality would reject.
+
+- type: fill_in_the_blank
+  grading: exact
+  description: >
+    A blank in a sentence; correct_answer is the missing word/phrase.
+    Example: "Ich fahre ___ meinem Freund. (with)"
+
+- type: multiple_choice
+  grading: exact
+  description: >
+    Options rendered as text (e.g. "a) mit  b) bei  c) nach"); the student
+    types the letter or word; correct_answer is the correct option.
+
+- type: true_false
+  grading: exact
+  description: >
+    A statement about the rule or a sentence; correct_answer is "richtig" or
+    "falsch".
+
+- type: error_correction
+  grading: llm
+  description: >
+    A sentence containing an error to find and fix.
+    Example: "Find and fix the error: Ich habe gestern ins Kino gegangen."
+
+- type: transformation
+  grading: llm
+  description: >
+    Rewrite a sentence per an instruction (tense, voice, etc.).
+    Example: "Rewrite using Perfekt: Ich esse einen Apfel."
+
+- type: word_order
+  grading: llm
+  description: >
+    Words given scrambled, either already-inflected ("reorder" — tests word
+    order only) or in base/dictionary form ("build" — tests word order plus
+    conjugation/case together).
+
+- type: sentence_completion
+  grading: llm
+  description: >
+    An incomplete sentence for the student to finish naturally.
+    Example: "Finish: Obwohl es regnet, ___"
+
+- type: sentence_combining
+  grading: llm
+  description: >
+    Two short sentences plus a connector cue to combine into one — a natural
+    home for small/idiomatic topics (e.g. sondern vs aber) that don't fit a
+    curated major-topic list.
+
+- type: translation
+  grading: llm
+  description: >
+    An English cue to translate into the target language (or the reverse
+    direction).
