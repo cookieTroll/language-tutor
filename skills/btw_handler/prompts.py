@@ -6,10 +6,12 @@ Current session context:
 - Topic: {topic}
 - Student's text so far: {user_text_so_far}
 - Student level: {level}
+{evaluation_context}
 
 Please answer the student's question concisely in English.
 If they are asking how to say an English word/phrase in {language}, translate it correctly (e.g. "wake up" is "aufwachen" or "aufstehen") and provide a quick example.
 If they ask about a {language} word, define it clearly in English.
+If the question is about why something was marked wrong (e.g. "why is this wrong?"), ground your answer in the mistakes/corrected text/tips above if they're relevant — don't re-derive the answer from scratch.
 Keep the explanation brief so they can return to writing.
 """
 

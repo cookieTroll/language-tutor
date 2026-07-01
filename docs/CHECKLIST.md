@@ -58,14 +58,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [x] [x] [ ] `tests/fixtures/grammar_cases.json` + `tests/judge/judge_grammar_module.py` (mirrors `judge_orchestrator.py`)
 - [x] [x] [ ] `shared/error_log.py` — `log_skill_error()` for skill call failures (not originally scoped, added while debugging judge-test flakiness); wired into every `out.success is False` branch across both `modules/grammar/` and `modules/writing/` (agent + pipeline), so any future skill failure — real or test-flake — leaves a diagnosable record in `data/logs/skill_errors.jsonl` instead of being silently discarded
 
-### 2a-v — Registry & orchestrator wiring
-- [ ] [ ] [ ] Register `GrammarModule` in `MODULE_REGISTRY`
-- [ ] [ ] [ ] Confirm `get_registry_description()` picks it up automatically (iterates the registry — likely free)
-- [ ] [ ] [ ] Confirm orchestrator routing / `recommend_exercise` works generically via registry validation, or needs a prompt update
-
-### 2a-vi — Writing module fix (independent of grammar module — can happen anytime)
-- [ ] [ ] [ ] Thread `pipeline.explained_mistakes` / `corrected_text` / `tips` / `session_summary` into `_handle_btw`'s `session_context` (`modules/writing/agent.py:90` → `_follow_up_phase` → `_handle_btw:222-228`) — currently only `user_text_so_far` is passed, so post-evaluation `/btw` answers about "why is this wrong" aren't grounded in the actual structured mistake data already shown to the user
-- [ ] [ ] [ ] Test: extend `tests/unit/test_writing.py` (or wherever `_handle_btw` is covered) to assert `session_context` includes the evaluation fields once a pipeline result exists — regression guard against this silently reverting
+> 2a-v and 2a-vi are complete — see `docs/CHECKLIST_FINISHED.md`.
 
 ### 2a-vii — Cross-module bridge: writing → grammar on error (depends on 2a-i…v; needs a short design pass, not a drop-in item)
 - [ ] [ ] [ ] `NextActionSignal(module, reason, suggested_focus)` — new model in `memory/protocols.py` (kept separate from `orchestrator.protocols.ExerciseRecommendation` to respect the memory→orchestrator dependency direction, despite the shape overlap)

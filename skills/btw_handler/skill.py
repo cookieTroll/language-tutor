@@ -3,6 +3,34 @@ from skills.protocols import SkillProtocol, SkillInput, SkillOutput
 from llm.base import BaseLLM, LLMMessage
 from skills.btw_handler.prompts import BTW_PROMPT, BTW_WORD_EXTRACTION_PROMPT
 
+
+def _format_evaluation_context(session_context: dict) -> str:
+    """Formats post-evaluation pipeline fields (mistakes/correction/tips/summary)
+    for injection into BTW_PROMPT, so "why is this wrong?" follow-up questions are
+    grounded in the actual evaluation already shown to the user — not re-derived
+    from scratch. Empty string (and the prompt's {evaluation_context} line stays
+    blank) when called before evaluation has happened, e.g. mid-writing /btw."""
+    mistakes = session_context.get("explained_mistakes")
+    if not mistakes:
+        return ""
+
+    lines = "\n".join(
+        f"  - '{m.get('fragment', '')}' → '{m.get('correction', '')}' "
+        f"({m.get('error_tag', '')}): {m.get('explanation', '')}"
+        for m in mistakes
+    )
+    parts = [f"- Mistakes found in the student's submission:\n{lines}"]
+
+    if session_context.get("corrected_text"):
+        parts.append(f"- Corrected text: {session_context['corrected_text']}")
+    if session_context.get("session_summary"):
+        parts.append(f"- Session summary: {session_context['session_summary']}")
+    if session_context.get("tips"):
+        parts.append(f"- Tips given: {'; '.join(session_context['tips'])}")
+
+    return "\n".join(parts)
+
+
 class BtwHandlerSkill(SkillProtocol):
     name = "btw_handler"
     description = "Utility: Answers quick, mid-session side questions from the user and extracts vocabulary flags."
@@ -46,6 +74,7 @@ class BtwHandlerSkill(SkillProtocol):
             user_text_so_far=session_context.get("user_text_so_far", ""),
             level=input.level,
             language=session_context.get("language", "German").capitalize(),
+            evaluation_context=_format_evaluation_context(session_context),
             question=question
         )
         

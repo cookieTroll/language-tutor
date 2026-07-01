@@ -1,12 +1,31 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from modules.writing.agent import WritingModule
+from modules.writing.pipeline import PipelineResult
 from modules.protocols import ModuleContext
 from llm.base import BaseLLM, LLMResponse, LLMMessage
 from memory.protocols import BtwEntry
 from skills.btw_handler.skill import BtwHandlerSkill
 from skills.protocols import SkillInput
-from shared.io import TerminalIOHandler
+from shared.io import IOHandler, TerminalIOHandler
+
+
+def _make_btw_llm(answer_text: str = "Because the verb splits.") -> MagicMock:
+    llm = MagicMock(spec=BaseLLM)
+    llm.config = MagicMock()
+    llm.config.max_skill_retries = 3
+    llm.config.show_incomplete_responses = False
+    llm.config.show_cut_by_limit_tag = True
+    llm.complete.return_value = LLMResponse(text=answer_text, model="test-model")
+    return llm
+
+
+def _make_ctx() -> ModuleContext:
+    return ModuleContext(
+        user_id="u1", language="german", level="a1",
+        recent_sessions=[], error_frequency={}, recent_topics=[],
+        vocab_flags=[], parameters={},
+    )
 
 def test_writing_module_run():
     # Simulate user interaction inside the module's input loop:
@@ -169,8 +188,101 @@ def test_detect_mistakes_self_correction_retry():
     )
     
     output = skill.run(inp, llm)
-    
+
     assert output.success is True
     assert len(output.metadata["raw_mistakes"]) == 1
     assert output.metadata["raw_mistakes"][0]["fragment"] == "Ich aufstehen"
     assert llm.complete.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# _handle_btw — evaluation context threading (Layer 2a-vi)
+# ---------------------------------------------------------------------------
+
+def test_handle_btw_includes_evaluation_context_after_pipeline():
+    """Post-evaluation /btw questions must be grounded in the actual pipeline
+    result already shown to the user, not just user_text_so_far."""
+    module = WritingModule()
+    ctx = _make_ctx()
+    pipeline = PipelineResult(
+        detector_success=True,
+        detector_error="",
+        explained_mistakes=[{
+            "fragment": "Ich aufstehen", "error_tag": "verb_conjugation",
+            "correction": "Ich stehe auf", "explanation": "Separable verbs split in main clauses.",
+        }],
+        corrected_text="Ich stehe auf.",
+        tips=["Practice separable verbs daily."],
+        session_summary="Solid A1 attempt with one separable verb error.",
+    )
+    llm = _make_btw_llm()
+    mock_io = MagicMock(spec=IOHandler)
+
+    module._handle_btw(
+        ctx, "My morning", ["Ich aufstehen um 7 Uhr."], "why is this wrong?", llm, mock_io,
+        pipeline=pipeline,
+    )
+
+    prompt_text = llm.complete.call_args_list[0].args[0][1].content
+    assert "Ich stehe auf" in prompt_text
+    assert "Separable verbs split in main clauses." in prompt_text
+    assert "Practice separable verbs daily." in prompt_text
+    assert "Solid A1 attempt with one separable verb error." in prompt_text
+
+
+def test_handle_btw_without_pipeline_omits_evaluation_context():
+    """Pre-evaluation /btw (asked mid-writing, before a pipeline result exists)
+    must not reference mistake data that doesn't exist yet — regression guard
+    against evaluation_context leaking in when pipeline=None (the default)."""
+    module = WritingModule()
+    ctx = _make_ctx()
+    llm = _make_btw_llm()
+    mock_io = MagicMock(spec=IOHandler)
+
+    module._handle_btw(
+        ctx, "My morning", ["Ich aufstehen um 7 Uhr."], "what does aufstehen mean?", llm, mock_io,
+    )
+
+    prompt_text = llm.complete.call_args_list[0].args[0][1].content
+    assert "Mistakes found" not in prompt_text
+    assert "Corrected text" not in prompt_text
+    assert "Session summary" not in prompt_text
+
+
+class TestFormatEvaluationContext:
+
+    def test_empty_without_explained_mistakes(self):
+        from skills.btw_handler.skill import _format_evaluation_context
+        assert _format_evaluation_context({}) == ""
+        assert _format_evaluation_context({"explained_mistakes": []}) == ""
+
+    def test_includes_mistake_correction_and_explanation(self):
+        from skills.btw_handler.skill import _format_evaluation_context
+        text = _format_evaluation_context({
+            "explained_mistakes": [{
+                "fragment": "Ich aufstehen", "correction": "Ich stehe auf",
+                "error_tag": "verb_conjugation", "explanation": "Separable verbs split.",
+            }],
+        })
+        assert "Ich aufstehen" in text
+        assert "Ich stehe auf" in text
+        assert "verb_conjugation" in text
+        assert "Separable verbs split." in text
+
+    def test_includes_optional_fields_only_when_present(self):
+        from skills.btw_handler.skill import _format_evaluation_context
+        mistakes = [{"fragment": "x", "correction": "y", "error_tag": "z", "explanation": "w"}]
+        text = _format_evaluation_context({
+            "explained_mistakes": mistakes,
+            "corrected_text": "Corrected version.",
+            "session_summary": "Good effort.",
+            "tips": ["Tip one.", "Tip two."],
+        })
+        assert "Corrected version." in text
+        assert "Good effort." in text
+        assert "Tip one." in text and "Tip two." in text
+
+        text_no_extras = _format_evaluation_context({"explained_mistakes": mistakes})
+        assert "Corrected text" not in text_no_extras
+        assert "Session summary" not in text_no_extras
+        assert "Tips given" not in text_no_extras

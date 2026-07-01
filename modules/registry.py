@@ -1,8 +1,10 @@
 from modules.writing.agent import WritingModule
+from modules.grammar.agent import GrammarModule
 
 # Registy of all middle-grain module agents available to the orchestrator
 MODULE_REGISTRY = {
     "writing": WritingModule(),
+    "grammar": GrammarModule(),
 }
 
 def get_registry_description() -> str:

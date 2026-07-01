@@ -88,7 +88,7 @@ class WritingModule(ModuleProtocol):
             ],
         })
 
-        self._follow_up_phase(ctx, topic, user_lines, llm, io)
+        self._follow_up_phase(ctx, topic, user_lines, pipeline, llm, io)
 
         return self._build_results(
             ctx, session_id, wp, writing_prompt,
@@ -193,7 +193,7 @@ class WritingModule(ModuleProtocol):
                 break
 
             if line.startswith("/btw "):
-                entry = self._handle_btw(ctx, topic, user_lines, line[5:].strip(), llm, io)
+                entry = self._handle_btw(ctx, topic, user_lines, line[5:].strip(), llm, io, pipeline=None)
                 btw_entries.append(entry)
                 if entry.flagged_word:
                     vocab_signals.append(entry.flagged_word)
@@ -222,6 +222,7 @@ class WritingModule(ModuleProtocol):
         question: str,
         llm: BaseLLM,
         io: IOHandler,
+        pipeline: PipelineResult | None = None,
     ) -> BtwEntry:
         io.output(f"[*] Asking tutor: '{question}'...")
         session_context = {
@@ -231,6 +232,13 @@ class WritingModule(ModuleProtocol):
             "level": ctx.level,
             "language": ctx.language,
         }
+        if pipeline is not None:
+            session_context.update({
+                "explained_mistakes": pipeline.explained_mistakes,
+                "corrected_text": pipeline.corrected_text,
+                "tips": pipeline.tips,
+                "session_summary": pipeline.session_summary,
+            })
         output = self.skills["btw_handler"].run(
             SkillInput(
                 user_id=ctx.user_id,
@@ -259,7 +267,13 @@ class WritingModule(ModuleProtocol):
         )
 
     def _follow_up_phase(
-        self, ctx: ModuleContext, topic: str, user_lines: list[str], llm: BaseLLM, io: IOHandler
+        self,
+        ctx: ModuleContext,
+        topic: str,
+        user_lines: list[str],
+        pipeline: PipelineResult,
+        llm: BaseLLM,
+        io: IOHandler,
     ) -> None:
         io.output("\n💬 Unsure about a mistake? Ask me here — or press Enter to finish.")
         while True:
@@ -269,7 +283,7 @@ class WritingModule(ModuleProtocol):
                 break
             if not line:
                 break
-            self._handle_btw(ctx, topic, user_lines, line, llm, io)
+            self._handle_btw(ctx, topic, user_lines, line, llm, io, pipeline=pipeline)
 
     def _write_latency_log(self, pipeline, ctx: ModuleContext, session_id: str) -> None:
         if not pipeline.step_timings:

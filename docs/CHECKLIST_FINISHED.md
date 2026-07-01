@@ -266,3 +266,12 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 
 ### 2a-ii — Grammar topics content
 - [x] [x] [x] `lang/maps/grammar_topics/german_a1_b2.yaml` — curated major topics compiled from Goethe Institut A1–B2 curriculum, `scope: major`, `related_error_tags` cross-checked against `lang/maps/taxonomy/german_taxonomy_v1.yaml`; review for accuracy before use
+
+### 2a-v — Registry & orchestrator wiring
+- [x] [x] [ ] Register `GrammarModule` in `MODULE_REGISTRY`
+- [x] [x] [ ] Confirm `get_registry_description()` picks it up automatically (iterates the registry — confirmed free, no changes needed)
+- [x] [x] [ ] Confirm orchestrator routing / `recommend_exercise` works generically via registry validation, or needs a prompt update — confirmed generic: `SUMMARIZE_PROGRESS_PROMPT` takes `{modules}` as a formatted list, `ExerciseRecommendation.module`/`ProgressSummary.weakest_module` are plain `str` (not `Literal["writing"]`), `write_file()` (`memory/protocols.py:230`) is fully generic via `content.to_dict()` — no prompt or code changes needed
+
+### 2a-vi — Writing module fix (independent of grammar module — can happen anytime)
+- [x] [x] [ ] Thread `pipeline.explained_mistakes` / `corrected_text` / `tips` / `session_summary` into `_handle_btw`'s `session_context` (`modules/writing/agent.py:90` → `_follow_up_phase` → `_handle_btw:222-228`) — currently only `user_text_so_far` is passed, so post-evaluation `/btw` answers about "why is this wrong" aren't grounded in the actual structured mistake data already shown to the user. `_handle_btw` takes a new `pipeline: PipelineResult | None = None` param (`None` for the pre-evaluation call site in `_collect_input`, the real pipeline for the post-evaluation call in `_follow_up_phase`); `skills/btw_handler/skill.py`'s new `_format_evaluation_context()` renders it into `BTW_PROMPT`'s new `{evaluation_context}` placeholder, and the prompt now explicitly says to ground "why is this wrong?" answers in it
+- [x] [x] [ ] Test: extend `tests/unit/test_writing.py` (or wherever `_handle_btw` is covered) to assert `session_context` includes the evaluation fields once a pipeline result exists — regression guard against this silently reverting. Added in `tests/unit/writing/test_writing.py`: `test_handle_btw_includes_evaluation_context_after_pipeline`, `test_handle_btw_without_pipeline_omits_evaluation_context`, and `TestFormatEvaluationContext` for the formatting helper directly
