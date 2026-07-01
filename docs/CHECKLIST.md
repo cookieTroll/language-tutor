@@ -50,12 +50,13 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [x] [x] [ ] ~~`skills/explain_grammar/`~~ — dropped from 2a scope; `grade_exercises` absorbs its only required use. Move to Backlog in `docs/grammar.md` as a possible future standalone utility. Fix stale claim in `docs/LAYERS.md:101` ("already built in Layer 1a" — it was never built; `explain_mistakes` is a different skill) — both already done: Backlog entry exists in `docs/grammar.md`, `docs/LAYERS.md:106` already states the corrected history
 
 ### 2a-iv — Module
-- [ ] [ ] [ ] `modules/grammar/agent.py` — `context_request()`; `run()`: **pick topic (manual override or `select_grammar`)** → dump → generate → display block → collect block → partition exact/llm → validate (Python) + grade (one batched `grade_exercises` call) → log errors → score → `GrammarSessionContent`. `ModuleResult.metadata` carries only `{btw_entries}` — `score`/`topic` are not duplicated there, they're already typed fields on `GrammarSessionContent` and grammar sessions produce no `vocab_signals`
-- [ ] [ ] [ ] `modules/grammar/skills.py` — skill injection
-- [ ] [ ] [ ] `modules/grammar/module.md`
-- [ ] [ ] [ ] Answer-block parsing (split by newline, pad/truncate to exercise count) — own test item, this is the fragile part
-- [ ] [ ] [ ] `tests/unit/test_grammar.py` — module loop logic (partitioning, string-normalize compare, block parsing), no LLM
-- [ ] [ ] [ ] `tests/fixtures/grammar_cases.json` + `tests/judge/judge_grammar_module.py` (mirrors `judge_orchestrator.py`)
+- [x] [x] [ ] `modules/grammar/agent.py` — `context_request()`; `run()`: **pick topic (manual override or `select_grammar`)** → dump → generate → display block → collect block → partition exact/llm → validate (Python) + grade (one batched `grade_exercises` call) → log errors → score → `GrammarSessionContent`. `ModuleResult.metadata` carries only `{btw_entries}` — `score`/`topic` are not duplicated there, they're already typed fields on `GrammarSessionContent` and grammar sessions produce no `vocab_signals`. Blank answers are resolved deterministically in Python (never sent to `grade_exercises` — a blank answer is unambiguously wrong, and the model was observed marking one "correct" when it was included in a batch)
+- [x] [x] [ ] `modules/grammar/skills.py` — skill injection
+- [x] [x] [ ] ~~`modules/grammar/module.md`~~ — dropped: not parsed by any code (confirmed `writing` has no equivalent file either); pure duplication of the class body and `docs/grammar.md`'s own module spec section
+- [x] [x] [ ] Answer-block parsing (split by newline, pad/truncate to exercise count) — own test item, this is the fragile part
+- [x] [x] [ ] `tests/unit/test_grammar.py` — module loop logic (partitioning, string-normalize compare, block parsing), no LLM
+- [x] [x] [ ] `tests/fixtures/grammar_cases.json` + `tests/judge/judge_grammar_module.py` (mirrors `judge_orchestrator.py`)
+- [x] [x] [ ] `shared/error_log.py` — `log_skill_error()` for skill call failures (not originally scoped, added while debugging judge-test flakiness); wired into every `out.success is False` branch across both `modules/grammar/` and `modules/writing/` (agent + pipeline), so any future skill failure — real or test-flake — leaves a diagnosable record in `data/logs/skill_errors.jsonl` instead of being silently discarded
 
 ### 2a-v — Registry & orchestrator wiring
 - [ ] [ ] [ ] Register `GrammarModule` in `MODULE_REGISTRY`

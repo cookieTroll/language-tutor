@@ -1,0 +1,26 @@
+[
+  {
+    "id": "gm_fresh_a1",
+    "description": "Fresh A1 learner, no recurring errors yet — select_grammar picks a foundational topic",
+    "level": "a1",
+    "language": "german",
+    "error_frequency": {"verb_conjugation": 3},
+    "recent_topics": []
+  },
+  {
+    "id": "gm_recurring_b1",
+    "description": "B1 learner with recurring noun_declension errors and one recently covered topic to avoid",
+    "level": "b1",
+    "language": "german",
+    "error_frequency": {"noun_declension": 4},
+    "recent_topics": ["Präteritum — narrative past for all verbs"]
+  },
+  {
+    "id": "gm_no_signal_b2",
+    "description": "B2 learner with no strong recurring-error signal",
+    "level": "b2",
+    "language": "german",
+    "error_frequency": {},
+    "recent_topics": []
+  }
+]

@@ -6,6 +6,7 @@ from modules.protocols import ModuleProtocol, ContextRequest, ModuleContext, Mod
 from memory.protocols import WritingSessionContent, BtwEntry
 from llm.base import BaseLLM
 from shared.io import IOHandler
+from shared.error_log import log_skill_error
 from lang.loader import get_writing_min_words
 from skills.protocols import SkillInput
 from skills.topic_picker.skill import TopicPickerSkill
@@ -142,6 +143,10 @@ class WritingModule(ModuleProtocol):
                 suggested_focus=suggested_focus,
             )
 
+        log_skill_error(
+            self.name, "topic_picker", out.metadata.get("error", ""),
+            {"level": ctx.level, "language": ctx.language},
+        )
         return WritingPrompt(
             topic="Describe your day",
             requirements=f"Minimum {min_words} words.",
@@ -234,6 +239,12 @@ class WritingModule(ModuleProtocol):
             ),
             llm,
         )
+        if not output.success:
+            # btw_handler's failure path puts the error text in "answer" itself, not "error"
+            log_skill_error(
+                self.name, "btw_handler", output.metadata.get("answer", ""),
+                {"level": ctx.level, "language": ctx.language, "topic": topic},
+            )
         answer = output.metadata.get("answer", "No answer received.")
         io.output(f"\nTutor: {answer}\n")
         return BtwEntry(

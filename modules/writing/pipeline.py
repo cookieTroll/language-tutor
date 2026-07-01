@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass, field
 from llm.base import BaseLLM
 from modules.protocols import ModuleContext
+from shared.error_log import log_skill_error
 from skills.protocols import SkillInput
 
 
@@ -81,6 +82,14 @@ class WritingPipeline:
             if io:
                 io.output(msg)
 
+        def _check(output, skill_name: str):
+            if not output.success:
+                log_skill_error(
+                    "writing", skill_name, output.metadata.get("error", ""),
+                    {"level": ctx.level, "language": ctx.language},
+                )
+            return output
+
         timings: list[StepTiming] = []
         _lock = threading.Lock()
         _wall_start = time.perf_counter()
@@ -109,8 +118,8 @@ class WritingPipeline:
                     "recurring_errors": list(ctx.error_frequency.keys()), "language": ctx.language,
                 },
             ))
-        level_output    = f1.result()
-        detector_output = f2.result()
+        level_output    = _check(f1.result(), "estimate_text_level")
+        detector_output = _check(f2.result(), "detect_mistakes")
         text_level_estimate = level_output.metadata.get("text_level_estimate")
 
         if not detector_output.success:
@@ -129,18 +138,18 @@ class WritingPipeline:
 
         # Step 3: classify against taxonomy
         _progress("[3/6] Classifying mistakes…")
-        classify_output = _timed(3, "classify_mistakes", SkillInput(
+        classify_output = _check(_timed(3, "classify_mistakes", SkillInput(
             user_id=ctx.user_id, level=ctx.level,
             parameters={"raw_mistakes": raw_mistakes, "language": ctx.language},
-        ))
+        )), "classify_mistakes")
         classified_mistakes = classify_output.metadata.get("classified_mistakes", [])
 
         # Step 4: add pedagogical explanations
         _progress("[4/6] Adding explanations…")
-        explain_output = _timed(4, "explain_mistakes", SkillInput(
+        explain_output = _check(_timed(4, "explain_mistakes", SkillInput(
             user_id=ctx.user_id, level=ctx.level,
             parameters={"classified_mistakes": classified_mistakes, "language": ctx.language},
-        ))
+        )), "explain_mistakes")
         explained_mistakes = explain_output.metadata.get("explained_mistakes", [])
 
         # Steps 5 + 6 in parallel — both only need explained_mistakes from step 4
@@ -162,8 +171,8 @@ class WritingPipeline:
                     "language": ctx.language,
                 },
             ))
-        correction_output = f5.result()
-        summary_output    = f6.result()
+        correction_output = _check(f5.result(), "write_correction")
+        summary_output    = _check(f6.result(), "summarise_writing_session")
         corrected_text = correction_output.metadata.get("corrected_text", user_text)
         return PipelineResult(
             detector_success=True,

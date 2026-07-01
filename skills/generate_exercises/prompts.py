@@ -21,16 +21,19 @@ For each exercise, provide:
 - error_tag: the single best matching tag from the taxonomy above
 - distractor_hint: the common wrong-answer pattern this exercise targets
 
+Every exercise must be genuinely about "{topic}" — do not reuse or adapt any
+example from these instructions, they are format illustrations only.
+
 Return JSON only. No markdown.
 {{
   "exercises": [
     {{
-      "prompt": "Ich fahre ___ meinem Freund. (with)",
-      "type": "fill_in_the_blank",
-      "correct_answer": "mit",
+      "prompt": "<exercise text testing {topic}, in {language}>",
+      "type": "<one of the exercise type names above>",
+      "correct_answer": "<the reference correct answer>",
       "accepted_answers": [],
       "error_tag": "<a valid taxonomy tag>",
-      "distractor_hint": "Students often confuse 'mit' + accusative"
+      "distractor_hint": "<the common wrong-answer pattern this targets>"
     }}
   ]
 }}"""

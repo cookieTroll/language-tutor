@@ -12,9 +12,15 @@ order, etc.), not because it says something different from the example.
 
 {items_json}
 
+MANDATORY: process every single item in the list above, including
+already_known_wrong ones — do not skip any item. Every item you mark
+correct=false MUST have a non-empty feedback string explaining the mistake;
+never leave feedback blank for an incorrect item, even if the explanation is
+short.
+
 Return JSON only. No markdown.
 {{
   "results": [
-    {{"index": <int>, "correct": <true|false>, "feedback": "<1-3 sentences, direct; only needed if incorrect>"}}
+    {{"index": <int>, "correct": <true|false>, "feedback": "<1-3 sentences, direct; REQUIRED and non-empty whenever correct is false>"}}
   ]
 }}"""
