@@ -144,3 +144,41 @@ class TestSelectGrammarSkill:
 
         assert out.success is False
         assert "error" in out.metadata
+
+
+# ---------------------------------------------------------------------------
+# resolve_manual_topic (manual override — no LLM call)
+# ---------------------------------------------------------------------------
+
+class TestResolveManualTopic:
+
+    def test_exact_match_resolves_as_major(self):
+        from skills.select_grammar.skill import resolve_manual_topic
+        result = resolve_manual_topic(
+            "Dative case — indirect objects and personal pronouns", level="a2", language="german",
+        )
+        assert result["scope"] == "major"
+        assert result["difficulty"] == "a2"
+        assert result["topic"] == "Dative case — indirect objects and personal pronouns"
+
+    def test_case_insensitive_match_resolves_as_major(self):
+        from skills.select_grammar.skill import resolve_manual_topic
+        result = resolve_manual_topic(
+            "  present tense — sein AND haben  ", level="a1", language="german",
+        )
+        assert result["scope"] == "major"
+        assert result["topic"] == "Present tense — sein and haben"
+        assert result["difficulty"] == "a1"
+
+    def test_no_match_falls_back_to_minor_at_stated_level(self):
+        from skills.select_grammar.skill import resolve_manual_topic
+        result = resolve_manual_topic("Sondern vs aber", level="b1", language="german")
+        assert result["scope"] == "minor"
+        assert result["topic"] == "Sondern vs aber"
+        assert result["difficulty"] == "b1"
+
+    def test_unknown_language_falls_back_to_minor(self):
+        from skills.select_grammar.skill import resolve_manual_topic
+        result = resolve_manual_topic("Some topic", level="a1", language="klingon")
+        assert result["scope"] == "minor"
+        assert result["difficulty"] == "a1"

@@ -88,3 +88,33 @@ class SelectGrammarSkill(SkillProtocol):
                 success=False,
                 metadata={"error": str(exc)},
             )
+
+
+def resolve_manual_topic(topic: str, level: str, language: str) -> dict:
+    """Resolves a user-typed free-text topic without calling the LLM.
+
+    Mirrors WritingModule._pick_topic's manual-override shape (modules/writing/agent.py):
+    the module offers "enter your own topic, or press Enter for a suggestion" before
+    invoking select_grammar. If the user's text matches a curated major topic (by
+    exact, case-insensitive topic string), reuse its difficulty — otherwise treat it
+    as an ad hoc minor topic at the user's stated level. Returns the same
+    {topic, difficulty, scope, reason} shape as SelectGrammarSkill's output, so the
+    module can use either path interchangeably.
+    """
+    topics_map = get_grammar_topics(language.capitalize())
+    if topics_map is not None:
+        for entry in topics_map.topics:
+            if entry.topic.strip().casefold() == topic.strip().casefold():
+                return {
+                    "topic": entry.topic,
+                    "difficulty": entry.difficulty,
+                    "scope": "major",
+                    "reason": "Matched user-provided topic to a curated syllabus entry.",
+                }
+
+    return {
+        "topic": topic.strip(),
+        "difficulty": level.lower(),
+        "scope": "minor",
+        "reason": "User-provided topic not found in the curated list; treated as ad hoc.",
+    }
