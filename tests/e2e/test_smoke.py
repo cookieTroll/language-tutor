@@ -27,14 +27,16 @@ def test_full_writing_session():
     #   2. language
     #   3. CEFR level
     #   4. confirm writing module (Enter = yes)
-    #   5. one line of essay text
-    #   6. empty line = submit
-    #   7. empty line = exit follow-up phase
-    #   8. decline another session
+    #   5. empty line = accept suggested topic (manual topic override prompt, Layer 2a-i)
+    #   6. one line of essay text
+    #   7. empty line = submit
+    #   8. empty line = exit follow-up phase
+    #   9. decline another session
     inputs = "\n".join([
         user_id,
         "german",
         "a2",
+        "",
         "",
         "Ich stehe morgens um sieben Uhr auf. Dann frühstücke ich mit meiner Familie.",
         "",

@@ -1,8 +1,20 @@
-# Seed list — small hand-picked set to unblock 2a-i infra end-to-end.
-# NOT curriculum-complete. Layer 2a-ii replaces this with the full,
-# reviewed Goethe Institut A1-B2 compilation (see docs/grammar.md).
+# Curated major grammar topics — Goethe-Institut A1-B2 curriculum (Start Deutsch 1/2,
+# Zertifikat B1, Zertifikat B2 syllabus scope). Compiled from the standard grammar
+# progression shared across Goethe-Institut course descriptors and mainstream course
+# books (Menschen, Schritte, Aspekte). Reviewed for curriculum accuracy and taxonomy
+# tag alignment before use — replaces the 2a-i seed list.
+#
+# related_error_tags must match lang/maps/taxonomy/german_taxonomy_v1.yaml exactly;
+# cross-validated at load time by lang/loader.py.
+
+# --- A1 ---
 
 - topic: "Present tense — regular verbs"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["verb_conjugation"]
+
+- topic: "Present tense — sein and haben"
   difficulty: a1
   scope: major
   related_error_tags: ["verb_conjugation"]
@@ -12,17 +24,213 @@
   scope: major
   related_error_tags: ["article"]
 
-- topic: "Separable verbs — present tense"
-  difficulty: a2
+- topic: "Accusative case — definite and indefinite articles"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["noun_declension"]
+
+- topic: "Negation — nicht and kein"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["other"]
+
+- topic: "Modal verbs — present tense and verb-final word order"
+  difficulty: a1
   scope: major
   related_error_tags: ["verb_conjugation", "word_order"]
 
-- topic: "Dative case — prepositions"
+- topic: "Separable verbs — present tense"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["verb_conjugation", "word_order"]
+
+- topic: "Imperative forms"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["verb_conjugation"]
+
+- topic: "Prepositions with accusative — für, durch, gegen, ohne, um"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["noun_declension"]
+
+- topic: "Prepositions with dative — mit, nach, bei, seit, von, zu, aus"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["noun_declension"]
+
+- topic: "Perfekt tense — regular and common irregular verbs"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "W-questions and yes/no questions — verb-second word order"
+  difficulty: a1
+  scope: major
+  related_error_tags: ["word_order"]
+
+# --- A2 ---
+
+- topic: "Präteritum — haben, sein, and modal verbs"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Perfekt — expanded irregular verbs and participle formation"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Two-way prepositions (Wechselpräpositionen) — dative vs accusative"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["noun_declension"]
+
+- topic: "Dative case — indirect objects and personal pronouns"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["noun_declension"]
+
+- topic: "Adjective endings after definite articles (nominative/accusative)"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["adjective_declension"]
+
+- topic: "Comparative and superlative"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["adjective_declension"]
+
+- topic: "Subordinate clauses — weil, dass, wenn"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["word_order"]
+
+- topic: "Reflexive verbs"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["verb_conjugation"]
+
+- topic: "Genitive case — possession"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["noun_declension"]
+
+- topic: "Infinitive clauses with zu"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["verb_conjugation"]
+
+- topic: "Ordinal numbers and dates"
+  difficulty: a2
+  scope: major
+  related_error_tags: ["other"]
+
+# --- B1 ---
+
+- topic: "Präteritum — narrative past for all verbs"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Plusquamperfekt"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Passive voice — present and past"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Konjunktiv II — polite requests and hypotheticals"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Relative clauses — relative pronouns in all cases"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["noun_declension", "word_order"]
+
+- topic: "Subordinate clauses — obwohl, während, nachdem, bevor"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["word_order"]
+
+- topic: "Adjective endings — all cases"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["adjective_declension"]
+
+- topic: "Genitive prepositions — während, trotz, wegen"
   difficulty: b1
   scope: major
   related_error_tags: ["noun_declension"]
 
-- topic: "Adjective endings — all cases"
+- topic: "Indirect questions"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["word_order"]
+
+- topic: "Two-part connectors — je...desto, sowohl...als auch, entweder...oder"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["word_order"]
+
+- topic: "Futur I"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Verbs with fixed prepositions — warten auf, sich freuen über"
+  difficulty: b1
+  scope: major
+  related_error_tags: ["vocabulary"]
+
+# --- B2 ---
+
+- topic: "Konjunktiv I — reported speech"
   difficulty: b2
   scope: major
-  related_error_tags: ["adjective_declension"]
+  related_error_tags: ["verb_tense"]
+
+- topic: "Passive voice with modal verbs"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Nominalization of verbs and adjectives"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["vocabulary"]
+
+- topic: "Extended participle constructions (erweiterte Partizipialattribute)"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["adjective_declension", "word_order"]
+
+- topic: "Konjunktiv II Vergangenheit — unreal conditions in the past"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["verb_tense"]
+
+- topic: "Fixed verb-noun collocations (Funktionsverbgefüge)"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["vocabulary"]
+
+- topic: "Advanced connectors — dennoch, folglich, zumal, dabei"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["word_order"]
+
+- topic: "Relative clauses with prepositions — wo(r)+preposition"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["word_order"]
+
+- topic: "Passive alternatives — sich lassen + infinitive, man, -bar adjectives"
+  difficulty: b2
+  scope: major
+  related_error_tags: ["verb_tense"]

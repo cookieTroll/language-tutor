@@ -42,7 +42,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 > See `docs/grammar.md` for full skill/module design. Split into sub-stages so each is independently reviewable; do 2a-i → 2a-vi before 2a-vii (cross-module bridge) and 2a-viii (UI).
 
 ### 2a-ii — Grammar topics content
-- [ ] [ ] [ ] `lang/maps/grammar_topics/german_a1_b2.yaml` — curated major topics compiled from Goethe Institut A1–B2 curriculum, `scope: major`, `related_error_tags` cross-checked against `lang/maps/taxonomy/german_taxonomy_v1.yaml`; review for accuracy before use
+- [x] [ ] [ ] `lang/maps/grammar_topics/german_a1_b2.yaml` — curated major topics compiled from Goethe Institut A1–B2 curriculum, `scope: major`, `related_error_tags` cross-checked against `lang/maps/taxonomy/german_taxonomy_v1.yaml`; review for accuracy before use
 
 ### 2a-iii — Skills
 - [ ] [ ] [ ] `skills/select_grammar/` — outline + `tests/fixtures/select_grammar_cases.json` + `tests/judge/judge_select_grammar.py`
