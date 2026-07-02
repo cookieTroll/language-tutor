@@ -29,12 +29,19 @@ class OrchestratorProtocol(Protocol):
         """Cold start → DEFAULT_RECOMMENDATION. Otherwise LLM over summary."""
         ...
 
-    def run_session(self, user_id: str, language: str, on_language_warning=None) -> None:
+    def run_session(
+        self,
+        user_id: str,
+        language: str,
+        on_language_warning=None,
+        forced_recommendation: ExerciseRecommendation | None = None,
+    ) -> ExerciseRecommendation | None:
         """
         0.  Check interrupted sessions → resume / log / discard
         1.  summarize_progress(user_id, language) — may return None
         2.  recommend_exercise
         3.  Present to user, await confirmation or override
+              └─ skipped when forced_recommendation is set — used as-is instead
         4.  Write-ahead: write_session(status='in_progress')
         5.  Fulfill module's ContextRequest from storage (all queries scoped to language)
         6.  module.run() → (ModuleResult, SessionFileContent)
@@ -46,5 +53,8 @@ class OrchestratorProtocol(Protocol):
         10. write_btw() for each entry in result.metadata['btw_entries']
         11. write_vocab_flag() for each signal in result.metadata['vocab_signals']
         12. Delete checkpoint file
+        13. If file_content.next_actions is set, prompt to start it now. Returns the
+            accepted recommendation (for the caller to re-invoke run_session with as
+            forced_recommendation) or None if declined / not offered.
         """
         ...

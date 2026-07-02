@@ -118,9 +118,20 @@ class Orchestrator(OrchestratorProtocol):
             "\n=================================================="
         )
 
-    def run_session(self, user_id: str, language: str, on_language_warning=None) -> None:
+    def run_session(
+        self,
+        user_id: str,
+        language: str,
+        on_language_warning=None,
+        forced_recommendation: ExerciseRecommendation | None = None,
+    ) -> ExerciseRecommendation | None:
         """Executes a full interactive session lifecycle.
         on_language_warning: optional callable(language, missing_maps) for UI to display config warnings.
+        forced_recommendation: when set, skips summarize/recommend/confirm and runs this
+        module directly — used to chain straight into a session accepted from the
+        previous session's next_actions prompt.
+        Returns the ExerciseRecommendation the user accepted from the end-of-session
+        prompt (for the caller to re-invoke run_session with), or None otherwise.
         """
         # 0. Check interrupted sessions
         self._handle_interruption(user_id)
@@ -129,12 +140,16 @@ class Orchestrator(OrchestratorProtocol):
         selected_lang, profile = self._select_language_and_profile(user_id, language)
         self._check_language_config(selected_lang, on_warn=on_language_warning)
 
-        # 2 & 3. Summarize and recommend
-        summary = self.summarize_progress(user_id, selected_lang)
-        recommendation = self.recommend_exercise(summary)
+        if forced_recommendation is not None:
+            recommendation = forced_recommendation
+            module_key = recommendation.module
+        else:
+            # 2 & 3. Summarize and recommend
+            summary = self.summarize_progress(user_id, selected_lang)
+            recommendation = self.recommend_exercise(summary)
 
-        # 4. Present recommendation, confirm or override
-        module_key = self._get_confirmed_module(recommendation)
+            # 4. Present recommendation, confirm or override
+            module_key = self._get_confirmed_module(recommendation)
         module = MODULE_REGISTRY[module_key]
 
         # 5. Write-ahead log + checkpoint creation
@@ -159,12 +174,30 @@ class Orchestrator(OrchestratorProtocol):
 
         except KeyboardInterrupt:
             self.io.output("\n[!] Session interrupted. You can resume or log it next time.")
-            return
+            return None
 
         # 8-13. Finalize session
         self._session_manager.finalize_session(
-            user_id, selected_lang, module_key, session_id, profile, result, file_content, checkpoint_path
+            user_id, selected_lang, module_key, session_id, profile, result, file_content, checkpoint_path,
+            error_frequency=ctx.error_frequency,
         )
+
+        # 14. Offer to chain straight into a suggested next action, if any
+        if file_content.next_actions:
+            signal = file_content.next_actions[0]
+            focus_label = f" on '{signal.suggested_focus}'" if signal.suggested_focus else ""
+            choice = self.io.prompt(
+                f"\nSession complete. Start {signal.module} practice{focus_label} now? "
+                f"This will begin a new session. [Y/n]: "
+            ).strip().lower()
+            accepted = choice != "n"
+            self._session_manager.record_next_action_decision(file_content, accepted)
+            if accepted:
+                return ExerciseRecommendation(
+                    module=signal.module, reason=signal.reason, suggested_focus=signal.suggested_focus
+                )
+
+        return None
 
     def _check_language_config(self, language: str, on_warn=None) -> None:
         if language in self._warned_languages:

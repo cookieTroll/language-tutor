@@ -2,11 +2,17 @@ import os
 import uuid
 from datetime import datetime
 from config import AppConfig
-from memory.protocols import StorageProtocol, SessionLog, BtwEntry, VocabFlag, UserProfile
+from memory.protocols import (
+    StorageProtocol, SessionLog, BtwEntry, VocabFlag, UserProfile, NextActionSignal, GrammarSessionContent,
+)
 from modules.protocols import ModuleContext, ContextRequest
 from llm.base import BaseLLM, LLMMessage
 from shared.io import IOHandler
 from orchestrator.prompts import INTERRUPTION_SUMMARY_PROMPT
+from lang.loader import get_grammar_topics
+
+RECURRING_ERROR_THRESHOLD = 2  # matches SessionAggregate.recurring_errors' own threshold
+GRAMMAR_MASTERY_THRESHOLD = 0.8  # score at/above this counts as "topic successfully covered"
 
 
 class SessionManager:
@@ -112,7 +118,12 @@ class SessionManager:
         result,
         file_content,
         checkpoint_path: str,
+        error_frequency: dict[str, int],
     ) -> None:
+        file_content.next_actions = self._compute_next_actions(
+            module_key, language, result, file_content, error_frequency
+        )
+
         rel_path = self.store.write_file(file_content, self.config.data_root)
 
         self.store.update_session_status(session_id, "completed")
@@ -158,6 +169,74 @@ class SessionManager:
             os.remove(checkpoint_path)
 
         self.io.output("\n[*] Session successfully saved!")
+
+    def record_next_action_decision(self, file_content, accepted: bool) -> None:
+        """Persist whether the user accepted the end-of-session next_actions suggestion.
+
+        finalize_session() already wrote the session file before the orchestrator asks
+        this question (the prompt is interactive and lives in orchestrator.py, not here
+        — SessionManager only ever informs via io.output, never prompts). This is a
+        small follow-up rewrite of the same file, not a new write path.
+        """
+        if not file_content.next_actions:
+            return
+        file_content.next_actions[0].accepted = accepted
+        self.store.write_file(file_content, self.config.data_root)
+
+    def _compute_next_actions(
+        self, module_key: str, language: str, result, file_content, error_frequency: dict[str, int]
+    ) -> list[NextActionSignal]:
+        """Dispatches to the direction-specific gate for the module that just ran.
+        Each direction uses a different signal shape, so it isn't one shared check —
+        see the two helpers below."""
+        if module_key == "writing":
+            return self._writing_error_recurrence_signal(language, result.errors, error_frequency)
+        if module_key == "grammar":
+            return self._grammar_mastery_signal(file_content)
+        return []
+
+    def _writing_error_recurrence_signal(
+        self, language: str, errors: list[dict], error_frequency: dict[str, int]
+    ) -> list[NextActionSignal]:
+        """Suggest a grammar session when a mistake from *this* session both maps to a
+        curated grammar topic (existence check via errors) and is already recurring
+        (judgment check via error_frequency, freq >= RECURRING_ERROR_THRESHOLD).
+
+        suggested_focus carries the error tag, not a resolved topic name — several
+        topics can share a tag (e.g. 12 topics all tag verb_tense) and this check has
+        no way to pick the right one for the user's level. Naming a specific topic
+        here would risk promising something select_grammar (which does the real,
+        level-aware pick when the grammar module actually runs) doesn't deliver.
+        """
+        topics_map = get_grammar_topics(language.capitalize())
+        if topics_map is None:
+            return []
+
+        session_tags = {e.get("error_tag") for e in errors if e.get("error_tag")}
+        for tag in session_tags:
+            if error_frequency.get(tag, 0) < RECURRING_ERROR_THRESHOLD:
+                continue
+            if any(tag in topic.related_error_tags for topic in topics_map.topics):
+                reason = f"You've repeatedly made '{tag}' mistakes ({error_frequency[tag]}x)."
+                return [NextActionSignal(module="grammar", reason=reason, suggested_focus=tag)]
+        return []
+
+    def _grammar_mastery_signal(self, file_content) -> list[NextActionSignal]:
+        """Suggest a writing session once a grammar topic is successfully covered
+        (score >= GRAMMAR_MASTERY_THRESHOLD), to reinforce it in free production.
+
+        Unlike the writing->grammar direction, suggested_focus here is the actual
+        topic name, not a tag: WritingModule._pick_topic already reads
+        ctx.parameters["suggested_focus"] and works it into the topic-picker prompt
+        as "try to practise: {suggested_focus}" — a phrase, not a hard contract like
+        generate_exercises' topic — so there's no precision/promise mismatch risk.
+        """
+        if not isinstance(file_content, GrammarSessionContent):
+            return []
+        if file_content.score < GRAMMAR_MASTERY_THRESHOLD:
+            return []
+        reason = f"You scored {file_content.score:.0%} on '{file_content.topic}' — write something using it to lock it in."
+        return [NextActionSignal(module="writing", reason=reason, suggested_focus=file_content.topic)]
 
     # ------------------------------------------------------------------
     # Interruption helpers

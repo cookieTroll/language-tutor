@@ -109,7 +109,7 @@ See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii f
 - `modules/grammar/module.md`
 - `memory/protocols.py` — updated: `GrammarSessionContent` added, `errors.module` column, `SessionFileContent.next_actions`
 - `modules/registry.py` — updated: grammar module registered
-- Writing → grammar cross-module bridge (`NextActionSignal`, `run_session(forced_recommendation=...)`) — depends on the above; see 2a-vii
+- Writing ↔ grammar cross-module bridge, both directions (`NextActionSignal`, `run_session(forced_recommendation=...)`) — depends on the above; see 2a-vii
 
 ---
 

@@ -2,6 +2,7 @@ import sys
 import pytest
 from unittest.mock import patch, MagicMock
 from ui.cli import main
+from orchestrator.protocols import ExerciseRecommendation
 
 @patch("ui.cli.sys.argv", ["ltut", "invalid-subcommand"])
 @patch("ui.cli.print")
@@ -66,10 +67,11 @@ def test_cli_main_flow(mock_print, mock_input, mock_orchestrator_cls, mock_build
     mock_build_llm.return_value = mock_llm
     
     mock_orch = MagicMock()
+    mock_orch.run_session.return_value = None
     mock_orchestrator_cls.return_value = mock_orch
 
     main()
-    
+
     # Assert orchestrator instantiation and session execution
     call_args = mock_orchestrator_cls.call_args
     assert call_args[0] == (mock_build_storage.return_value, mock_llm, mock_config)
@@ -78,4 +80,49 @@ def test_cli_main_flow(mock_print, mock_input, mock_orchestrator_cls, mock_build
     assert call_kwargs[0][0] == "john"
     assert call_kwargs[1]["language"] is None
     assert callable(call_kwargs[1]["on_language_warning"])
+    assert call_kwargs[1]["forced_recommendation"] is None
+    mock_print.assert_any_call("Goodbye!")
+
+@patch("ui.cli.sys.argv", ["ltut"])
+@patch("ui.cli.load_config")
+@patch("ui.cli.build_storage")
+@patch("ui.cli.build_llm")
+@patch("ui.cli.Orchestrator")
+@patch("ui.cli.input")
+@patch("ui.cli.print")
+def test_cli_chains_forced_recommendation_without_reprompting(
+    mock_print, mock_input, mock_orchestrator_cls, mock_build_llm, mock_build_storage, mock_load_config
+):
+    # Simulates a writing session ending with a next_actions signal accepted:
+    # 1. Enter student ID -> 'john'
+    # 2. First run_session accepts a grammar recommendation (returns it, not None)
+    #    -> the "Start another learning session?" prompt must be skipped entirely
+    # 3. Second run_session (the forced grammar session) returns None
+    # 4. Start another learning session -> 'n' (exits loop)
+    mock_input.side_effect = ["john", "n"]
+
+    mock_config = MagicMock()
+    mock_load_config.return_value = mock_config
+
+    mock_llm = MagicMock()
+    mock_llm.check_health.return_value = True
+    mock_build_llm.return_value = mock_llm
+
+    recommendation = ExerciseRecommendation(module="grammar", reason="recurring error", suggested_focus="verb_tense")
+    mock_orch = MagicMock()
+    mock_orch.run_session.side_effect = [recommendation, None]
+    mock_orchestrator_cls.return_value = mock_orch
+
+    main()
+
+    assert mock_orch.run_session.call_count == 2
+    first_call, second_call = mock_orch.run_session.call_args_list
+    assert first_call[1]["forced_recommendation"] is None
+    assert second_call[1]["forced_recommendation"] is recommendation
+
+    # "Start another learning session?" must only have been asked once (after the
+    # second, declined session) — not after the first, chained one.
+    assert mock_input.call_args_list.count(
+        (("\nStart another learning session? [Y/n]: ",), {})
+    ) == 1
     mock_print.assert_any_call("Goodbye!")

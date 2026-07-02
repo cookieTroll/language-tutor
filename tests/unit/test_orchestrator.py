@@ -1,4 +1,5 @@
 import os
+import yaml
 import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
@@ -6,7 +7,8 @@ from config import AppConfig, LLMConfig
 from memory.json_store import JSONSessionStore
 from llm.base import BaseLLM, LLMResponse
 from orchestrator.orchestrator import Orchestrator, DEFAULT_RECOMMENDATION
-from memory.protocols import UserProfile, SessionLog
+from memory.protocols import UserProfile, SessionLog, GrammarSessionContent, NextActionSignal
+from lang.models import GrammarTopicsMap, GrammarTopic
 
 @pytest.fixture
 def store_and_llm(tmp_path):
@@ -390,10 +392,166 @@ def test_finalize_session_success(store_and_llm):
         profile=profile,
         result=result,
         file_content=file_content,
-        checkpoint_path=os.path.join(config.data_root, "checkpoints", "user1", "session123.json")
+        checkpoint_path=os.path.join(config.data_root, "checkpoints", "user1", "session123.json"),
+        error_frequency={},
     )
     
     recent = store.get_recent_sessions("user1", "german")
     assert recent[0].status == "completed"
     assert recent[0].file_path != ""
     assert recent[0].comment == "Great job"
+
+
+# ── 2a-vii: next_actions gate (writing <-> grammar bridge, both directions) ────────
+
+_GRAMMAR_TOPICS = GrammarTopicsMap(topics=[
+    GrammarTopic(
+        topic="Present tense — regular verbs",
+        difficulty="a1",
+        scope="major",
+        related_error_tags=["verb_conjugation"],
+    ),
+])
+
+
+@patch("orchestrator.session_manager.get_grammar_topics", return_value=_GRAMMAR_TOPICS)
+def test_next_actions_no_signal_when_not_recurring(mock_topics, store_and_llm):
+    """Tag present in this session's errors but not yet recurring -> no signal."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    signals = orchestrator._session_manager._writing_error_recurrence_signal(
+        language="german",
+        errors=[{"error_tag": "verb_conjugation", "fragment": "x", "explanation": "y"}],
+        error_frequency={"verb_conjugation": 1},
+    )
+    assert signals == []
+
+
+@patch("orchestrator.session_manager.get_grammar_topics", return_value=_GRAMMAR_TOPICS)
+def test_next_actions_no_signal_when_absent_from_session(mock_topics, store_and_llm):
+    """Tag recurring in the aggregate but not among this session's own errors -> no signal."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    signals = orchestrator._session_manager._writing_error_recurrence_signal(
+        language="german",
+        errors=[],
+        error_frequency={"verb_conjugation": 5},
+    )
+    assert signals == []
+
+
+@patch("orchestrator.session_manager.get_grammar_topics", return_value=_GRAMMAR_TOPICS)
+def test_next_actions_signal_when_both_present(mock_topics, store_and_llm):
+    """Tag both present this session and recurring -> signal set, focused on the tag
+    (not a resolved topic name — select_grammar does the level-aware topic pick later)."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    signals = orchestrator._session_manager._writing_error_recurrence_signal(
+        language="german",
+        errors=[{"error_tag": "verb_conjugation", "fragment": "x", "explanation": "y"}],
+        error_frequency={"verb_conjugation": 2},
+    )
+    assert len(signals) == 1
+    assert signals[0].module == "grammar"
+    assert signals[0].suggested_focus == "verb_conjugation"
+
+
+def _grammar_session_content(score: float, topic: str = "Present tense — regular verbs"):
+    return GrammarSessionContent(
+        session_id="s1", user_id="user1", language="german", module="grammar",
+        task_label="grammar_practice", date=datetime.now().isoformat(), level="a1",
+        status="completed", topic=topic, scope="major", explanation="...",
+        items=[], score=score, btw_log=[],
+    )
+
+
+def test_grammar_mastery_no_signal_below_threshold(store_and_llm):
+    """Score below GRAMMAR_MASTERY_THRESHOLD -> no writing suggestion."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    signals = orchestrator._session_manager._grammar_mastery_signal(_grammar_session_content(score=0.5))
+    assert signals == []
+
+
+def test_grammar_mastery_signal_at_threshold(store_and_llm):
+    """Score at/above GRAMMAR_MASTERY_THRESHOLD -> writing suggestion, focused on the topic name."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    signals = orchestrator._session_manager._grammar_mastery_signal(
+        _grammar_session_content(score=1.0, topic="Perfekt tense — regular and common irregular verbs")
+    )
+    assert len(signals) == 1
+    assert signals[0].module == "writing"
+    assert signals[0].suggested_focus == "Perfekt tense — regular and common irregular verbs"
+
+
+def test_compute_next_actions_dispatches_by_module(store_and_llm):
+    """The generic dispatcher routes to the right direction-specific gate."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    class _Result:
+        errors: list = []
+
+    signals = orchestrator._session_manager._compute_next_actions(
+        module_key="grammar",
+        language="german",
+        result=_Result(),
+        file_content=_grammar_session_content(score=1.0),
+        error_frequency={},
+    )
+    assert len(signals) == 1
+    assert signals[0].module == "writing"
+
+    signals = orchestrator._session_manager._compute_next_actions(
+        module_key="vocab",
+        language="german",
+        result=_Result(),
+        file_content=_grammar_session_content(score=1.0),
+        error_frequency={},
+    )
+    assert signals == []
+
+
+def test_record_next_action_decision_persists_accepted_flag(store_and_llm):
+    """The accept/decline answer is written back to the session file — the file is
+    already on disk (finalize_session wrote it) by the time this is called, so this
+    exercises the follow-up rewrite path, not the original write."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    file_content = _grammar_session_content(score=1.0)
+    file_content.next_actions = [
+        NextActionSignal(module="writing", reason="you nailed it", suggested_focus="Perfekt tense")
+    ]
+    orchestrator._session_manager.store.write_file(file_content, config.data_root)
+
+    orchestrator._session_manager.record_next_action_decision(file_content, accepted=True)
+
+    assert file_content.next_actions[0].accepted is True
+
+    written_path = os.path.join(
+        config.data_root, "sessions", file_content.user_id, file_content.language, f"{file_content.session_id}.yaml"
+    )
+    with open(written_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    assert data["next_actions"][0]["accepted"] is True
+
+
+def test_record_next_action_decision_noop_without_next_actions(store_and_llm):
+    """No next_actions on the file -> nothing to record, and no spurious rewrite."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    file_content = _grammar_session_content(score=0.0)  # next_actions defaults to []
+    orchestrator._session_manager.record_next_action_decision(file_content, accepted=True)
+
+    written_path = os.path.join(
+        config.data_root, "sessions", file_content.user_id, file_content.language, f"{file_content.session_id}.yaml"
+    )
+    assert not os.path.exists(written_path)

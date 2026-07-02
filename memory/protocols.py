@@ -5,6 +5,18 @@ from datetime import datetime
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+class NextActionSignal(BaseModel):
+    """Cross-module recommendation signal, e.g. writing -> grammar on a recurring error.
+
+    Kept separate from orchestrator.protocols.ExerciseRecommendation to respect the
+    memory -> orchestrator dependency direction, despite the shape overlap.
+    """
+    module: str
+    reason: str
+    suggested_focus: str | None = None
+    accepted: bool | None = None  # None until the end-of-session prompt is answered
+
+
 class SessionFileContent(BaseModel, ABC):
     """Abstract base. Each module defines a typed subclass."""
     session_id: str
@@ -15,6 +27,7 @@ class SessionFileContent(BaseModel, ABC):
     date: str
     level: str
     status: Literal["completed", "interrupted"]
+    next_actions: list[NextActionSignal] = Field(default_factory=list)
 
     @field_validator("level")
     @classmethod

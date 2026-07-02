@@ -419,6 +419,21 @@ Full list to be compiled from Goethe Institut A1–B2 curriculum before Layer 2a
   only if a concrete future need for an ad hoc, system-triggered "explain
   this one thing" call emerges that batching can't cover.
 
+- **Tag → topic precision for the 2a-vii writing→grammar bridge** — the
+  current taxonomy is coarse relative to the curated grammar topic list:
+  9 taxonomy tags map onto 40 topics, and some tags fan out badly
+  (`verb_tense` alone covers 12 topics spanning A1–B2, `word_order` covers
+  11). `SessionManager._compute_next_actions` (`orchestrator/session_manager.py`)
+  deliberately does **not** try to resolve a specific topic from the tag —
+  it only uses the tag as an existence check (does *any* topic cover this
+  tag at all) and surfaces the raw tag as `suggested_focus`, leaving the
+  actual level-aware topic pick to `select_grammar`. A precise "you keep
+  messing up X, here's exactly topic Y" recommendation would need the
+  already-tracked taxonomy work in `docs/CHECKLIST.md` Layer 1a
+  ("Vary error taxonomy by progression level... finer at B2/C1") — finer
+  tags would shrink the fan-out enough for 1:1 or near-1:1 tag→topic
+  mapping. Revisit this bridge once that taxonomy work lands.
+
 Exercise types considered and deliberately deferred — not part of the Layer
 2a `generate_exercises` type set:
 

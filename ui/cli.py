@@ -62,16 +62,24 @@ def main():
     if not user_id:
         user_id = "student"
         
+    forced_recommendation = None
     while True:
         try:
             # Run the full session flow (includes startup check, active language selection, etc.)
-            orchestrator.run_session(user_id, language=None, on_language_warning=_language_config_warning)
+            forced_recommendation = orchestrator.run_session(
+                user_id, language=None, on_language_warning=_language_config_warning,
+                forced_recommendation=forced_recommendation,
+            )
         except KeyboardInterrupt:
             print("\n\nExiting active tutoring session. Goodbye!")
             break
         except Exception as e:
             print(f"\n[!] An error occurred during the session: {e}")
-            
+            forced_recommendation = None
+
+        if forced_recommendation is not None:
+            continue
+
         again = input("\nStart another learning session? [Y/n]: ").strip().lower()
         if again == "n":
             print("Goodbye!")

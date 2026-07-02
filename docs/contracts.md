@@ -165,9 +165,20 @@ class ModuleProtocol(Protocol):
 ## Session File Contracts (`memory/protocols.py`)
 
 ```python
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from abc import ABC, abstractmethod
 from typing import Literal
+
+class NextActionSignal(BaseModel):
+    """Cross-module recommendation signal, e.g. writing -> grammar on a recurring error.
+
+    Kept separate from orchestrator.protocols.ExerciseRecommendation to respect the
+    memory -> orchestrator dependency direction, despite the shape overlap.
+    """
+    module: str
+    reason: str
+    suggested_focus: str | None = None
+    accepted: bool | None = None  # None until the end-of-session prompt is answered
 
 class SessionFileContent(BaseModel, ABC):
     """Abstract base. Each module defines a typed subclass."""
@@ -179,6 +190,7 @@ class SessionFileContent(BaseModel, ABC):
     date: str
     level: str
     status: Literal["completed", "interrupted"]
+    next_actions: list[NextActionSignal] = Field(default_factory=list)  # set by SessionManager.finalize_session
 
     @field_validator("level")
     @classmethod
@@ -369,13 +381,20 @@ class OrchestratorProtocol(Protocol):
         """Cold start → DEFAULT_RECOMMENDATION. Otherwise LLM over summary."""
         ...
 
-    def run_session(self, user_id: str, language: str, on_language_warning=None) -> None:
+    def run_session(
+        self,
+        user_id: str,
+        language: str,
+        on_language_warning=None,
+        forced_recommendation: ExerciseRecommendation | None = None,
+    ) -> ExerciseRecommendation | None:
         """
         0.  Check interrupted sessions → resume / log / discard (SessionManager)
         1.  Language selection + user profile (get/create)
         2.  summarize_progress(user_id, language) — may return None
         3.  recommend_exercise
         4.  Present to user, await confirmation or override
+              └─ steps 2–4 skipped when forced_recommendation is set — used as-is instead
         5.  Write-ahead: write_session(status='in_progress') + create checkpoint file (SessionManager)
         6.  Fulfill module's ContextRequest from storage (SessionManager)
         7.  module.run(ctx, llm, io) → (ModuleResult, SessionFileContent)
@@ -387,6 +406,9 @@ class OrchestratorProtocol(Protocol):
         11. write_btw() for each entry in result.metadata['btw_entries']
         12. write_vocab_flag() for each signal in result.metadata['vocab_signals']
         13. Delete checkpoint file
+        14. If file_content.next_actions is set, prompt to start it now; return the
+            accepted ExerciseRecommendation for the caller to re-invoke run_session
+            with as forced_recommendation, or None if declined / not offered.
         Steps 5, 6, 8–13 delegated to SessionManager.
         """
         ...
