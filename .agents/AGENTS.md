@@ -16,6 +16,10 @@ These rules define workspace-specific guidelines for AI agents working on this p
 - **Safe Database Schema Updates**: Any changes to the SQLite database schema in `memory/sqlite_store.py` must handle schema upgrades gracefully (e.g., using `CREATE TABLE IF NOT EXISTS` or catching exceptions when adding columns) to prevent destroying or corrupting existing students' databases when they update to a new version of the package.
 - **Git Commit Structure**: All commits must follow the Conventional Commits specification (e.g., `feat(ui):`, `fix(orchestrator):`, `test(cli):`).
 
+## Code Health
+
+- **Bloat check**: When a commit substantially grows an existing file or function (e.g. a file crosses ~500 lines, or a function/file starts visibly mixing unrelated concerns), proactively flag it and propose a concrete split — don't wait to be asked. Suggest only; don't refactor without confirmation, per the project's "don't refactor beyond what's asked" norm.
+
 ## Documentation Sync
 
 Each `docs/` file owns a specific concern (see below). After any commit that adds, renames, or removes a package, skill, or module — or changes a public interface, session file schema, storage method, or test structure — check every `docs/` file whose concern is touched and update it to reflect current reality.
