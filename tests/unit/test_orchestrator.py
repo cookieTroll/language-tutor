@@ -555,3 +555,150 @@ def test_record_next_action_decision_noop_without_next_actions(store_and_llm):
         config.data_root, "sessions", file_content.user_id, file_content.language, f"{file_content.session_id}.yaml"
     )
     assert not os.path.exists(written_path)
+
+
+# ── 2b: on-demand /history command ──────────────────────────────────────────────
+
+def _writing_session_log(session_id, days_ago, error_tags, text_level_estimate=None, task_label="daily_routine"):
+    when = datetime.now() - timedelta(days=days_ago)
+    return SessionLog(
+        user_id="user1", session_id=session_id, language="german", module="writing",
+        task_label=task_label, task_description="desc", comment="ok",
+        errors=[{"error_tag": tag, "fragment": "x", "explanation": "y"} for tag in error_tags],
+        level="a2", date=when, file_path=f"sessions/user1/german/{session_id}.yaml",
+        status="completed", started_at=when, completed_at=when, duration_minutes=5.0,
+        text_level_estimate=text_level_estimate,
+    )
+
+
+def test_parse_history_scope_default(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    from orchestrator.orchestrator import DEFAULT_HISTORY_SESSIONS
+    assert orchestrator._parse_history_scope("") == ("sessions", DEFAULT_HISTORY_SESSIONS)
+
+
+def test_parse_history_scope_session_count_arg(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    assert orchestrator._parse_history_scope("5") == ("sessions", 5)
+
+
+def test_parse_history_scope_days_arg(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    assert orchestrator._parse_history_scope("30d") == ("days", 30)
+
+
+@pytest.mark.parametrize("arg", ["abc", "0", "-5d", "5x", "0d"])
+def test_parse_history_scope_invalid(store_and_llm, arg):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    assert orchestrator._parse_history_scope(arg) is None
+
+
+def test_handle_history_command_invalid_arg_skips_skill_call(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    with patch("orchestrator.orchestrator.SummarizeWritingHistorySkill") as mock_skill_cls:
+        orchestrator._handle_history_command("user1", "german", "/history abc")
+        mock_skill_cls.assert_not_called()
+
+    assert any("Invalid /history" in call.args[0] for call in io.output.call_args_list)
+
+
+def test_handle_history_command_no_sessions_skips_skill_call(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    with patch("orchestrator.orchestrator.SummarizeWritingHistorySkill") as mock_skill_cls:
+        orchestrator._handle_history_command("user1", "german", "/history")
+        mock_skill_cls.assert_not_called()
+
+    assert any("No completed writing sessions" in call.args[0] for call in io.output.call_args_list)
+
+
+def test_handle_history_command_aggregates_and_calls_skill(store_and_llm):
+    """Recurring-mistake threshold (>=2) filters out one-off tags; topics and a
+    chronological level trend are built from the filtered sessions."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    store.write_session(_writing_session_log("s1", days_ago=3, error_tags=["dative_case", "word_order"],
+                                              text_level_estimate="a2", task_label="daily_routine"))
+    store.write_session(_writing_session_log("s2", days_ago=2, error_tags=["dative_case"],
+                                              text_level_estimate="a2", task_label="holiday_trip"))
+    store.write_session(_writing_session_log("s3", days_ago=1, error_tags=["dative_case"],
+                                              text_level_estimate="b1", task_label="daily_routine"))
+
+    from skills.protocols import SkillOutput
+    with patch("orchestrator.orchestrator.SummarizeWritingHistorySkill") as mock_skill_cls:
+        mock_skill_cls.return_value.run.return_value = SkillOutput(
+            skill_name="summarize_writing_history", success=True,
+            metadata={"history_summary": "You've been practicing daily routines and improved to B1."},
+        )
+        orchestrator._handle_history_command("user1", "german", "/history")
+
+        call_kwargs = mock_skill_cls.return_value.run.call_args
+        skill_input = call_kwargs.args[0]
+        assert skill_input.parameters["topics"] == ["daily_routine", "holiday_trip"]
+        assert skill_input.parameters["recurring_mistakes"] == [{"error_tag": "dative_case", "count": 3}]
+        assert skill_input.parameters["level_trend"] == [
+            {"date": (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d"), "level": "a2"},
+            {"date": (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"), "level": "a2"},
+            {"date": (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"), "level": "b1"},
+        ]
+
+    assert any("You've been practicing" in call.args[0] for call in io.output.call_args_list)
+
+
+def test_handle_history_command_days_arg_filters_by_date(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    store.write_session(_writing_session_log("old", days_ago=60, error_tags=["word_order"]))
+    store.write_session(_writing_session_log("recent", days_ago=1, error_tags=["word_order"]))
+
+    from skills.protocols import SkillOutput
+    with patch("orchestrator.orchestrator.SummarizeWritingHistorySkill") as mock_skill_cls:
+        mock_skill_cls.return_value.run.return_value = SkillOutput(
+            skill_name="summarize_writing_history", success=True, metadata={"history_summary": "..."},
+        )
+        orchestrator._handle_history_command("user1", "german", "/history 7d")
+
+        skill_input = mock_skill_cls.return_value.run.call_args.args[0]
+        assert skill_input.parameters["topics"] == ["daily_routine"]  # only the recent session
+
+
+def test_handle_history_command_skill_failure_logged_not_crashed(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    store.write_session(_writing_session_log("s1", days_ago=1, error_tags=["word_order"]))
+
+    from skills.protocols import SkillOutput
+    with patch("orchestrator.orchestrator.SummarizeWritingHistorySkill") as mock_skill_cls, \
+         patch("orchestrator.orchestrator.log_skill_error") as mock_log:
+        mock_skill_cls.return_value.run.return_value = SkillOutput(
+            skill_name="summarize_writing_history", success=False, metadata={"error": "boom"},
+        )
+        orchestrator._handle_history_command("user1", "german", "/history")
+        mock_log.assert_called_once()
+
+    assert any("Could not generate" in call.args[0] for call in io.output.call_args_list)
+
+
+def test_get_confirmed_module_loops_on_history_then_confirms_normally(store_and_llm):
+    """/history re-prompts instead of starting a module; a normal answer afterward
+    is unaffected — the existing [Y/n] / override flow still works."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    io.prompt.side_effect = ["/history", "y"]
+
+    with patch.object(orchestrator, "_handle_history_command") as mock_handle:
+        module_key = orchestrator._get_confirmed_module(DEFAULT_RECOMMENDATION, "user1", "german")
+
+    mock_handle.assert_called_once_with("user1", "german", "/history")
+    assert module_key == "writing"
+    assert io.prompt.call_count == 2

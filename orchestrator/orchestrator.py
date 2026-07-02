@@ -1,14 +1,16 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import AppConfig
 from memory.protocols import StorageProtocol, SessionLog, UserProfile
 from llm.base import BaseLLM
 from orchestrator.protocols import OrchestratorProtocol, ProgressSummary, ExerciseRecommendation
 from orchestrator.session_manager import SessionManager
 from skills.summarize_progress.skill import SummarizeProgressSkill
+from skills.summarize_writing_history.skill import SummarizeWritingHistorySkill
 from skills.protocols import SkillInput
 from modules.registry import MODULE_REGISTRY
 from shared.io import IOHandler
+from shared.error_log import log_skill_error
 from lang.loader import using_defaults
 
 DEFAULT_RECOMMENDATION = ExerciseRecommendation(
@@ -16,6 +18,9 @@ DEFAULT_RECOMMENDATION = ExerciseRecommendation(
     reason="Not enough session history yet — starting with writing.",
     suggested_focus=None
 )
+
+DEFAULT_HISTORY_SESSIONS = 10  # /history with no argument: how many past writing sessions to summarise
+RECURRING_MISTAKE_THRESHOLD = 2  # matches SessionAggregate.recurring_errors' own threshold
 
 class Orchestrator(OrchestratorProtocol):
     def __init__(self, store: StorageProtocol, llm: BaseLLM, config: AppConfig, io: IOHandler):
@@ -149,7 +154,7 @@ class Orchestrator(OrchestratorProtocol):
             recommendation = self.recommend_exercise(summary)
 
             # 4. Present recommendation, confirm or override
-            module_key = self._get_confirmed_module(recommendation)
+            module_key = self._get_confirmed_module(recommendation, user_id, selected_lang)
         module = MODULE_REGISTRY[module_key]
 
         # 5. Write-ahead log + checkpoint creation
@@ -255,7 +260,7 @@ class Orchestrator(OrchestratorProtocol):
 
         return selected_lang, profile
 
-    def _get_confirmed_module(self, recommendation: ExerciseRecommendation) -> str:
+    def _get_confirmed_module(self, recommendation: ExerciseRecommendation, user_id: str, language: str) -> str:
         focus_line = f"\nSuggested focus: {recommendation.suggested_focus}" if recommendation.suggested_focus else ""
         self.io.output(
             f"\n[Recommendation]: We suggest using the '{recommendation.module.upper()}' module."
@@ -263,15 +268,113 @@ class Orchestrator(OrchestratorProtocol):
             f"{focus_line}"
         )
 
-        confirm = self.io.prompt("\nStart this module? [Y/n]: ").strip().lower()
-        module_key = recommendation.module
+        while True:
+            confirm = self.io.prompt(
+                "\nStart this module? [Y/n] "
+                "(or /history, /history <n>, /history <n>d for a writing-history report): "
+            ).strip().lower()
 
-        if confirm == "n":
-            self.io.output(f"Available modules: {list(MODULE_REGISTRY.keys())}")
-            override = self.io.prompt("Enter module name to run instead: ").strip().lower()
-            if override in MODULE_REGISTRY:
-                module_key = override
-            else:
-                self.io.output(f"[!] Invalid module. Falling back to suggested module '{module_key}'.")
+            if confirm.startswith("/history"):
+                self._handle_history_command(user_id, language, confirm)
+                continue
 
-        return module_key
+            module_key = recommendation.module
+            if confirm == "n":
+                self.io.output(f"Available modules: {list(MODULE_REGISTRY.keys())}")
+                override = self.io.prompt("Enter module name to run instead: ").strip().lower()
+                if override in MODULE_REGISTRY:
+                    module_key = override
+                else:
+                    self.io.output(f"[!] Invalid module. Falling back to suggested module '{module_key}'.")
+
+            return module_key
+
+    def _parse_history_scope(self, arg: str) -> tuple[str, int] | None:
+        """Returns (kind, n) where kind is 'sessions' or 'days'. None if arg is malformed."""
+        if not arg:
+            return "sessions", DEFAULT_HISTORY_SESSIONS
+        if arg.endswith("d") and arg[:-1].isdigit() and int(arg[:-1]) > 0:
+            return "days", int(arg[:-1])
+        if arg.isdigit() and int(arg) > 0:
+            return "sessions", int(arg)
+        return None
+
+    def _handle_history_command(self, user_id: str, language: str, raw_command: str) -> None:
+        """On-demand writing-history report (Layer 2b). Not tied to any specific session;
+        nothing here is written back to storage — regenerated fresh on every request.
+
+        Currently does arg validation, window filtering, and all three aggregations
+        (topics/recurring mistakes/level trend) in one method — acceptable at this size,
+        but if /history grows more scope (more aggregations, other modules, etc.) split
+        the window-filtering and aggregation-building into their own helpers first.
+        """
+        arg = raw_command[len("/history"):].strip()
+        scope = self._parse_history_scope(arg)
+        if scope is None:
+            self.io.output(
+                "[!] Invalid /history argument. Use '/history', '/history <n>' (sessions), "
+                "or '/history <n>d' (days)."
+            )
+            return
+        kind, n = scope
+
+        completed = [
+            s for s in self.store.get_sessions_by_module(user_id, language, "writing")
+            if s.status == "completed"
+        ]
+        if kind == "sessions":
+            window = completed[:n]
+            scope_label = f"last {n} session{'s' if n != 1 else ''}"
+        else:
+            cutoff = datetime.now() - timedelta(days=n)
+            window = [s for s in completed if s.date >= cutoff]
+            scope_label = f"last {n} day{'s' if n != 1 else ''}"
+
+        if not window:
+            self.io.output("\nNo completed writing sessions in that window yet.")
+            return
+
+        topics = list(dict.fromkeys(s.task_label for s in window if s.task_label))
+
+        tag_counts: dict[str, int] = {}
+        for s in window:
+            for e in s.errors:
+                tag = e.get("error_tag")
+                if tag:
+                    tag_counts[tag] = tag_counts.get(tag, 0) + 1
+        recurring_mistakes = [
+            {"error_tag": tag, "count": count}
+            for tag, count in sorted(tag_counts.items(), key=lambda x: -x[1])
+            if count >= RECURRING_MISTAKE_THRESHOLD
+        ]
+
+        level_trend = [
+            {"date": s.date.strftime("%Y-%m-%d"), "level": s.text_level_estimate}
+            for s in reversed(window)  # window is newest-first; trend reads oldest-to-newest
+            if s.text_level_estimate
+        ]
+
+        skill = SummarizeWritingHistorySkill()
+        out = skill.run(
+            SkillInput(
+                user_id=user_id,
+                level=self.store.get_current_level(user_id),
+                parameters={
+                    "language": language,
+                    "scope_label": scope_label,
+                    "topics": topics,
+                    "recurring_mistakes": recurring_mistakes,
+                    "level_trend": level_trend,
+                },
+            ),
+            self.llm,
+        )
+        if not out.success:
+            log_skill_error(
+                "orchestrator", "summarize_writing_history", out.metadata.get("error", ""),
+                {"user_id": user_id, "language": language},
+            )
+            self.io.output("\n[!] Could not generate a history summary right now.")
+            return
+
+        self.io.output(f"\n--- Writing History ({scope_label}) ---\n{out.metadata['history_summary']}")
