@@ -52,7 +52,7 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 - `skills/explain_mistakes/` — Step 3: Explanation Generator
 - `skills/write_correction/` — Step 4: Correction Writer (produces `corrected_text`, `tips`, `session_summary`)
 - `skills/estimate_text_level/` — Step 5: CEFR Band Estimator (runs before Step 1; independent)
-- `skills/summarise_session/` — Step 6: Session Summariser (severity-grouped mistakes, `comparison_note`)
+- `skills/summarise_session/` — Step 6: Session Summariser (severity-grouped mistakes, `session_summary`, `tips`)
 
 ### Module
 - `modules/writing/pipeline.py` — `WritingPipeline` sequences all six steps; `WritingModule` delegates to it

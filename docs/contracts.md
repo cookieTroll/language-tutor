@@ -216,7 +216,6 @@ class WritingSessionContent(SessionFileContent):
     vocab_updates: list[dict]      # [{word, source, occurrence_count}]
     suggested_focus: str | None = None
     text_level_estimate: str | None = None   # CEFR band from Step 5 estimator
-    comparison_note: str | None = None       # cross-session comparison (Layer 2b)
 
 class GrammarSessionContent(SessionFileContent):  # Layer 2a
     topic: str
@@ -254,6 +253,7 @@ class SessionLog(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_minutes: float | None = None
+    text_level_estimate: str | None = None   # writing sessions only; None for other modules (Layer 2b)
 
 class SessionAggregate(BaseModel):
     """Aggregated session profile for a (user, language) pair. Used by progress summariser."""

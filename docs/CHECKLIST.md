@@ -81,13 +81,24 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ---
 
-## Layer 2b — Cross-Session Writing Comparison
+## Layer 2b — Writing History Summary
 
-> Fills in `comparison_note: str | None` introduced as `None` in Layer 1a Step 6.
-- [ ] [ ] [ ] `StorageProtocol.get_writing_sessions()` — returns session logs with file paths for writing sessions
-- [ ] [ ] [ ] Post-pipeline step: load previous writing session file, generate comparison note
-- [ ] [ ] [ ] Populate `WritingSessionContent.comparison_note` (stub introduced in Layer 1a Step 6)
-- [ ] [ ] [ ] Update session file viewer to render comparison section when present
+> Supersedes the original "cross-session comparison" framing: not a per-session diff against
+> the immediately-previous session, and not automatically attached to every session file.
+> Instead, an on-demand `/history` command (typed at the existing "Start this module? [Y/n]"
+> prompt in `orchestrator.py::_get_confirmed_module`, same interaction shape as `/btw`) that
+> reports on writing history at whatever depth the user asks for — topics covered, recurring
+> mistakes, and a CEFR-level trend. Nothing is persisted to any session file; the report is
+> regenerated each time it's requested. Drops the `WritingSessionContent.comparison_note`
+> stub from Layer 1a Step 6 — nothing will ever populate it under this design, so the field
+> and its forced-`None` guard in `skills/summarise_session/base.py` are removed rather than
+> left dead.
+- [x] [ ] [ ] `SessionLog.text_level_estimate: str | None` — new field (`memory/protocols.py`), the one schema addition this layer needed; everything else (topics, recurring-mistake counts) is built in Python from `get_sessions_by_module()`'s existing return value — `get_session_aggregate()` wasn't reused here since it aggregates all-time with no count/day bound, and `/history` needs a bounded window. No new `StorageProtocol` surface. Populated in `SessionManager.finalize_session()` from `file_content.text_level_estimate` (`getattr` fallback — only `WritingSessionContent` carries it). Threaded through both backends: `json_store.py` (write + all three `SessionLog`-constructing reads) and `sqlite_store.py` (`schema.sql` column + idempotent `ALTER TABLE ... ADD COLUMN` guard in `_init_db()` for pre-existing local DBs, since `CREATE TABLE IF NOT EXISTS` alone won't add a column to an already-created table — verified against a simulated pre-migration DB)
+- [x] [ ] [ ] Remove `WritingSessionContent.comparison_note` and `PipelineResult.comparison_note` (`modules/writing/pipeline.py`, `modules/writing/agent.py`), the forced-`None` guard + `_defaults()` doc line in `skills/summarise_session/base.py`, and the corresponding prompt field/JSON-schema line in `skills/summarise_session/writing/prompts.py` + `skill.py`. Updated the now-affected tests in `tests/unit/writing/test_writing.py` and `test_writing_pipeline.py`, including deleting the now-meaningless `test_forces_comparison_note_to_none`
+- [x] [ ] [ ] `skills/summarize_writing_history/` — new skill (own `skill.py` + `prompts.py`, no shared base needed — only writing consumes it). Input: pre-aggregated topics list, recurring-mistake tag counts, and a chronological level-estimate trend (already computed in Python from filtered `SessionLog`s, not raw session objects — mirrors how `SummarizeProgressSkill` takes a pre-built `SessionAggregate.model_dump()` rather than raw rows) plus a scope label (e.g. "last 10 sessions" / "last 30 days"). Output: one readable `history_summary` string. + `tests/fixtures/summarize_writing_history_cases.json` + `tests/judge/judge_summarize_writing_history.py`
+- [x] [ ] [ ] `orchestrator.py::_get_confirmed_module()` — needs `user_id`/`language` threaded in (currently only takes `recommendation`); wraps its prompt in a loop that recognizes `/history`, `/history <n>` (session count), and `/history <n>d` (days) before falling through to the normal `[Y/n]` handling. History depth is a parameter, not a hardcoded literal buried inline: no argument falls back to a module-level `DEFAULT_HISTORY_SESSIONS = 10` constant in `orchestrator.py`, matching the existing `RECURRING_ERROR_THRESHOLD` / `GRAMMAR_MASTERY_THRESHOLD` pattern in `orchestrator/session_manager.py`. An explicit `<n>` or `<n>d` argument always overrides the default. Filters `store.get_sessions_by_module(user_id, language, "writing")` (status `"completed"` only) by count or by date cutoff, builds the three inputs above, calls the new skill, prints the result via `io.output()`, then re-prompts. `log_skill_error()` on the skill's `out.success is False` branch, matching every other skill call site. No output is written back to any session file. Empty-history case ("no writing sessions yet") and a malformed argument both short-circuit before the LLM call
+- [x] [ ] [ ] Test: `tests/unit/test_orchestrator.py` — `_parse_history_scope` (default/count/days/invalid), `_handle_history_command` (invalid arg, no-history case, aggregation correctness incl. the recurring-mistake threshold and chronological level trend, days-window filtering, skill-failure logging), and `_get_confirmed_module`'s loop (confirms `/history` re-prompts and the normal `[Y/n]` path is unaffected) — each its own control-flow branch, not a fixed-up existing test
+- [x] [ ] [ ] Updated `docs/contracts.md` (`SessionLog` + `WritingSessionContent` schema blocks), `docs/writing.md`, `docs/DESIGN.md`, `docs/LAYERS.md`, `docs/TODO.md` — all previously described the old per-session `comparison_note` design
 
 ---
 

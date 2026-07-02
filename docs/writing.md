@@ -351,10 +351,30 @@ See `docs/contracts.md` for the current German taxonomy tags.
 
 ---
 
-## Cross-Session Writing Comparison (Layer 2b)
+## Writing History Summary (Layer 2b)
 
-After `write_correction`, if a previous writing session file exists:
-- Load previous `WritingSessionContent` from storage
-- LLM generates a brief comparison: what improved, what persisted
-- Added to `WritingSessionContent.comparison_to_previous`
-- Requires `StorageProtocol.get_writing_sessions()` method
+Not a per-session field and not automatic — earlier design drafts had a
+`WritingSessionContent.comparison_note` stub (Layer 1a Step 6) meant to be filled in with a
+diff against the immediately-previous session, right when a session ends. That stub is
+removed; nothing populates it.
+
+Instead, an on-demand `/history` command, typed at the existing "Start this module? [Y/n]"
+prompt (`orchestrator.py::_get_confirmed_module`) — same interaction shape as `/btw`, works
+identically in CLI and web since both go through the generic `IOHandler.prompt()`. Not tied
+to whichever session (if any) just finished; available any time before starting a module.
+
+- `/history` — last `DEFAULT_HISTORY_SESSIONS` (10) completed writing sessions
+- `/history <n>` — last `n` sessions
+- `/history <n>d` — last `n` days
+
+Data sources — no new `StorageProtocol` methods beyond one field addition:
+- `store.get_sessions_by_module(user_id, language, "writing")` (existing), filtered to
+  `status == "completed"` and bounded by count or date cutoff in Python
+- `SessionLog.text_level_estimate` (new field) across the filtered sessions, for a CEFR-level
+  trend — the one schema addition this layer needs
+
+From the filtered `SessionLog`s, Python builds: topics covered (`task_label`s), recurring
+mistake tag counts (`errors[].error_tag`), and the chronological level-estimate list. These
+pre-aggregated inputs — not raw session objects — go to `skills/summarize_writing_history/`,
+which returns one readable `history_summary` string via `io.output()`. Nothing is written
+back to any session file; the report is regenerated on every request.

@@ -44,7 +44,7 @@ Detailed specs for each component live in `docs/`. This document is the human-fa
 | **1b** | User level review + session history aggregation + topic picker + orchestrator LLM routing |
 | **1c** | `IOHandler` protocol + light local frontend (chat window + session file browser) |
 | **2a** | Grammar module |
-| **2b** | Cross-session writing comparison (fills `comparison_note` stub from Step 6) |
+| **2b** | On-demand writing history summary (`/history` command — topics, recurring mistakes, level trend; not a per-session field) |
 | **2c** | CEFR estimator — aggregates per-session text-level estimates (Step 5) into a user-level estimate |
 | **3a** | Vocab module |
 | **3b** | Level progression tracking |
@@ -320,4 +320,4 @@ language-tutor/
 
 **`lang/` versioned content maps.** CEFR pedagogical hints and error taxonomy live as versioned YAML artifacts in `lang/maps/`. Language configs in `lang/languages/` reference maps by name. The registry cross-validates all references at startup. Default maps (`default.yaml`) provide a language-agnostic fallback for unconfigured languages. Adding a language = one YAML file; adding a new taxonomy variant = one YAML file, no code change.
 
-**`WritingSessionContent` schema evolution.** Layer 1a Steps 1–4 populate `mistakes`, `recommendations`, `comment`, `corrected_text`. Steps 5–6 extend the schema: add `text_level_estimate`, enrich each mistake with `severity` (`critical`/`expected`/`minor`), replace `recommendations` with `tips` (sorted by distance from user level), replace `comment` with `session_summary`, add `comparison_note: str | None` (stub for Layer 2b). Schema changes are additive; no breaking changes to storage.
+**`WritingSessionContent` schema evolution.** Layer 1a Steps 1–4 populate `mistakes`, `recommendations`, `comment`, `corrected_text`. Steps 5–6 extend the schema: add `text_level_estimate`, enrich each mistake with `severity` (`critical`/`expected`/`minor`), replace `recommendations` with `tips` (sorted by distance from user level), replace `comment` with `session_summary`. Schema changes are additive; no breaking changes to storage. (An earlier draft also added a `comparison_note: str | None` stub as a Layer 2b placeholder; Layer 2b took a different shape — an on-demand `/history` command, not a per-session field — so that stub was removed rather than left permanently `None`. See `docs/writing.md`.)
