@@ -60,6 +60,7 @@ class JSONSessionStore(BaseSessionStore):
             "started_at": self._dt_to_str(log.started_at),
             "completed_at": self._dt_to_str(log.completed_at),
             "duration_minutes": log.duration_minutes,
+            "text_level_estimate": log.text_level_estimate,
         }
         self._write(self.sessions_file, sessions)
 
@@ -125,7 +126,8 @@ class JSONSessionStore(BaseSessionStore):
                     status=r["status"],
                     started_at=self._str_to_dt(r["started_at"]),
                     completed_at=self._str_to_dt(r["completed_at"]),
-                    duration_minutes=r["duration_minutes"]
+                    duration_minutes=r["duration_minutes"],
+                    text_level_estimate=r.get("text_level_estimate"),
                 )
             )
         return result
@@ -163,7 +165,8 @@ class JSONSessionStore(BaseSessionStore):
                     status=r["status"],
                     started_at=self._str_to_dt(r["started_at"]),
                     completed_at=self._str_to_dt(r["completed_at"]),
-                    duration_minutes=r["duration_minutes"]
+                    duration_minutes=r["duration_minutes"],
+                    text_level_estimate=r.get("text_level_estimate"),
                 )
             )
         return result
@@ -229,7 +232,8 @@ class JSONSessionStore(BaseSessionStore):
                             status="interrupted",
                             started_at=started_at,
                             completed_at=self._str_to_dt(r["completed_at"]),
-                            duration_minutes=r["duration_minutes"]
+                            duration_minutes=r["duration_minutes"],
+                            text_level_estimate=r.get("text_level_estimate"),
                         )
                     )
         return result

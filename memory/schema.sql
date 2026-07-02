@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     started_at DATETIME,
     completed_at DATETIME,
     duration_minutes REAL,
+    text_level_estimate TEXT,
     FOREIGN KEY (user_id, language) REFERENCES user_profiles (user_id, language)
 );
 
