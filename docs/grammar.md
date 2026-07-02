@@ -434,6 +434,18 @@ Full list to be compiled from Goethe Institut A1–B2 curriculum before Layer 2a
   tags would shrink the fan-out enough for 1:1 or near-1:1 tag→topic
   mapping. Revisit this bridge once that taxonomy work lands.
 
+- **Per-exercise input boxes for the web grammar UI (2a-viii)** — the web
+  answer-collection widget is a single flat textarea (mirrors `GrammarModule`
+  calling `io.prompt_block()` exactly once — the whole answer set, including
+  any inline `/btw ...` lines, is one submitted blob parsed server-side by
+  `parse_answer_block` before grading, not a live per-exercise round-trip).
+  A richer UI — one input box per exercise, avoiding the user having to keep
+  line-ordering straight in one blob — is a legitimate future improvement,
+  but needs a separate "ask a question" field whose value gets re-assembled
+  into a `/btw`-prefixed line client-side before the single `sendInput()`
+  call, to preserve the existing question-asking feature without a
+  regression. Bounded UX gain, not a functional gap — deferred as UI polish.
+
 Exercise types considered and deliberately deferred — not part of the Layer
 2a `generate_exercises` type set:
 

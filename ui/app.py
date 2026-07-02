@@ -59,11 +59,16 @@ def api_start():
     def run():
         try:
             orch = _make_orchestrator(io)
-            orch.run_session(
-                user_id,
-                language=None,
-                on_language_warning=lambda lang, missing: _lang_warning(io, lang, missing),
-            )
+            forced_recommendation = None
+            while True:
+                forced_recommendation = orch.run_session(
+                    user_id,
+                    language=None,
+                    on_language_warning=lambda lang, missing: _lang_warning(io, lang, missing),
+                    forced_recommendation=forced_recommendation,
+                )
+                if forced_recommendation is None:
+                    break
         except Exception as e:
             io.output(f"[!] Session error: {e}")
         finally:

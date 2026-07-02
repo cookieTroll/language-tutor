@@ -1,11 +1,14 @@
 import os
 import subprocess
 import threading
+from unittest.mock import patch, MagicMock
 
 import pytest
+import yaml
 
 import ui.app as _ui_mod
 from shared.io import TerminalIOHandler, WebIOHandler
+from orchestrator.protocols import ExerciseRecommendation
 
 _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -56,6 +59,28 @@ class TestWebIOHandler:
         ev = io.get_event(timeout=1.0)
         assert ev == {"type": "prompt", "text": "Answers?"}
 
+    def test_render_exercises_enqueues_event(self):
+        io = WebIOHandler()
+        io.render_exercises({"exercises": [{"prompt": "Der ___ Mann", "exercise_type": "fill_blank"}]})
+        ev = io.get_event(timeout=1.0)
+        assert ev == {
+            "type": "data",
+            "payload": {
+                "event": "exercises_ready",
+                "exercises": [{"prompt": "Der ___ Mann", "exercise_type": "fill_blank"}],
+            },
+        }
+
+    def test_render_results_enqueues_event(self):
+        io = WebIOHandler()
+        items = [{"prompt": "p", "user_answer": "a", "correct_answer": "a", "correct": True, "feedback": ""}]
+        io.render_results({"items": items, "score": 1.0})
+        ev = io.get_event(timeout=1.0)
+        assert ev == {
+            "type": "data",
+            "payload": {"event": "grammar_results_complete", "items": items, "score": 1.0},
+        }
+
 
 # ── TerminalIOHandler ───────────────────────────────────────────────────────────
 
@@ -72,6 +97,36 @@ class TestTerminalIOHandler:
         io = TerminalIOHandler()
         monkeypatch.setattr("builtins.input", lambda: "")
         assert io.prompt_block() == ""
+
+    def test_render_exercises_matches_prior_grammar_module_format(self, capsys):
+        io = TerminalIOHandler()
+        io.render_exercises({"exercises": [
+            {"prompt": "Der ___ Mann", "exercise_type": "fill_blank"},
+            {"prompt": "Die ___ Frau", "exercise_type": "fill_blank"},
+        ]})
+        out = capsys.readouterr().out
+        assert "1. Der ___ Mann" in out
+        assert "2. Die ___ Frau" in out
+
+    def test_render_exercises_empty_list_prints_nothing(self, capsys):
+        io = TerminalIOHandler()
+        io.render_exercises({"exercises": []})
+        assert capsys.readouterr().out == ""
+
+    def test_render_results_matches_prior_grammar_module_format(self, capsys):
+        io = TerminalIOHandler()
+        items = [
+            {"prompt": "p1", "user_answer": "a1", "correct_answer": "a1", "correct": True, "feedback": ""},
+            {"prompt": "p2", "user_answer": "wrong", "correct_answer": "right", "correct": False, "feedback": "nope"},
+        ]
+        io.render_results({"items": items, "score": 0.5})
+        out = capsys.readouterr().out
+        assert "RESULTS" in out
+        assert "1. [correct] p1" in out
+        assert "2. [incorrect] p2" in out
+        assert "Correct answer: right" in out
+        assert "Feedback: nope" in out
+        assert "Score: 50% (1/2)" in out
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -128,6 +183,55 @@ class TestRoutes:
         with _ui_mod.app.test_client() as c:
             r = c.get("/sessions/sessions/%2F..%2F..%2Fetc%2Fpasswd")
             assert r.status_code in (400, 403, 404)
+
+    def test_session_view_renders_grammar_session(self, client, monkeypatch, tmp_path):
+        """A grammar-shaped session file renders explanation/exercises/score, and its
+        next_actions (any session type can carry one — not grammar-specific)."""
+        monkeypatch.setattr(_ui_mod._config, "data_root", str(tmp_path))
+        session_dir = tmp_path / "sessions" / "u1" / "german"
+        session_dir.mkdir(parents=True)
+        session_data = {
+            "session_id": "abc123", "user_id": "u1", "language": "german", "module": "grammar",
+            "task_label": "articles", "date": "2026-07-02T10:00:00", "level": "a1", "status": "completed",
+            "topic": "Articles", "scope": "major", "explanation": "Articles explain gender and case.",
+            "items": [
+                {"prompt": "Der ___ Mann", "user_answer": "der", "correct_answer": "der",
+                 "correct": True, "feedback": "", "exercise_type": "fill_blank", "error_tag": "article"},
+            ],
+            "score": 1.0, "btw_log": [],
+            "next_actions": [
+                {"module": "writing", "reason": "you nailed it", "suggested_focus": "Articles", "accepted": None}
+            ],
+        }
+        with open(session_dir / "abc123.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(session_data, f)
+
+        r = client.get("/sessions/sessions/u1/german/abc123.yaml")
+        assert r.status_code == 200
+        body = r.data.decode()
+        assert "Articles explain gender and case." in body
+        assert "Der ___ Mann" in body
+        assert "100%" in body
+        assert "you nailed it" in body
+
+    def test_api_start_chains_forced_recommendation(self, client):
+        """/api/start's background run() must loop with forced_recommendation, mirroring
+        the ui/cli.py chaining loop from 2a-vii — mocks Orchestrator entirely."""
+        recommendation = ExerciseRecommendation(module="grammar", reason="recurring error", suggested_focus="verb_tense")
+        mock_orch = MagicMock()
+        mock_orch.run_session.side_effect = [recommendation, None]
+
+        with patch("ui.app.Orchestrator", return_value=mock_orch):
+            r = client.post("/api/start", json={"user_id": "test"})
+            sid = r.get_json()["session_id"]
+            with _ui_mod._sessions_lock:
+                thread = _ui_mod._sessions[sid]["thread"]
+            thread.join(timeout=5)
+
+        assert mock_orch.run_session.call_count == 2
+        first_call, second_call = mock_orch.run_session.call_args_list
+        assert first_call.kwargs["forced_recommendation"] is None
+        assert second_call.kwargs["forced_recommendation"] is recommendation
 
 
 # ── Static assets ─────────────────────────────────────────────────────────────

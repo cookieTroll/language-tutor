@@ -12,6 +12,12 @@ class IOHandler(Protocol):
         """Collect a multi-line answer as one opaque string (e.g. a block of grammar exercise answers)."""
         ...
     def render_evaluation(self, data: dict) -> None: ...
+    def render_exercises(self, data: dict) -> None:
+        """Render a generated exercise list. data: {"exercises": [{"prompt", "exercise_type"}, ...]}."""
+        ...
+    def render_results(self, data: dict) -> None:
+        """Render graded exercise results. data: {"items": [...], "score": float}."""
+        ...
     def start_timer(self, label: str = "Writing") -> None: ...
     def stop_timer(self) -> None: ...
 
@@ -112,6 +118,32 @@ class TerminalIOHandler:
             )
         self.output("==================================================\n")
 
+    def render_exercises(self, data: dict) -> None:
+        exercises = data.get("exercises", [])
+        if not exercises:
+            return
+        lines = [f"{i + 1}. {ex['prompt']}" for i, ex in enumerate(exercises)]
+        self.output("\n" + "\n".join(lines))
+
+    def render_results(self, data: dict) -> None:
+        items = data.get("items", [])
+        score = data.get("score", 0.0)
+        self.output(
+            f"\n=================================================="
+            f"\n                 RESULTS"
+            f"\n=================================================="
+        )
+        for i, item in enumerate(items):
+            status = "correct" if item["correct"] else "incorrect"
+            self.output(f"{i + 1}. [{status}] {item['prompt']}")
+            self.output(f"   Your answer: {item['user_answer']}")
+            if not item["correct"]:
+                self.output(f"   Correct answer: {item['correct_answer']}")
+                self.output(f"   Feedback: {item['feedback']}")
+        correct_count = sum(1 for item in items if item["correct"])
+        self.output(f"\nScore: {score:.0%} ({correct_count}/{len(items)})")
+        self.output("==================================================\n")
+
 
 class WebIOHandler:
     """Bridges a blocking session thread to an HTTP/SSE client via two queues.
@@ -142,6 +174,12 @@ class WebIOHandler:
 
     def render_evaluation(self, data: dict) -> None:
         self._out_q.put({"type": "data", "payload": {"event": "evaluation_complete", **data}})
+
+    def render_exercises(self, data: dict) -> None:
+        self._out_q.put({"type": "data", "payload": {"event": "exercises_ready", **data}})
+
+    def render_results(self, data: dict) -> None:
+        self._out_q.put({"type": "data", "payload": {"event": "grammar_results_complete", **data}})
 
     def start_timer(self, label: str = "Writing") -> None:
         pass  # web UI manages its own timer in JS

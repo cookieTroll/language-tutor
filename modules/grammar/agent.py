@@ -235,8 +235,11 @@ class GrammarModule(ModuleProtocol):
     def _display_exercises(self, exercises: list[dict], io: IOHandler) -> None:
         if not exercises:
             return
-        lines = [f"{i + 1}. {ex['prompt']}" for i, ex in enumerate(exercises)]
-        io.output("\n" + "\n".join(lines))
+        io.render_exercises({
+            "exercises": [
+                {"prompt": ex["prompt"], "exercise_type": ex["exercise_type"]} for ex in exercises
+            ]
+        })
 
     def _handle_btw(
         self, ctx: ModuleContext, topic: str, question: str, llm: BaseLLM, io: IOHandler
@@ -373,18 +376,4 @@ class GrammarModule(ModuleProtocol):
         return items, errors, score
 
     def _display_results(self, items: list[dict], score: float, io: IOHandler) -> None:
-        io.output(
-            f"\n=================================================="
-            f"\n                 RESULTS"
-            f"\n=================================================="
-        )
-        for i, item in enumerate(items):
-            status = "correct" if item["correct"] else "incorrect"
-            io.output(f"{i + 1}. [{status}] {item['prompt']}")
-            io.output(f"   Your answer: {item['user_answer']}")
-            if not item["correct"]:
-                io.output(f"   Correct answer: {item['correct_answer']}")
-                io.output(f"   Feedback: {item['feedback']}")
-        correct_count = sum(1 for item in items if item["correct"])
-        io.output(f"\nScore: {score:.0%} ({correct_count}/{len(items)})")
-        io.output("==================================================\n")
+        io.render_results({"items": items, "score": score})

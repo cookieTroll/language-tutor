@@ -1,7 +1,8 @@
 // ── State ────────────────────────────────────────────────────────────────────
 let sid = null;
-let phase = 'idle';           // idle | setup | writing | evaluating | done
-let inWritingPhase = false;
+let phase = 'idle';           // idle | setup | writing | evaluating | follow-up | done
+let inSessionPhase = false;   // true once any module (writing/grammar) has started its interactive phase
+let activeModule = null;      // 'writing' | 'grammar' | null — which panel is showing
 let lastOutputText = '';
 let timerStart = null;
 let timerInterval = null;
@@ -212,32 +213,71 @@ function handleOutput(text) {
   if (!text) return;
   lastOutputText = text;
 
-  // Detect exercise header → switch to writing layout
-  if (text.includes('WRITING EXERCISE') && !inWritingPhase) {
-    inWritingPhase = true;
+  // Detect a fresh module-session header (writing or grammar). Fires on every
+  // occurrence, not just once — a session chained via the next_actions accept
+  // prompt starts a second header within the same SSE stream.
+  const isWritingHeader = text.includes('WRITING EXERCISE');
+  const isGrammarHeader = text.includes('GRAMMAR SESSION');
+
+  if (isWritingHeader || isGrammarHeader) {
+    if (inSessionPhase) resetForNewModuleSession();
+    inSessionPhase = true;
     switchToSession();
-    // Parse topic / requirements / level
+
     const topicMatch = text.match(/Topic:\s*(.+)/);
-    const reqMatch   = text.match(/Requirements:\s*(.+)/);
     const lvlMatch   = text.match(/Target Level:\s*(\w+)/);
-    if (topicMatch) {
-      document.getElementById('topic-box').style.display = 'block';
-      document.getElementById('topic-title').textContent = topicMatch[1].trim();
-      document.getElementById('topic-req').textContent   = reqMatch ? reqMatch[1].trim() : '';
-    }
     if (lvlMatch) updateChip('chip-level', lvlMatch[1].toUpperCase());
+
+    if (isWritingHeader) {
+      activeModule = 'writing';
+      const reqMatch = text.match(/Requirements:\s*(.+)/);
+      document.getElementById('writing-pad').style.display = 'block';
+      document.getElementById('grammar-pad').style.display = 'none';
+      document.getElementById('word-count').style.display = '';
+      document.getElementById('btw-inp').disabled = false;
+      document.getElementById('btw-btn').disabled = false;
+      document.getElementById('btw-inp').placeholder = 'Ask the tutor… (during writing)';
+      if (topicMatch) {
+        document.getElementById('topic-box').style.display = 'block';
+        document.getElementById('topic-title').textContent = topicMatch[1].trim();
+        document.getElementById('topic-req').textContent   = reqMatch ? reqMatch[1].trim() : '';
+      }
+      updateChip('chip-module', 'Writing');
+      document.getElementById('writing-pad').focus();
+      const draft = localStorage.getItem('draftText');
+      if (draft) {
+        document.getElementById('writing-pad').value = draft;
+        updateWordCount();
+      }
+    } else {
+      // Header + explanation arrive as one combined io.output() blob — pull the
+      // explanation body out from between the separator and the closing rule.
+      activeModule = 'grammar';
+      const explMatch = text.match(/-{5,}[\r\n]+([\s\S]*)\n=+/);
+      document.getElementById('writing-pad').style.display = 'none';
+      document.getElementById('grammar-box').style.display = 'block';
+      document.getElementById('word-count').style.display = 'none';
+      // /btw during grammar answer-collection must be typed inline in the block —
+      // a separate Ask call here would collide with the single prompt_block() read.
+      document.getElementById('btw-inp').disabled = true;
+      document.getElementById('btw-btn').disabled = true;
+      document.getElementById('btw-inp').placeholder = 'Type /btw questions directly in your answer block';
+      if (topicMatch) document.getElementById('grammar-topic-title').textContent = topicMatch[1].trim();
+      document.getElementById('grammar-explanation').textContent = explMatch ? explMatch[1].trim() : '';
+      updateChip('chip-module', 'Grammar');
+    }
     return; // don't render the raw ASCII header
   }
 
   // Detect language
-  const langMatch = text.match(/(?:studying|WRITING EXERCISE.*?for|)\s*(\bGERMAN\b|\bFRENCH\b|\bSPANISH\b|\bITALIAN\b|\bJAPANESE\b)/i);
+  const langMatch = text.match(/(?:studying|EXERCISE.*?for|SESSION.*?for|)\s*(\bGERMAN\b|\bFRENCH\b|\bSPANISH\b|\bITALIAN\b|\bJAPANESE\b)/i);
   if (langMatch) updateChip('chip-lang', langMatch[1].toUpperCase());
 
   // Route text to the right panel
-  if (!inWritingPhase) {
+  if (!inSessionPhase) {
     appendSetup(text);
   } else {
-    // Detect pipeline progress steps
+    // Detect pipeline progress steps (writing evaluation only)
     const stepMatch = text.match(/^\[(\d+)\/6\]/);
     if (stepMatch) {
       const n = parseInt(stepMatch[1]);
@@ -248,14 +288,65 @@ function handleOutput(text) {
     }
   }
 
-  // Update module chip from output
-  if (text.includes('WRITING EXERCISE')) updateChip('chip-module', 'Writing');
-  if (text.includes('GRAMMAR'))          updateChip('chip-module', 'Grammar');
-  if (text.includes('VOCABULARY'))       updateChip('chip-module', 'Vocab');
+  if (text.includes('VOCABULARY')) updateChip('chip-module', 'Vocab');
+}
+
+function resetForNewModuleSession() {
+  // A new module session is starting within the same SSE stream (chained via the
+  // accept/decline next_actions prompt) — reset per-session UI, keep the stream alive.
+  stopTimer();
+  const divider = document.createElement('div');
+  divider.className = 'tmsg section';
+  divider.textContent = '── New session ──';
+  document.getElementById('tutor-output').appendChild(divider);
+
+  document.getElementById('eval-overlay').style.display = 'none';
+  markEvalStep(0);
+  document.getElementById('done-banner').style.display = 'none';
+
+  document.getElementById('topic-box').style.display = 'none';
+  document.getElementById('topic-title').textContent = '';
+  document.getElementById('topic-req').textContent = '';
+  document.getElementById('writing-pad').value = '';
+  document.getElementById('writing-pad').disabled = false;
+  document.getElementById('writing-pad').style.display = 'none';
+  localStorage.removeItem('draftText');
+
+  document.getElementById('grammar-box').style.display = 'none';
+  document.getElementById('grammar-topic-title').textContent = '';
+  document.getElementById('grammar-explanation').textContent = '';
+  document.getElementById('grammar-exercises').style.display = 'none';
+  document.getElementById('grammar-exercises').innerHTML = '';
+  document.getElementById('grammar-pad').value = '';
+  document.getElementById('grammar-pad').placeholder = '';
+  document.getElementById('grammar-pad').disabled = false;
+  document.getElementById('grammar-pad').style.display = 'none';
+
+  document.getElementById('submit-btn').disabled = false;
+  activeModule = null;
 }
 
 function handlePrompt(text) {
-  if (!inWritingPhase) {
+  const trimmed = (text || '').trim();
+
+  // Module-agnostic end-of-session chaining prompt (2a-vii bridge, either direction).
+  const chainMatch = trimmed.match(/^Session complete\. Start (\w+) practice(?: on '([^']*)')? now\?/);
+  if (chainMatch) {
+    showChainPrompt(chainMatch[1], chainMatch[2] || '');
+    return;
+  }
+
+  if (activeModule === 'grammar') {
+    // The single block-answer prompt — handled by #grammar-pad, no separate input box.
+    const pad = document.getElementById('grammar-pad');
+    if (pad && !pad.placeholder) pad.placeholder = trimmed;
+    pad.style.display = 'block';
+    pad.disabled = false;
+    pad.focus();
+    return;
+  }
+
+  if (!inSessionPhase) {
     // Setup prompts
     if (pendingTopic && lastOutputText.includes('suggestion')) {
       sendInput(pendingTopic);
@@ -267,6 +358,38 @@ function handlePrompt(text) {
     showSetupInput(text);
   }
   // Writing prompts (">") are handled by the textarea — no input box shown
+}
+
+function showChainPrompt(module, focus) {
+  const wrap = document.createElement('div');
+  wrap.className = 'invite-msg';
+  const focusText = focus ? ` on '${escapeHtml(focus)}'` : '';
+  wrap.innerHTML =
+    `Session complete. Start <b>${escapeHtml(module)}</b> practice${focusText} now? ` +
+    `<button class="btn-ask" id="chain-yes">Yes</button> ` +
+    `<button class="btn-ask" id="chain-no">No</button>`;
+  document.getElementById('tutor-output').appendChild(wrap);
+  document.getElementById('chain-yes').onclick = () => {
+    wrap.remove();
+    // The chained run_session() still re-runs language/level confirmation (only
+    // summarize/recommend/confirm are skipped, not setup) before the next module's
+    // header appears — go back to the #setup panel so those prompts aren't swallowed
+    // by the "no input box during a session" rule that (correctly) applies once a
+    // module header actually starts.
+    goBackToSetupForChaining();
+    sendInput('y');
+  };
+  document.getElementById('chain-no').onclick  = () => { wrap.remove(); sendInput('n'); };
+  const out = document.getElementById('tutor-output');
+  out.scrollTop = out.scrollHeight;
+}
+
+function goBackToSetupForChaining() {
+  resetForNewModuleSession();
+  inSessionPhase = false;
+  document.getElementById('session').style.display = 'none';
+  document.getElementById('setup').style.display = 'flex';
+  document.getElementById('setup-output').innerHTML = '';
 }
 
 function handleDone() {
@@ -287,8 +410,12 @@ async function finishSession() {
 }
 
 function handleData(payload) {
-  if (payload.event !== 'evaluation_complete') return;
+  if (payload.event === 'evaluation_complete')      return handleEvaluationComplete(payload);
+  if (payload.event === 'exercises_ready')          return handleExercisesReady(payload);
+  if (payload.event === 'grammar_results_complete') return handleGrammarResultsComplete(payload);
+}
 
+function handleEvaluationComplete(payload) {
   // Hide eval overlay now that evaluation output is fully rendered
   document.getElementById('eval-overlay').style.display = 'none';
 
@@ -330,6 +457,60 @@ function handleData(payload) {
   document.getElementById('btw-btn').disabled = false;
   document.getElementById('done-btn').style.display = '';
   setTimeout(() => btwInp.focus(), 150);
+
+  const out = document.getElementById('tutor-output');
+  out.scrollTop = out.scrollHeight;
+}
+
+function handleExercisesReady(payload) {
+  const exercises = payload.exercises || [];
+  const box = document.getElementById('grammar-exercises');
+  box.innerHTML = '<ol>' + exercises.map(ex => `<li>${escapeHtml(ex.prompt)}</li>`).join('') + '</ol>';
+  box.style.display = exercises.length ? 'block' : 'none';
+
+  const pad = document.getElementById('grammar-pad');
+  pad.style.display = 'block';
+  pad.disabled = false;
+  pad.value = '';
+  pad.focus();
+  phase = 'writing'; // shared "collecting a submittable answer" phase, reused across modules
+}
+
+function handleGrammarResultsComplete(payload) {
+  // GrammarModule has no follow-up phase (unlike writing) — module.run() returns
+  // right after grading, so no btw/done follow-up UI is offered here.
+  const items = payload.items || [];
+  const score = payload.score || 0;
+
+  document.getElementById('grammar-pad').style.display = 'none';
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('btw-btn').disabled = true;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'annotated-block';
+  const rows = items.map((item, i) => {
+    const cls = item.correct ? 'correct' : 'incorrect';
+    const status = item.correct ? 'Correct' : 'Incorrect';
+    let extra = '';
+    if (!item.correct) {
+      extra =
+        `<div class="ex-answer">Correct answer: ${escapeHtml(item.correct_answer || '')}</div>` +
+        `<div class="ex-feedback">${escapeHtml(item.feedback || '')}</div>`;
+    }
+    return (
+      `<div class="exercise-item ${cls}">` +
+      `<div>${i + 1}. [${status}] ${escapeHtml(item.prompt)}</div>` +
+      `<div class="ex-answer">Your answer: ${escapeHtml(item.user_answer || '')}</div>` +
+      extra +
+      `</div>`
+    );
+  }).join('');
+  wrap.innerHTML =
+    `<div class="ann-label">Results <span class="ann-count">${Math.round(score * 100)}%</span></div>` +
+    rows;
+  document.getElementById('tutor-output').appendChild(wrap);
+
+  if (score >= 0.999) fireConfetti();
 
   const out = document.getElementById('tutor-output');
   out.scrollTop = out.scrollHeight;
@@ -397,18 +578,12 @@ function showSetupInput(placeholder) {
 }
 
 function switchToSession() {
+  // Module-specific setup (pad focus/draft-restore/visibility) happens in
+  // handleOutput()'s header branch, since it differs between writing and grammar.
   document.getElementById('setup').style.display   = 'none';
   document.getElementById('session').style.display = 'flex';
-  document.getElementById('writing-pad').focus();
   startTimer();
   phase = 'writing';
-
-  // Restore draft
-  const draft = localStorage.getItem('draftText');
-  if (draft) {
-    document.getElementById('writing-pad').value = draft;
-    updateWordCount();
-  }
 }
 
 function updateChip(id, text) {
@@ -457,6 +632,25 @@ async function submitWriting() {
       body: JSON.stringify({text: line}),
     });
   }
+}
+
+function handleSubmitClick() {
+  if (activeModule === 'grammar') submitGrammarAnswers();
+  else submitWriting();
+}
+
+async function submitGrammarAnswers() {
+  // GrammarModule calls io.prompt_block() exactly once — send the whole textarea
+  // value (including any inline /btw lines) as a single sendInput() call, unlike
+  // submitWriting()'s per-line loop for io.prompt()'s N round trips.
+  if (phase !== 'writing' || activeModule !== 'grammar') return;
+  const pad = document.getElementById('grammar-pad');
+
+  phase = 'evaluating';
+  pad.disabled = true;
+  document.getElementById('submit-btn').disabled = true;
+  appendTutor('Grading your answers…', 'progress');
+  await sendInput(pad.value);
 }
 
 async function sendBtw() {
@@ -572,8 +766,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && document.activeElement === document.getElementById('btw-inp'))
     sendBtw();
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter'
-      && document.activeElement === document.getElementById('writing-pad'))
-    submitWriting();
+      && (document.activeElement === document.getElementById('writing-pad')
+          || document.activeElement === document.getElementById('grammar-pad')))
+    handleSubmitClick();
 });
 
 // ── Confetti ──────────────────────────────────────────────────────────────────

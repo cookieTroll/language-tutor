@@ -49,6 +49,13 @@ h2 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 1px; color: 
 .btw-q { color: var(--blue); margin-bottom: 6px; font-size: 0.84rem; }
 .btw-a { line-height: 1.6; font-size: 0.88rem; }
 .flag  { font-size: 0.74rem; color: var(--muted); margin-top: 4px; }
+/* grammar exercises + next_actions */
+.exercise-item { margin: 8px 0; padding: 12px 14px; background: var(--panel);
+                 border-left: 3px solid var(--border); border-radius: 0 6px 6px 0; }
+.exercise-item.correct   { border-color: var(--green); }
+.exercise-item.incorrect { border-color: var(--accent); }
+.exercise-item .ex-answer   { margin-top: 4px; font-size: 0.85rem; color: var(--sub); }
+.exercise-item .ex-feedback { margin-top: 4px; font-size: 0.85rem; line-height: 1.5; }
 /* diff */
 .diff-wrap { background: var(--panel); padding: 16px 18px; border-radius: 6px;
              line-height: 1.8; font-size: 0.9rem; white-space: pre-wrap; font-family: 'Courier New', monospace; }
@@ -92,6 +99,37 @@ h2 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 1px; color: 
   <section>
     <h2>Topic</h2>
     <div class="block">{{ session['topic'] }}<div class="block-sub">{{ session.get('requirements','') }}</div></div>
+  </section>
+  {% endif %}
+
+  {% if session.get('explanation') %}
+  <section>
+    <h2>Explanation</h2>
+    <div class="block">{{ session['explanation'] }}</div>
+  </section>
+  {% endif %}
+
+  {% set items = session.get('items', []) %}
+  {% if items %}
+  <section>
+    <h2>Exercises ({{ items|length }})</h2>
+    {% for item in items %}
+    <div class="exercise-item {{ 'correct' if item.get('correct') else 'incorrect' }}">
+      <div>{{ loop.index }}. [{{ 'correct' if item.get('correct') else 'incorrect' }}] {{ item.get('prompt','') }}</div>
+      <div class="ex-answer">Your answer: {{ item.get('user_answer','') }}</div>
+      {% if not item.get('correct') %}
+      <div class="ex-answer">Correct answer: {{ item.get('correct_answer','') }}</div>
+      <div class="ex-feedback">{{ item.get('feedback','') }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if session.get('score') is not none %}
+  <section>
+    <h2>Score</h2>
+    <div class="block">{{ (session['score'] * 100) | round | int }}%</div>
   </section>
   {% endif %}
 
@@ -157,6 +195,22 @@ h2 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 1px; color: 
       <div class="btw-q">Q: {{ entry.get('question','') }}</div>
       <div class="btw-a">{{ entry.get('answer','') }}</div>
       {% if entry.get('flagged_word') %}<div class="flag">Flagged: {{ entry['flagged_word'] }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% set next_actions = session.get('next_actions', []) %}
+  {% if next_actions %}
+  <section>
+    <h2>Recommended Next</h2>
+    {% for na in next_actions %}
+    <div class="btw-entry">
+      <div>{{ na.get('module','') }} &mdash; {{ na.get('reason','') }}
+        {% if na.get('suggested_focus') %}(focus: {{ na['suggested_focus'] }}){% endif %}</div>
+      {% if na.get('accepted') is not none %}
+      <div class="flag">{{ 'Accepted' if na['accepted'] else 'Declined' }}</div>
+      {% endif %}
     </div>
     {% endfor %}
   </section>
