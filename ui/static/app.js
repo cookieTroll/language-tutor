@@ -201,6 +201,8 @@ function resetForNewModuleSession() {
   document.getElementById('grammar-pad').placeholder = '';
   document.getElementById('grammar-pad').disabled = false;
   document.getElementById('grammar-pad').style.display = 'none';
+  document.getElementById('grammar-results').style.display = 'none';
+  document.getElementById('grammar-results').innerHTML = '';
 
   document.getElementById('submit-btn').disabled = false;
   activeModule = null;

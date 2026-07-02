@@ -49,6 +49,13 @@ function handleGrammarResultsComplete(payload) {
   document.getElementById('submit-btn').disabled = true;
   document.getElementById('btw-btn').disabled = true;
 
+  // Explanation/exercise list are stale once graded — hiding them gives
+  // #grammar-results (and the footer/done-banner below it) room in #left-col,
+  // which has overflow:hidden and no scrollbar of its own.
+  document.getElementById('grammar-box').style.display = 'none';
+  document.getElementById('grammar-resizer').style.display = 'none';
+  document.getElementById('grammar-exercises').style.display = 'none';
+
   const wrap = document.createElement('div');
   wrap.className = 'annotated-block';
   const rows = items.map((item, i) => {
@@ -79,11 +86,15 @@ function handleGrammarResultsComplete(payload) {
   wrap.innerHTML =
     `<div class="ann-label">Results <span class="ann-count">${Math.round(score * 100)}%</span></div>` +
     rows;
-  document.getElementById('tutor-output').appendChild(wrap);
+
+  // Rendered in the left column, not #tutor-output — #right-col is hidden for
+  // the whole grammar session (see handleOutput's grammar branch in app.js).
+  const out = document.getElementById('grammar-results');
+  out.style.display = 'block';
+  out.appendChild(wrap);
 
   if (score >= 0.999) fireConfetti();
 
-  const out = document.getElementById('tutor-output');
   out.scrollTop = out.scrollHeight;
 }
 

@@ -26,7 +26,7 @@ function handleEvaluationComplete(payload) {
   // Hide eval overlay now that evaluation output is fully rendered
   document.getElementById('eval-overlay').style.display = 'none';
 
-  const { user_text, corrected_text, mistakes } = payload;
+  const { user_text, corrected_text, mistakes, explained_mistakes, session_summary, tips, text_level_estimate } = payload;
   if (!user_text) return;
 
   // Annotated original (only if there are mistakes to highlight)
@@ -38,15 +38,77 @@ function handleEvaluationComplete(payload) {
       `<div class="ann-label">Your text <span class="ann-count">${mistakes.length} issue${mistakes.length === 1 ? '' : 's'}</span></div>` +
       `<div>${annotatedHtml}</div>`;
     document.getElementById('tutor-output').appendChild(orig);
+  }
 
-    if (corrected_text && corrected_text !== user_text) {
-      const corr = document.createElement('div');
-      corr.className = 'annotated-block corr';
-      corr.innerHTML =
-        `<div class="ann-label">Corrected</div>` +
-        `<div>${escapeHtml(corrected_text)}</div>`;
-      document.getElementById('tutor-output').appendChild(corr);
+  // Itemized mistake breakdown (severity-grouped, with corrections and
+  // explanations) — the inline highlighting above only carries a hover
+  // tooltip, easy to miss. This mirrors what the CLI and the post-session
+  // review page already show but the live UI never rendered.
+  if (explained_mistakes && explained_mistakes.length > 0) {
+    const order = ['critical', 'expected', 'minor', ''];
+    const labels = { critical: 'Critical', expected: 'Expected at this level', minor: 'Minor / stylistic', '': 'Mistakes' };
+    const groups = {};
+    for (const m of explained_mistakes) {
+      const sev = m.severity || '';
+      (groups[sev] = groups[sev] || []).push(m);
     }
+    const block = document.createElement('div');
+    block.className = 'annotated-block';
+    let html = `<div class="ann-label">Mistakes <span class="ann-count">${explained_mistakes.length}</span></div>`;
+    let counter = 0;
+    for (const sev of order) {
+      if (!groups[sev] || !groups[sev].length) continue;
+      html += `<div class="mistake-group-heading">${escapeHtml(labels[sev])}</div>`;
+      for (const m of groups[sev]) {
+        counter++;
+        html +=
+          `<div class="mistake-item">` +
+          `<div>${counter}. [${escapeHtml(m.error_tag || '')}] "${escapeHtml(m.fragment || '')}" &rarr; ${escapeHtml(m.correction || '')}</div>` +
+          `<div class="mistake-expl">${escapeHtml(m.explanation || '')}</div>` +
+          `</div>`;
+      }
+    }
+    block.innerHTML = html;
+    document.getElementById('tutor-output').appendChild(block);
+  }
+
+  if (corrected_text && corrected_text !== user_text) {
+    const corr = document.createElement('div');
+    corr.className = 'annotated-block corr';
+    corr.innerHTML =
+      `<div class="ann-label">Corrected</div>` +
+      `<div>${escapeHtml(corrected_text)}</div>`;
+    document.getElementById('tutor-output').appendChild(corr);
+  }
+
+  // Session summary + tips + estimated level — sent by the backend on every
+  // evaluation (see shared/io.py's render_evaluation) but previously dropped
+  // here since this handler never read them off the payload.
+  if (session_summary) {
+    const summary = document.createElement('div');
+    summary.className = 'annotated-block';
+    summary.innerHTML =
+      `<div class="ann-label">Summary</div>` +
+      `<div>${escapeHtml(session_summary)}</div>`;
+    document.getElementById('tutor-output').appendChild(summary);
+  }
+
+  if (tips && tips.length > 0) {
+    const tipsBlock = document.createElement('div');
+    tipsBlock.className = 'annotated-block';
+    tipsBlock.innerHTML =
+      `<div class="ann-label">Tips</div>` +
+      `<ul class="tips-list">${tips.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>`;
+    document.getElementById('tutor-output').appendChild(tipsBlock);
+  }
+
+  if (text_level_estimate) {
+    const levelBlock = document.createElement('div');
+    levelBlock.className = 'annotated-block';
+    levelBlock.innerHTML =
+      `<div class="ann-label">Text level</div>` +
+      `<div>Estimated: ${escapeHtml(text_level_estimate.toUpperCase())}</div>`;
+    document.getElementById('tutor-output').appendChild(levelBlock);
   }
 
   // Invitation to ask follow-up questions

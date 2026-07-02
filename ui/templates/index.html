@@ -121,6 +121,18 @@ mark.mistake-hl {
   padding: 1px 6px; border-radius: 8px; font-size: 0.66rem;
   text-transform: none; letter-spacing: 0;
 }
+.tips-list { margin: 0; padding-left: 18px; }
+.tips-list li { margin: 3px 0; }
+.mistake-group-heading {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); margin: 10px 0 4px;
+}
+.mistake-group-heading:first-of-type { margin-top: 2px; }
+.mistake-item {
+  margin: 4px 0; padding: 6px 8px; background: var(--surface);
+  border-radius: 4px; font-size: 0.84rem;
+}
+.mistake-expl { color: var(--sub); font-size: 0.8rem; margin-top: 2px; }
 .invite-msg {
   font-size: 0.8rem; color: var(--sub); margin: 8px 0 4px;
   padding: 8px 12px; border-left: 2px solid var(--blue); background: var(--panel);
@@ -226,12 +238,12 @@ mark.mistake-hl {
 .btn-send:hover { background: var(--accent); color: #111; border-color: var(--accent); }
 
 /* Session (two-column) */
-#session { flex: 1; display: none; flex-direction: column; overflow: hidden; }
-.session-inner { display: flex; flex: 1; }
+#session { flex: 1; min-height: 0; display: none; flex-direction: column; overflow: hidden; }
+.session-inner { display: flex; flex: 1; min-height: 0; }
 
 /* Left column: writing */
 #left-col {
-  flex: 3; display: flex; flex-direction: column;
+  flex: 3; min-height: 0; display: flex; flex-direction: column;
   border-right: 1px solid var(--border); overflow: hidden;
 }
 /* Grammar has no use for the right (btw/tutor) column — /btw questions are
@@ -287,6 +299,10 @@ mark.mistake-hl {
 #grammar-pad::placeholder { color: #444d56; white-space: pre-wrap; }
 #grammar-pad:disabled { opacity: 0.55; }
 
+/* Graded results — rendered here (left column) rather than #tutor-output,
+   since #right-col is hidden for the whole grammar session (see #left-col.solo). */
+#grammar-results { display: none; flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px; }
+
 .exercise-item {
   margin: 6px 0; padding: 10px 12px; background: var(--panel);
   border-left: 3px solid var(--border); border-radius: 0 6px 6px 0; font-size: 0.86rem;
@@ -324,11 +340,11 @@ mark.mistake-hl {
 
 /* Right column: tutor panel */
 #right-col {
-  flex: 2; display: flex; flex-direction: column;
+  flex: 2; min-height: 0; display: flex; flex-direction: column;
   background: var(--bg); overflow: hidden;
 }
 #tutor-output {
-  flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 6px;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 6px;
 }
 .tmsg { padding: 8px 12px; border-radius: 4px; font-size: 0.84rem; line-height: 1.55; white-space: pre-wrap; }
 .tmsg.tutor    { background: var(--panel); border-left: 3px solid var(--accent); }
@@ -374,7 +390,9 @@ mark.mistake-hl {
 
 /* ── Command hints sidebar ── */
 #cmd-sidebar {
-  display: none; position: fixed; right: 20px; bottom: 20px; width: 240px;
+  /* top-right, below the header — bottom-right collided with the writing
+     module's btw-row (Ask/Done buttons) and the grammar module's footer. */
+  display: none; position: fixed; right: 20px; top: 60px; width: 240px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
   padding: 12px 14px; font-size: 0.76rem; color: var(--sub); z-index: 2;
   box-shadow: 0 12px 30px rgba(0,0,0,.35);
@@ -458,6 +476,7 @@ mark.mistake-hl {
         <div id="grammar-exercises"></div>
         <textarea id="writing-pad" placeholder="Begin writing here…&#10;&#10;Type line by line. Submit when ready."></textarea>
         <textarea id="grammar-pad" placeholder=""></textarea>
+        <div id="grammar-results"></div>
         <div id="eval-overlay">
           <div class="prog-item" id="p1">[1/6] Estimating text level</div>
           <div class="prog-item" id="p2">[2/6] Detecting mistakes</div>
