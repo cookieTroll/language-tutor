@@ -1,0 +1,50 @@
+[
+  {
+    "id": "hist_recurring_and_improving",
+    "description": "Clear recurring error tag plus a rising level trend across the window",
+    "level": "b1",
+    "language": "german",
+    "scope_label": "last 10 sessions",
+    "topics": ["daily_routine", "holiday_trip", "school_day", "hobbies"],
+    "recurring_mistakes": [
+      {"error_tag": "dative_case", "count": 4},
+      {"error_tag": "word_order", "count": 2}
+    ],
+    "level_trend": [
+      {"date": "2026-06-01", "level": "a2"},
+      {"date": "2026-06-10", "level": "a2"},
+      {"date": "2026-06-20", "level": "b1"},
+      {"date": "2026-06-30", "level": "b1"}
+    ],
+    "must_mention": ["dative_case", "a2", "b1"]
+  },
+  {
+    "id": "hist_no_recurring_errors",
+    "description": "Errors present but none recur (all count 1) — should say there's no clear recurring pattern, not invent one",
+    "level": "a2",
+    "language": "german",
+    "scope_label": "last 30 days",
+    "topics": ["weekend", "family", "pets"],
+    "recurring_mistakes": [],
+    "level_trend": [
+      {"date": "2026-06-15", "level": "a2"},
+      {"date": "2026-06-25", "level": "a2"}
+    ],
+    "must_mention": ["weekend"]
+  },
+  {
+    "id": "hist_sparse_no_level_data",
+    "description": "Only one session with a level estimate — not enough data for a real trend, must not claim improvement or decline",
+    "level": "a1",
+    "language": "german",
+    "scope_label": "last 5 sessions",
+    "topics": ["introductions"],
+    "recurring_mistakes": [
+      {"error_tag": "article_gender", "count": 3}
+    ],
+    "level_trend": [
+      {"date": "2026-06-28", "level": "a1"}
+    ],
+    "must_mention": ["article_gender"]
+  }
+]
