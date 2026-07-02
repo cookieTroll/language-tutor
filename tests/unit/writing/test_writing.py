@@ -81,7 +81,6 @@ def test_writing_module_run():
             "session_summary": "Good attempt with one separable verb error typical for A1.",
             "mistakes": [{"fragment": "Ich aufstehen", "error_tag": "verb_conjugation", "correction": "Ich stehe auf", "explanation": "Separable verbs split in main clauses; the prefix moves to the end.", "severity": "expected"}],
             "tips": ["Practice separable verbs daily.", "Build longer connected sentences."],
-            "comparison_note": None,
         }),
         model="test-model"
     )
@@ -126,7 +125,6 @@ def test_writing_module_run():
     assert any("stamina" in t or "word" in t.lower() for t in session_content.tips[2:])
     assert session_content.session_summary == "Good attempt with one separable verb error typical for A1."
     assert session_content.mistakes[0].get("severity") == "expected"
-    assert session_content.comparison_note is None
 
     # BTW log in session YAML
     assert len(session_content.btw_log) == 1

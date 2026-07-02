@@ -362,7 +362,6 @@ class WritingModule(ModuleProtocol):
             ],
             suggested_focus=wp.suggested_focus,
             text_level_estimate=pipeline.text_level_estimate,
-            comparison_note=pipeline.comparison_note,
         )
 
         result = ModuleResult(

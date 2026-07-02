@@ -27,7 +27,7 @@ class BaseSummariseSkill(ABC):
     @abstractmethod
     def _defaults(self, input: SkillInput) -> dict:
         """Safe fallback metadata when all retries fail.
-        Must include session_summary, tips, and comparison_note keys."""
+        Must include session_summary and tips keys."""
 
     def run(self, input: SkillInput, llm: BaseLLM) -> SkillOutput:
         language = input.parameters.get("language", "").capitalize()
@@ -44,7 +44,6 @@ class BaseSummariseSkill(ABC):
             if not isinstance(data.get("tips"), list):
                 raise ValueError("'tips' must be a list")
             data = self._validate(data, input)
-            data["comparison_note"] = None  # Layer 2b fills this; never trust LLM value
             return data
 
         try:

@@ -84,5 +84,4 @@ class SummariseWritingSessionSkill(BaseSummariseSkill):
             "session_summary": "",
             "mistakes": input.parameters.get("explained_mistakes", []),
             "tips": [],
-            "comparison_note": None,
         }

@@ -24,7 +24,6 @@ class PipelineResult:
     tips: list[str]
     session_summary: str
     text_level_estimate: str | None = None
-    comparison_note: str | None = None
     step_timings: list[StepTiming] = field(default_factory=list)
     total_wall_s: float | None = None
 
@@ -56,9 +55,7 @@ class WritingPipeline:
 
         Step 6  summarise_writing_session — enriches mistakes with severity labels
                                         (critical / expected / minor), generates
-                                        session_summary and tips[], and populates
-                                        comparison_note if prior session data is
-                                        available.
+                                        session_summary and tips[].
 
     Data flow: each step receives only the output it needs from previous steps —
     raw_mistakes → classified_mistakes → explained_mistakes flows linearly.
@@ -182,7 +179,6 @@ class WritingPipeline:
             tips=summary_output.metadata.get("tips", []),
             session_summary=summary_output.metadata.get("session_summary", ""),
             text_level_estimate=text_level_estimate,
-            comparison_note=summary_output.metadata.get("comparison_note"),
             step_timings=timings,
             total_wall_s=round(time.perf_counter() - _wall_start, 3) if enable_timing else None,
         )

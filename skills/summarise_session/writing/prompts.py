@@ -41,8 +41,6 @@ Your task:
    - Tips must NOT restate specific corrections — they should be actionable learning directions
    - Tips and session_summary must ALWAYS be written in English, regardless of the target language
 
-4. Set comparison_note to null.
-
 Respond with exactly one JSON object:
 {{
   "session_summary": "...",
@@ -55,8 +53,7 @@ Respond with exactly one JSON object:
       "severity": "critical|expected|minor"
     }}
   ],
-  "tips": ["...", "..."],
-  "comparison_note": null
+  "tips": ["...", "..."]
 }}
 
 The "mistakes" array must contain exactly the same mistakes as the input, in the same order, each enriched with a "severity" field."""
