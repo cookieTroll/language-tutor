@@ -13,7 +13,9 @@ class IOHandler(Protocol):
         ...
     def render_evaluation(self, data: dict) -> None: ...
     def render_exercises(self, data: dict) -> None:
-        """Render a generated exercise list. data: {"exercises": [{"prompt", "exercise_type"}, ...]}."""
+        """Render a generated exercise list, batched by type.
+        data: {"groups": [{"exercise_type", "instruction", "exercises": [{"prompt"}, ...]}, ...]}.
+        """
         ...
     def render_results(self, data: dict) -> None:
         """Render graded exercise results. data: {"items": [...], "score": float}."""
@@ -119,10 +121,17 @@ class TerminalIOHandler:
         self.output("==================================================\n")
 
     def render_exercises(self, data: dict) -> None:
-        exercises = data.get("exercises", [])
-        if not exercises:
+        groups = data.get("groups", [])
+        if not groups:
             return
-        lines = [f"{i + 1}. {ex['prompt']}" for i, ex in enumerate(exercises)]
+        lines = []
+        counter = 0
+        for group in groups:
+            if group.get("instruction"):
+                lines.append(f"-- {group['instruction']} --")
+            for ex in group["exercises"]:
+                counter += 1
+                lines.append(f"{counter}. {ex['prompt']}")
         self.output("\n" + "\n".join(lines))
 
     def render_results(self, data: dict) -> None:

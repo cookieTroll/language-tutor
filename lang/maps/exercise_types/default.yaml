@@ -10,30 +10,35 @@
   description: >
     A blank in a sentence; correct_answer is the missing word/phrase.
     Example: "Ich fahre ___ meinem Freund. (with)"
+  student_instruction: "Fill in the blank."
 
 - type: multiple_choice
   grading: exact
   description: >
     Options rendered as text (e.g. "a) mit  b) bei  c) nach"); the student
     types the letter or word; correct_answer is the correct option.
+  student_instruction: "Choose the correct option."
 
 - type: true_false
   grading: exact
   description: >
     A statement about the rule or a sentence; correct_answer is "richtig" or
     "falsch".
+  student_instruction: "Is this statement correct? Answer richtig or falsch."
 
 - type: error_correction
   grading: llm
   description: >
     A sentence containing an error to find and fix.
     Example: "Find and fix the error: Ich habe gestern ins Kino gegangen."
+  student_instruction: "Find and rewrite the sentence with the error fixed."
 
 - type: transformation
   grading: llm
   description: >
     Rewrite a sentence per an instruction (tense, voice, etc.).
     Example: "Rewrite using Perfekt: Ich esse einen Apfel."
+  student_instruction: "Rewrite the sentence as instructed."
 
 - type: word_order
   grading: llm
@@ -41,12 +46,14 @@
     Words given scrambled, either already-inflected ("reorder" — tests word
     order only) or in base/dictionary form ("build" — tests word order plus
     conjugation/case together).
+  student_instruction: "Put the words in the correct order to form a sentence."
 
 - type: sentence_completion
   grading: llm
   description: >
     An incomplete sentence for the student to finish naturally.
     Example: "Finish: Obwohl es regnet, ___"
+  student_instruction: "Complete the sentence naturally."
 
 - type: sentence_combining
   grading: llm
@@ -54,9 +61,11 @@
     Two short sentences plus a connector cue to combine into one — a natural
     home for small/idiomatic topics (e.g. sondern vs aber) that don't fit a
     curated major-topic list.
+  student_instruction: "Combine the two sentences into one, using the given connector."
 
 - type: translation
   grading: llm
   description: >
     An English cue to translate into the target language (or the reverse
     direction).
+  student_instruction: "Translate the sentence."

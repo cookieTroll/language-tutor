@@ -10,6 +10,7 @@ from shared.error_log import log_skill_error
 from skills.protocols import SkillInput
 from skills.select_grammar.skill import resolve_manual_topic
 from modules.grammar.skills import get_grammar_skills
+from lang.loader import get_exercise_types
 
 
 def parse_answer_block(raw_block: str, exercise_count: int) -> tuple[list[str], list[str]]:
@@ -77,7 +78,7 @@ class GrammarModule(ModuleProtocol):
         self._display_explanation(ctx, topic_info, explanation, io)
 
         exercises = self._generate_exercises(ctx, topic_info, llm, io)
-        self._display_exercises(exercises, io)
+        self._display_exercises(ctx, exercises, io)
 
         if exercises:
             raw_block = io.prompt_block(
@@ -163,6 +164,7 @@ class GrammarModule(ModuleProtocol):
                     "language": ctx.language,
                     "error_frequency": ctx.error_frequency,
                     "recent_topics": ctx.recent_topics,
+                    "suggested_focus": ctx.parameters.get("suggested_focus"),
                 },
             ),
             llm,
@@ -232,14 +234,26 @@ class GrammarModule(ModuleProtocol):
         io.output("\n[!] Exercise generation failed — ending session with no exercises.")
         return []
 
-    def _display_exercises(self, exercises: list[dict], io: IOHandler) -> None:
+    def _display_exercises(self, ctx: ModuleContext, exercises: list[dict], io: IOHandler) -> None:
         if not exercises:
             return
-        io.render_exercises({
-            "exercises": [
-                {"prompt": ex["prompt"], "exercise_type": ex["exercise_type"]} for ex in exercises
-            ]
-        })
+        types_map = get_exercise_types(ctx.language)
+
+        # exercises is already clustered by type (generate_exercises regroups
+        # defensively) — fold consecutive same-type runs into display batches,
+        # each with one shared instruction instead of repeating it per line.
+        groups: list[dict] = []
+        for ex in exercises:
+            etype = ex["exercise_type"]
+            if not groups or groups[-1]["exercise_type"] != etype:
+                groups.append({
+                    "exercise_type": etype,
+                    "instruction": types_map.instruction_for(etype) if types_map else None,
+                    "exercises": [],
+                })
+            groups[-1]["exercises"].append({"prompt": ex["prompt"]})
+
+        io.render_exercises({"groups": groups})
 
     def _handle_btw(
         self, ctx: ModuleContext, topic: str, question: str, llm: BaseLLM, io: IOHandler

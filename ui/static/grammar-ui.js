@@ -1,11 +1,35 @@
 // Grammar-module-specific handlers. Depends on shared state/helpers defined in
 // app.js (phase, activeModule, escapeHtml, appendTutor, sendInput, etc.) — load after it.
+// Also depends on diff.js's tokenise()/lcs() (word-level LCS diff), loaded before this file.
+
+// Word-level diff between a wrong free-text answer and the reference answer —
+// only meaningful for llm-graded types (whole-sentence answers); exact-match
+// types (fill-in-the-blank etc.) are single tokens where a diff adds nothing
+// over the plain "Your answer / Correct answer" pair.
+function diffToHtml(origText, corrText) {
+  if (typeof lcs !== 'function' || typeof tokenise !== 'function') return '';
+  const ops = lcs(tokenise(origText), tokenise(corrText));
+  return ops.map(op => {
+    if (op.t === '=') return escapeHtml(op.v);
+    if (op.t === '-') return `<span class="del">${escapeHtml(op.v)}</span>`;
+    return `<span class="ins">${escapeHtml(op.v)}</span>`;
+  }).join('');
+}
 
 function handleExercisesReady(payload) {
-  const exercises = payload.exercises || [];
+  const groups = payload.groups || [];
   const box = document.getElementById('grammar-exercises');
-  box.innerHTML = '<ol>' + exercises.map(ex => `<li>${escapeHtml(ex.prompt)}</li>`).join('') + '</ol>';
-  box.style.display = exercises.length ? 'block' : 'none';
+  let counter = 0;
+  box.innerHTML = groups.map(group => {
+    const heading = group.instruction
+      ? `<div class="ex-group-heading">${escapeHtml(group.instruction)}</div>` : '';
+    const items = group.exercises.map(ex => {
+      counter++;
+      return `<li>${escapeHtml(ex.prompt)}</li>`;
+    }).join('');
+    return `${heading}<ol start="${counter - group.exercises.length + 1}">${items}</ol>`;
+  }).join('');
+  box.style.display = groups.length ? 'block' : 'none';
 
   const pad = document.getElementById('grammar-pad');
   pad.style.display = 'block';
@@ -32,9 +56,17 @@ function handleGrammarResultsComplete(payload) {
     const status = item.correct ? 'Correct' : 'Incorrect';
     let extra = '';
     if (!item.correct) {
+      const diffWorthy = item.grading === 'llm' && item.user_answer && item.correct_answer;
+      const diffLine = diffWorthy
+        ? `<div class="ex-diff">${diffToHtml(item.user_answer, item.correct_answer)}</div>`
+        : '';
       extra =
+        diffLine +
         `<div class="ex-answer">Correct answer: ${escapeHtml(item.correct_answer || '')}</div>` +
         `<div class="ex-feedback">${escapeHtml(item.feedback || '')}</div>`;
+    } else if (item.feedback) {
+      // Correct but with a non-penalizing note (e.g. a flagged typo).
+      extra = `<div class="ex-feedback">${escapeHtml(item.feedback)}</div>`;
     }
     return (
       `<div class="exercise-item ${cls}">` +

@@ -209,7 +209,7 @@ Generates targeted exercises for a grammar topic. Validates user answers. Logs e
 ```python
 topic: str
 level: str
-exercise_count: int = 5
+exercise_count: int = 7
 ```
 
 **Output:**

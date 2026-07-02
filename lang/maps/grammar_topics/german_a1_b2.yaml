@@ -6,6 +6,11 @@
 #
 # related_error_tags must match lang/maps/taxonomy/german_taxonomy_v1.yaml exactly;
 # cross-validated at load time by lang/loader.py.
+#
+# in_scope/out_of_scope: explicit boundary points for every topic, so dump_grammar
+# and generate_exercises — two independent LLM calls given only the topic string —
+# don't silently drift apart on what a topic covers (see GrammarTopic docstring in
+# lang/models.py for why this matters).
 
 # --- A1 ---
 
@@ -13,61 +18,132 @@
   difficulty: a1
   scope: major
   related_error_tags: ["verb_conjugation"]
+  in_scope:
+    - "regular (weak) verb conjugation in the present tense (-e, -st, -t, -en, -t, -en)"
+  out_of_scope:
+    - "sein and haben — see the separate topic"
+    - "stem-changing/irregular verbs (fahren, sehen, essen)"
+    - "modal verbs"
+    - "past tenses"
 
 - topic: "Present tense — sein and haben"
   difficulty: a1
   scope: major
   related_error_tags: ["verb_conjugation"]
+  in_scope:
+    - "present-tense conjugation of sein and haben only"
+  out_of_scope:
+    - "Präteritum of sein/haben — see the A2 Präteritum topic"
+    - "other irregular verbs"
 
 - topic: "Articles — nominative case"
   difficulty: a1
   scope: major
   related_error_tags: ["article"]
+  in_scope:
+    - "definite and indefinite articles (der/die/das, ein/eine/ein) in the nominative case"
+    - "gender agreement"
+  out_of_scope:
+    - "accusative, dative, or genitive case"
+    - "adjective endings"
 
 - topic: "Accusative case — definite and indefinite articles"
   difficulty: a1
   scope: major
   related_error_tags: ["noun_declension"]
+  in_scope:
+    - "definite/indefinite article forms in the accusative case"
+  out_of_scope:
+    - "dative or genitive case"
+    - "adjective endings"
+    - "personal pronouns in the accusative"
 
 - topic: "Negation — nicht and kein"
   difficulty: a1
   scope: major
   related_error_tags: ["other"]
+  in_scope:
+    - "choosing nicht vs kein"
+    - "position of nicht in a sentence"
+  out_of_scope:
+    - "other negation words (nie, niemand, nichts)"
+    - "double negation"
 
 - topic: "Modal verbs — present tense and verb-final word order"
   difficulty: a1
   scope: major
   related_error_tags: ["verb_conjugation", "word_order"]
+  in_scope:
+    - "present-tense conjugation of können, müssen, wollen, sollen, dürfen, mögen"
+    - "verb-final placement of the accompanying infinitive"
+  out_of_scope:
+    - "modal verbs in Präteritum — see the A2 Präteritum topic"
+    - "subjunctive/Konjunktiv uses of modals"
 
 - topic: "Separable verbs — present tense"
   difficulty: a1
   scope: major
   related_error_tags: ["verb_conjugation", "word_order"]
+  in_scope:
+    - "identifying separable prefixes"
+    - "splitting the prefix to the end of the clause in present-tense main clauses"
+  out_of_scope:
+    - "inseparable-prefix verbs"
+    - "separable verbs in Perfekt or subordinate clauses"
 
 - topic: "Imperative forms"
   difficulty: a1
   scope: major
   related_error_tags: ["verb_conjugation"]
+  in_scope:
+    - "du/ihr/Sie imperative forms for regular and common irregular verbs"
+  out_of_scope:
+    - "imperative of separable verbs"
+    - "polite requests via Konjunktiv II (würde/könnten Sie...)"
 
 - topic: "Prepositions with accusative — für, durch, gegen, ohne, um"
   difficulty: a1
   scope: major
   related_error_tags: ["noun_declension"]
+  in_scope:
+    - "these five accusative prepositions and the case they require"
+  out_of_scope:
+    - "dative prepositions"
+    - "two-way prepositions"
 
 - topic: "Prepositions with dative — mit, nach, bei, seit, von, zu, aus"
   difficulty: a1
   scope: major
   related_error_tags: ["noun_declension"]
+  in_scope:
+    - "these dative prepositions and the case they require"
+  out_of_scope:
+    - "accusative prepositions"
+    - "two-way prepositions"
 
 - topic: "Perfekt tense — regular and common irregular verbs"
   difficulty: a1
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "haben/sein as the Perfekt auxiliary"
+    - "regular (weak) verb participles (ge-t)"
+    - "common irregular (strong) verb participles an A1 learner already knows (e.g. gehen, sehen, essen, trinken)"
+  out_of_scope:
+    - "Präteritum forms — see the separate Präteritum topics"
+    - "rare or advanced irregular verbs"
+    - "passive voice"
 
 - topic: "W-questions and yes/no questions — verb-second word order"
   difficulty: a1
   scope: major
   related_error_tags: ["word_order"]
+  in_scope:
+    - "verb-second (V2) position in statements and W-questions"
+    - "verb-first position in yes/no questions"
+  out_of_scope:
+    - "word order in subordinate clauses"
+    - "indirect questions"
 
 # --- A2 ---
 
@@ -75,56 +151,120 @@
   difficulty: a2
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "Präteritum conjugation of haben and sein"
+    - "Präteritum conjugation of modal verbs (können, müssen, wollen, sollen, dürfen, mögen)"
+  out_of_scope:
+    - "Präteritum of regular (weak) main verbs"
+    - "Präteritum of irregular (strong) main verbs like gehen→ging, nehmen→nahm — covered by the B1 topic 'Präteritum — narrative past for all verbs', not this one"
 
 - topic: "Perfekt — expanded irregular verbs and participle formation"
   difficulty: a2
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "a wider set of irregular (strong) verb participles beyond the A1 set"
+    - "participle formation for separable- and inseparable-prefix verbs"
+  out_of_scope:
+    - "Präteritum forms"
+    - "passive voice"
 
 - topic: "Two-way prepositions (Wechselpräpositionen) — dative vs accusative"
   difficulty: a2
   scope: major
   related_error_tags: ["noun_declension"]
+  in_scope:
+    - "the nine two-way prepositions (an, auf, hinter, in, neben, über, unter, vor, zwischen)"
+    - "choosing dative for location vs accusative for motion/direction"
+  out_of_scope:
+    - "fixed accusative-only or dative-only prepositions"
+    - "genitive prepositions"
 
 - topic: "Dative case — indirect objects and personal pronouns"
   difficulty: a2
   scope: major
   related_error_tags: ["noun_declension"]
+  in_scope:
+    - "dative case for indirect objects"
+    - "dative personal pronoun forms (mir, dir, ihm, ihr, uns, euch, ihnen)"
+  out_of_scope:
+    - "dative prepositions — see the separate A1 topic"
+    - "verbs with fixed dative prepositions — see the B1 topic"
 
 - topic: "Adjective endings after definite articles (nominative/accusative)"
   difficulty: a2
   scope: major
   related_error_tags: ["adjective_declension"]
+  in_scope:
+    - "weak adjective declension after der/die/das (and dieser/jeder/welcher) in nominative and accusative"
+  out_of_scope:
+    - "dative or genitive adjective endings"
+    - "strong/mixed declension (no article or indefinite article) — see the B1 'all cases' topic"
 
 - topic: "Comparative and superlative"
   difficulty: a2
   scope: major
   related_error_tags: ["adjective_declension"]
+  in_scope:
+    - "-er/-(e)st endings"
+    - "irregular comparatives (gut/besser/best-, viel/mehr/meist-, gern/lieber/liebst-)"
+    - "als vs wie in comparisons"
+  out_of_scope:
+    - "case endings on comparative/superlative forms when used attributively"
 
 - topic: "Subordinate clauses — weil, dass, wenn"
   difficulty: a2
   scope: major
   related_error_tags: ["word_order"]
+  in_scope:
+    - "verb-final word order after weil, dass, and wenn"
+  out_of_scope:
+    - "other subordinating conjunctions (obwohl, während, nachdem, bevor) — see the B1 topic"
+    - "relative clauses"
+    - "indirect questions"
 
 - topic: "Reflexive verbs"
   difficulty: a2
   scope: major
   related_error_tags: ["verb_conjugation"]
+  in_scope:
+    - "reflexive pronoun forms (mich, dich, sich, uns, euch, sich)"
+    - "accusative vs dative reflexive pronouns"
+  out_of_scope:
+    - "reciprocal pronouns (einander)"
+    - "passive-like reflexive constructions (sich lassen — see the B2 passive-alternatives topic)"
 
 - topic: "Genitive case — possession"
   difficulty: a2
   scope: major
   related_error_tags: ["noun_declension"]
+  in_scope:
+    - "genitive article and noun endings"
+    - "expressing possession with the genitive"
+  out_of_scope:
+    - "genitive prepositions — see the separate B1 topic"
+    - "von + dative as a spoken-register genitive alternative"
 
 - topic: "Infinitive clauses with zu"
   difficulty: a2
   scope: major
   related_error_tags: ["verb_conjugation"]
+  in_scope:
+    - "zu + infinitive after verbs, adjectives, and nouns"
+    - "um...zu, ohne...zu, (an)statt...zu constructions"
+  out_of_scope:
+    - "infinitive without zu after modal verbs, lassen, and perception verbs"
 
 - topic: "Ordinal numbers and dates"
   difficulty: a2
   scope: major
   related_error_tags: ["other"]
+  in_scope:
+    - "forming ordinal numbers (der erste, der zweite, ...)"
+    - "saying and writing dates"
+  out_of_scope:
+    - "cardinal numbers"
+    - "time-of-day expressions"
 
 # --- B1 ---
 
@@ -132,61 +272,130 @@
   difficulty: b1
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "Präteritum conjugation of regular (weak) verbs"
+    - "Präteritum conjugation of irregular (strong) verbs (e.g. gehen→ging, nehmen→nahm, sehen→sah)"
+    - "using Präteritum for narrative/written past tense"
+  out_of_scope:
+    - "Perfekt tense"
+    - "haben/sein/modal-verb Präteritum as an isolated topic — that's the A2 topic, this one covers the full verb system"
 
 - topic: "Plusquamperfekt"
   difficulty: b1
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "hatte/war + participle"
+    - "using Plusquamperfekt for an event that happened before another past event"
+  out_of_scope:
+    - "simple Perfekt or Präteritum"
+    - "the nachdem clause itself — word order there belongs to the subordinate-clause topics"
 
 - topic: "Passive voice — present and past"
   difficulty: b1
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "werden-passive in the present tense"
+    - "werden-passive in the simple past (Präteritum passive)"
+  out_of_scope:
+    - "passive with modal verbs — see the B2 topic"
+    - "passive alternatives (sich lassen, man, -bar adjectives) — see the B2 topic"
 
 - topic: "Konjunktiv II — polite requests and hypotheticals"
   difficulty: b1
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "würde + infinitive"
+    - "common irregular Konjunktiv II forms (wäre, hätte, könnte, müsste)"
+    - "present-time hypotheticals and polite requests"
+  out_of_scope:
+    - "past-time Konjunktiv II (Konjunktiv II Vergangenheit) — see the B2 topic"
+    - "Konjunktiv I"
 
 - topic: "Relative clauses — relative pronouns in all cases"
   difficulty: b1
   scope: major
   related_error_tags: ["noun_declension", "word_order"]
+  in_scope:
+    - "relative pronoun forms (der/die/das/dessen/deren/denen...) in nominative, accusative, dative, and genitive"
+    - "verb-final word order in the relative clause"
+  out_of_scope:
+    - "relative clauses with prepositions (wo(r)+preposition) — see the B2 topic"
 
 - topic: "Subordinate clauses — obwohl, während, nachdem, bevor"
   difficulty: b1
   scope: major
   related_error_tags: ["word_order"]
+  in_scope:
+    - "verb-final word order after obwohl, während, nachdem, and bevor"
+    - "the meaning distinctions between these four conjunctions"
+  out_of_scope:
+    - "weil, dass, wenn — see the A2 topic"
+    - "indirect questions"
 
 - topic: "Adjective endings — all cases"
   difficulty: b1
   scope: major
   related_error_tags: ["adjective_declension"]
+  in_scope:
+    - "weak declension (after definite article) in all four cases"
+    - "mixed declension (after indefinite article) in all four cases"
+    - "strong declension (no article) in all four cases"
+  out_of_scope:
+    - "comparative/superlative forms — see the separate A2 topic"
 
 - topic: "Genitive prepositions — während, trotz, wegen"
   difficulty: b1
   scope: major
   related_error_tags: ["noun_declension"]
+  in_scope:
+    - "these genitive prepositions"
+    - "the common spoken-register substitution with von + dative"
+  out_of_scope:
+    - "genitive case for possession — see the separate A2 topic"
 
 - topic: "Indirect questions"
   difficulty: b1
   scope: major
   related_error_tags: ["word_order"]
+  in_scope:
+    - "embedding W-questions with verb-final word order"
+    - "embedding yes/no questions via ob with verb-final word order"
+  out_of_scope:
+    - "direct questions — see the A1 topic"
+    - "other subordinate clause types"
 
 - topic: "Two-part connectors — je...desto, sowohl...als auch, entweder...oder"
   difficulty: b1
   scope: major
   related_error_tags: ["word_order"]
+  in_scope:
+    - "word order and usage of je...desto, sowohl...als auch, entweder...oder, weder...noch"
+  out_of_scope:
+    - "single connectors (aber, sondern, deshalb)"
+    - "advanced connectors — see the B2 topic"
 
 - topic: "Futur I"
   difficulty: b1
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "werden + infinitive for future events and predictions"
+    - "verb-final placement of the infinitive"
+  out_of_scope:
+    - "Futur II"
+    - "present tense used with future meaning"
 
 - topic: "Verbs with fixed prepositions — warten auf, sich freuen über"
   difficulty: b1
   scope: major
   related_error_tags: ["vocabulary"]
+  in_scope:
+    - "common verb + fixed-preposition pairs and the case each triggers"
+  out_of_scope:
+    - "general preposition case rules already covered by the dedicated preposition topics"
 
 # --- B2 ---
 
@@ -194,43 +403,88 @@
   difficulty: b2
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "Konjunktiv I verb forms"
+    - "using Konjunktiv I for indirect/reported speech"
+  out_of_scope:
+    - "Konjunktiv II"
+    - "direct speech"
 
 - topic: "Passive voice with modal verbs"
   difficulty: b2
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "modal verb + passive infinitive construction (muss gemacht werden)"
+  out_of_scope:
+    - "simple passive without a modal verb — see the B1 topic"
 
 - topic: "Nominalization of verbs and adjectives"
   difficulty: b2
   scope: major
   related_error_tags: ["vocabulary"]
+  in_scope:
+    - "forming nouns from verbs/adjectives (-ung, -heit, -keit, infinitive-as-noun)"
+    - "gender/article of the resulting nominalized form"
+  out_of_scope:
+    - "general noun declension unrelated to nominalization"
 
 - topic: "Extended participle constructions (erweiterte Partizipialattribute)"
   difficulty: b2
   scope: major
   related_error_tags: ["adjective_declension", "word_order"]
+  in_scope:
+    - "participle phrases used attributively before a noun"
+    - "word order within the extended participle construction"
+  out_of_scope:
+    - "relative clauses as an alternative construction — see the B1 topic"
 
 - topic: "Konjunktiv II Vergangenheit — unreal conditions in the past"
   difficulty: b2
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "hätte/wäre + participle for past-time hypotheticals and unreal conditions"
+  out_of_scope:
+    - "present-time Konjunktiv II — see the B1 topic"
 
 - topic: "Fixed verb-noun collocations (Funktionsverbgefüge)"
   difficulty: b2
   scope: major
   related_error_tags: ["vocabulary"]
+  in_scope:
+    - "common Funktionsverbgefüge (e.g. in Frage stellen, zur Verfügung stehen, Anwendung finden)"
+    - "when to prefer the collocation over the plain verb"
+  out_of_scope:
+    - "general verb + fixed-preposition pairs — see the B1 topic"
 
 - topic: "Advanced connectors — dennoch, folglich, zumal, dabei"
   difficulty: b2
   scope: major
   related_error_tags: ["word_order"]
+  in_scope:
+    - "these specific connectors and their word-order behavior"
+  out_of_scope:
+    - "basic connectors (aber, deshalb)"
+    - "two-part connectors — see the B1 topic"
 
 - topic: "Relative clauses with prepositions — wo(r)+preposition"
   difficulty: b2
   scope: major
   related_error_tags: ["word_order"]
+  in_scope:
+    - "wo(r)+preposition relative constructions (worüber, womit, wofür)"
+    - "when this form is used instead of preposition + relative pronoun"
+  out_of_scope:
+    - "basic relative clauses without a preposition — see the B1 topic"
 
 - topic: "Passive alternatives — sich lassen + infinitive, man, -bar adjectives"
   difficulty: b2
   scope: major
   related_error_tags: ["verb_tense"]
+  in_scope:
+    - "sich lassen + infinitive as a passive alternative"
+    - "man + active verb as a passive alternative"
+    - "-bar adjective formation as a passive alternative"
+  out_of_scope:
+    - "the werden-passive itself — see the B1 and B2 passive topics"

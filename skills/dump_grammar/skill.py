@@ -1,6 +1,7 @@
 from llm.base import BaseLLM, LLMMessage
+from lang.loader import get_grammar_topics
 from skills.protocols import SkillProtocol, SkillInput, SkillOutput
-from skills.dump_grammar.prompts import DUMP_GRAMMAR_PROMPT
+from skills.dump_grammar.prompts import DUMP_GRAMMAR_PROMPT, GENERIC_SCOPE_FALLBACK
 
 
 class DumpGrammarSkill(SkillProtocol):
@@ -22,10 +23,21 @@ class DumpGrammarSkill(SkillProtocol):
                 metadata={"explanation": "", "error": "No topic provided."},
             )
 
+        # dump_grammar and generate_exercises are independent LLM calls given
+        # only the topic string — without an explicit scope boundary, one can
+        # explain a narrower slice (e.g. regular verbs) while the other tests a
+        # wider one (e.g. all verbs). Curated topics may carry in_scope/out_of_scope;
+        # ad hoc/minor topics fall back to a generic "respect the topic's own
+        # qualifier clause" instruction.
+        topics_map = get_grammar_topics(language)
+        matched = topics_map.scope_for(topic) if topics_map else None
+        scope_block = (matched.format_scope_for_prompt() if matched else "") or GENERIC_SCOPE_FALLBACK
+
         prompt = DUMP_GRAMMAR_PROMPT.format(
             language=language,
             topic=topic,
             level=input.level.upper(),
+            scope_block=scope_block,
         )
         messages = [LLMMessage(role="user", content=prompt)]
 

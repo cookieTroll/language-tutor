@@ -142,6 +142,36 @@ class TestGrammarModuleRun:
         assert result.errors == []
         assert result.metadata["btw_entries"] == []
 
+    def test_suggested_focus_from_orchestrator_reaches_select_grammar(self):
+        """ctx.parameters['suggested_focus'] (set by the orchestrator's
+        recommendation) must be threaded into select_grammar's prompt so the
+        module actually honors what the confirm screen suggested."""
+        from modules.grammar.agent import GrammarModule
+
+        mock_io = MagicMock(spec=IOHandler)
+        mock_io.show_cli_hints = True
+        mock_io.prompt.side_effect = [""]
+        mock_io.prompt_block.return_value = ""
+
+        resp_select = LLMResponse(text=json.dumps({
+            "topic": "Dative case — prepositions",
+            "difficulty": "a1",
+            "scope": "major",
+            "reason": "matches suggested focus",
+        }), model="test-model")
+        resp_dump = LLMResponse(text="# Dative case\nCore rule...", model="test-model")
+        resp_generate = LLMResponse(text=json.dumps({"exercises": []}), model="test-model")
+
+        llm = _make_llm([])
+        llm.complete.side_effect = [resp_select, resp_dump, resp_generate]
+
+        module = GrammarModule()
+        ctx = _make_ctx(parameters={"suggested_focus": "noun_declension"})
+        module.run(ctx, llm, mock_io)
+
+        select_grammar_prompt = llm.complete.call_args_list[0].args[0][0].content
+        assert "noun_declension" in select_grammar_prompt
+
     def test_manual_topic_override_with_wrong_answer_and_btw(self):
         """User supplies their own topic (skips select_grammar entirely) and
         asks a /btw question mid-block; one exact-match exercise is wrong."""

@@ -2,10 +2,10 @@ import json
 import re
 
 from llm.base import BaseLLM, LLMMessage
-from lang.loader import get_taxonomy, get_exercise_types
+from lang.loader import get_taxonomy, get_exercise_types, get_grammar_topics
 from lang.models import TaxonomyError
 from skills.protocols import SkillProtocol, SkillInput, SkillOutput, call_with_self_correction, SelfCorrectionError
-from skills.generate_exercises.prompts import GENERATE_EXERCISES_PROMPT
+from skills.generate_exercises.prompts import GENERATE_EXERCISES_PROMPT, GENERIC_SCOPE_FALLBACK
 
 
 class GenerateExercisesSkill(SkillProtocol):
@@ -19,7 +19,7 @@ class GenerateExercisesSkill(SkillProtocol):
     def run(self, input: SkillInput, llm: BaseLLM) -> SkillOutput:
         topic = input.parameters.get("topic", "").strip()
         language = input.parameters.get("language", "German").capitalize()
-        exercise_count = input.parameters.get("exercise_count", 5)
+        exercise_count = input.parameters.get("exercise_count", 7)
 
         if not topic:
             return SkillOutput(
@@ -44,6 +44,13 @@ class GenerateExercisesSkill(SkillProtocol):
                 metadata={"exercises": [], "error": f"No exercise_types map found for language '{language}'."},
             )
 
+        # Same scope-boundary lookup as dump_grammar — the two skills are
+        # independent LLM calls given only the topic string, so without this
+        # they can silently disagree on scope (see GrammarTopic.in_scope docstring).
+        topics_map = get_grammar_topics(language)
+        matched = topics_map.scope_for(topic) if topics_map else None
+        scope_block = (matched.format_scope_for_prompt() if matched else "") or GENERIC_SCOPE_FALLBACK
+
         prompt = GENERATE_EXERCISES_PROMPT.format(
             language=language,
             exercise_count=exercise_count,
@@ -51,6 +58,7 @@ class GenerateExercisesSkill(SkillProtocol):
             level=input.level.upper(),
             exercise_types=exercise_types_map.format_for_prompt(),
             taxonomy=taxonomy.format_for_prompt(),
+            scope_block=scope_block,
         )
         messages = [LLMMessage(role="user", content=prompt)]
 
@@ -108,7 +116,18 @@ class GenerateExercisesSkill(SkillProtocol):
                     "distractor_hint": str(item.get("distractor_hint", "")),
                 })
 
-            return parsed
+            # Defensive re-clustering: the prompt asks for same-type exercises
+            # grouped consecutively, but don't trust the model to always comply —
+            # regroup here (stable, by first occurrence) so display/grading always
+            # see one batch per type regardless of model output order. This is the
+            # single source of exercise order, so both the UI and the positional
+            # answer-line matching in modules/grammar/agent.py inherit it for free.
+            buckets: dict[str, list[dict]] = {}
+            for ex in parsed:
+                buckets.setdefault(ex["exercise_type"], []).append(ex)
+            grouped: list[dict] = [ex for bucket in buckets.values() for ex in bucket]
+
+            return grouped
 
         try:
             exercises = call_with_self_correction(llm, messages, parse, temperature=0.6)

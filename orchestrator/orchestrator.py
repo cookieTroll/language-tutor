@@ -270,8 +270,10 @@ class Orchestrator(OrchestratorProtocol):
 
         while True:
             confirm = self.io.prompt(
-                "\nStart this module? [Y/n] "
-                "(or /history, /history <n>, /history <n>d for a writing-history report): "
+                "\nStart this module? [Y/n]"
+                " (writing-history report: /history for last 10 sessions,"
+                " /history <n> e.g. /history 5 for last n sessions,"
+                " /history <n>d e.g. /history 7d for last n days): "
             ).strip().lower()
 
             if confirm.startswith("/history"):

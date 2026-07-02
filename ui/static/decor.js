@@ -233,6 +233,45 @@ applyTheme(THEMES[themeIdx]);
   });
 })();
 
+// ── Grammar explanation panel resizer (vertical) ───────────────────────────────
+(function () {
+  const resizer = document.getElementById('grammar-resizer');
+  const box     = document.getElementById('grammar-box');
+  const leftCol = document.getElementById('left-col');
+  let dragging = false, startY = 0, startH = 0;
+
+  const saved = localStorage.getItem('grammarBoxHeight');
+  if (saved) box.style.height = saved + 'px';
+
+  resizer.addEventListener('mousedown', e => {
+    dragging = true;
+    startY   = e.clientY;
+    startH   = box.getBoundingClientRect().height;
+    resizer.classList.add('dragging');
+    document.body.style.cursor    = 'row-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    // Clamped to 15%-80% of the column height so exercises/the answer pad
+    // below always keep a usable margin, however the split is dragged.
+    const colH = leftCol.getBoundingClientRect().height;
+    const newH = Math.min(Math.max(startH + e.clientY - startY, colH * 0.15), colH * 0.8);
+    box.style.height = newH + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor    = '';
+    document.body.style.userSelect = '';
+    localStorage.setItem('grammarBoxHeight', Math.round(box.getBoundingClientRect().height));
+  });
+})();
+
 // ── Confetti ──────────────────────────────────────────────────────────────────
 function fireConfetti() {
   const colors = ['#f87171','#34d399','#60a5fa','#fbbf24','#a78bfa'];

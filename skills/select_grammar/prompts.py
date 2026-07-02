@@ -7,11 +7,14 @@ Curated major topics for this language/level (YAML — the syllabus backbone):
 Recurring errors (error_tag → count):
 {error_frequency_json}
 
+Suggested focus from the orchestrator (prioritise a topic matching this if
+one exists in the curated list): {suggested_focus}
+
 Recently covered topics (avoid):
 {recent_topics}
 
-Prioritise a major topic linked to a recurring error that hasn't been
-covered recently. If none of the major topics fit the recurring errors well
+Prioritise a major topic linked to the suggested focus or a recurring error
+that hasn't been covered recently. If none of the major topics fit well
 (e.g. the error is a small/idiomatic point like connector word choice, not
 covered by the syllabus backbone), propose your own topic instead and mark
 it as minor — do not force a poor-fitting major topic just to stay on the list.

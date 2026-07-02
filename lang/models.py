@@ -112,12 +112,21 @@ class GrammarTopic(BaseModel):
     scope: 'major' — from the curated syllabus list.
            'minor' — reserved for topics select_grammar proposes on the fly;
            never appears in a loaded map, only in skill output.
+
+    in_scope / out_of_scope: optional explicit boundary points for topics whose
+    name alone is ambiguous (e.g. two Präteritum entries split by which verbs
+    they cover). dump_grammar and generate_exercises are two independent LLM
+    calls given only the topic string — without this, one could explain
+    regular verbs while the other tests irregular ones. Empty by default;
+    only populated where the topic name's qualifier clause needs reinforcing.
     """
 
     topic: str
     difficulty: str
     scope: Literal["major", "minor"]
     related_error_tags: list[str]
+    in_scope: list[str] = []
+    out_of_scope: list[str] = []
 
     @field_validator("difficulty")
     @classmethod
@@ -126,6 +135,18 @@ class GrammarTopic(BaseModel):
         if v.lower() not in valid_levels:
             raise ValueError(f"Invalid CEFR difficulty: '{v}'. Allowed: {valid_levels}")
         return v.lower()
+
+    def format_scope_for_prompt(self) -> str:
+        """Empty string if no explicit scope was authored — callers fall back to
+        a generic instruction (see dump_grammar/generate_exercises prompts)."""
+        if not self.in_scope and not self.out_of_scope:
+            return ""
+        lines = ["Scope constraint for this topic — stay within these boundaries:"]
+        if self.in_scope:
+            lines.append("In scope: " + "; ".join(self.in_scope))
+        if self.out_of_scope:
+            lines.append("Out of scope (do NOT cover or test this): " + "; ".join(self.out_of_scope))
+        return "\n".join(lines)
 
 
 class GrammarTopicsMap(BaseModel):
@@ -137,6 +158,15 @@ class GrammarTopicsMap(BaseModel):
     """
 
     topics: list[GrammarTopic]
+
+    def scope_for(self, topic: str) -> GrammarTopic | None:
+        """Exact, case-insensitive match — mirrors resolve_manual_topic's lookup
+        in skills/select_grammar/skill.py. Returns None for ad hoc/minor topics
+        not in the curated list, which simply have no scope constraint to enforce."""
+        for t in self.topics:
+            if t.topic.strip().casefold() == topic.strip().casefold():
+                return t
+        return None
 
 
 class ExerciseType(BaseModel):
@@ -150,6 +180,7 @@ class ExerciseType(BaseModel):
     type: str
     grading: Literal["exact", "llm"]
     description: str
+    student_instruction: str
 
 
 class ExerciseTypesMap(BaseModel):
@@ -171,6 +202,12 @@ class ExerciseTypesMap(BaseModel):
         for t in self.types:
             if t.type == exercise_type:
                 return t.grading
+        return None
+
+    def instruction_for(self, exercise_type: str) -> str | None:
+        for t in self.types:
+            if t.type == exercise_type:
+                return t.student_instruction
         return None
 
     def format_for_prompt(self) -> str:

@@ -47,8 +47,8 @@ def _minimal_registry(tmp_path: Path) -> _Registry:
         "a1": 40, "a2": 60, "b1": 100, "b2": 150, "c1": 200, "c2": 250
     })
     _write_yaml(tmp_path / "maps/exercise_types/default.yaml", [
-        {"type": "fill_in_the_blank", "grading": "exact", "description": "A blank to fill in."},
-        {"type": "transformation", "grading": "llm", "description": "Rewrite per an instruction."},
+        {"type": "fill_in_the_blank", "grading": "exact", "description": "A blank to fill in.", "student_instruction": "Fill in the blank."},
+        {"type": "transformation", "grading": "llm", "description": "Rewrite per an instruction.", "student_instruction": "Rewrite the sentence as instructed."},
     ])
     _write_yaml(tmp_path / "languages/testlang.yaml", {
         "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1"
@@ -198,12 +198,12 @@ class TestExerciseTypesMap:
 
     def test_invalid_grading_raises(self):
         with pytest.raises(ValidationError):
-            ExerciseType(type="fill_in_the_blank", grading="fuzzy", description="x")
+            ExerciseType(type="fill_in_the_blank", grading="fuzzy", description="x", student_instruction="i")
 
     def test_grading_for_known_and_unknown_type(self):
         m = ExerciseTypesMap(types=[
-            ExerciseType(type="fill_in_the_blank", grading="exact", description="x"),
-            ExerciseType(type="word_order", grading="llm", description="y"),
+            ExerciseType(type="fill_in_the_blank", grading="exact", description="x", student_instruction="i"),
+            ExerciseType(type="word_order", grading="llm", description="y", student_instruction="i"),
         ])
         assert m.grading_for("fill_in_the_blank") == "exact"
         assert m.grading_for("word_order") == "llm"
@@ -211,19 +211,26 @@ class TestExerciseTypesMap:
 
     def test_type_names(self):
         m = ExerciseTypesMap(types=[
-            ExerciseType(type="fill_in_the_blank", grading="exact", description="x"),
-            ExerciseType(type="translation", grading="llm", description="y"),
+            ExerciseType(type="fill_in_the_blank", grading="exact", description="x", student_instruction="i"),
+            ExerciseType(type="translation", grading="llm", description="y", student_instruction="i"),
         ])
         assert m.type_names == frozenset({"fill_in_the_blank", "translation"})
 
     def test_format_for_prompt_includes_type_grading_and_description(self):
         m = ExerciseTypesMap(types=[
-            ExerciseType(type="true_false", grading="exact", description="richtig/falsch"),
+            ExerciseType(type="true_false", grading="exact", description="richtig/falsch", student_instruction="i"),
         ])
         text = m.format_for_prompt()
         assert "true_false" in text
         assert "exact" in text
         assert "richtig/falsch" in text
+
+    def test_instruction_for_known_and_unknown_type(self):
+        m = ExerciseTypesMap(types=[
+            ExerciseType(type="true_false", grading="exact", description="x", student_instruction="Answer richtig or falsch."),
+        ])
+        assert m.instruction_for("true_false") == "Answer richtig or falsch."
+        assert m.instruction_for("matching") is None
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +410,7 @@ class TestRegistry:
     def test_exercise_types_loads_and_resolves(self, tmp_path):
         _minimal_registry(tmp_path)
         _write_yaml(tmp_path / "maps/exercise_types/et1.yaml", [
-            {"type": "translation", "grading": "llm", "description": "x"},
+            {"type": "translation", "grading": "llm", "description": "x", "student_instruction": "Translate."},
         ])
         _write_yaml(tmp_path / "languages/testlang.yaml", {
             "name": "testlang", "cefr_hints": "map1", "taxonomy": "tax1", "exercise_types": "et1"

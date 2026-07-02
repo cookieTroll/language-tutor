@@ -72,8 +72,8 @@ class GradeExercisesSkill(SkillProtocol):
                 feedback = str(item.get("feedback", "")).strip()
                 if not correct and not feedback:
                     raise ValueError(f"Missing feedback for incorrect item at index {index}")
-                if correct:
-                    feedback = ""
+                # Feedback is kept even when correct=true — used for non-penalizing
+                # notes like flagging a typo that didn't affect the grammar rule.
 
                 parsed.append({"index": index, "correct": correct, "feedback": feedback})
 

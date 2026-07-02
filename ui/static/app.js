@@ -19,6 +19,7 @@ async function startSession() {
   const userId = document.getElementById('user-id').value.trim() || 'student';
   document.getElementById('idle').style.display = 'none';
   document.getElementById('main').style.display = 'flex';
+  showCmdSidebar('setup');
 
   const res  = await fetch('/api/start', {
     method: 'POST', headers: {'Content-Type':'application/json'},
@@ -30,6 +31,35 @@ async function startSession() {
   const es = new EventSource('/api/stream/' + sid);
   es.onmessage = e => handleEvent(JSON.parse(e.data));
   es.onerror   = () => appendTutor('Connection lost.', 'system');
+}
+
+// ── Command hints sidebar ────────────────────────────────────────────────────
+const CMD_HINTS = {
+  setup: [
+    { cmd: '/history', desc: 'Last 10 writing sessions' },
+    { cmd: '/history &lt;n&gt;', desc: 'e.g. /history 5 — last n sessions' },
+    { cmd: '/history &lt;n&gt;d', desc: 'e.g. /history 7d — last n days' },
+  ],
+  writing: [
+    { cmd: '/btw &lt;question&gt;', desc: 'Ask the tutor a question, typed in the answer box' },
+  ],
+  grammar: [
+    { cmd: '/btw &lt;question&gt;', desc: 'Type on its own line inside your answer block' },
+  ],
+};
+
+function showCmdSidebar(phaseKey) {
+  const hints = CMD_HINTS[phaseKey];
+  const sidebar = document.getElementById('cmd-sidebar');
+  if (!hints) { sidebar.style.display = 'none'; return; }
+  document.getElementById('cmd-list').innerHTML = hints.map(h =>
+    `<div class="cmd-item"><code>${h.cmd}</code><div class="cmd-desc">${h.desc}</div></div>`
+  ).join('');
+  sidebar.style.display = 'block';
+}
+
+function hideCmdSidebar() {
+  document.getElementById('cmd-sidebar').style.display = 'none';
 }
 
 function confirmLeave() {
@@ -85,6 +115,12 @@ function handleOutput(text) {
         document.getElementById('writing-pad').value = draft;
         updateWordCount();
       }
+      // Writing uses the right column for tutor/btw — restore it in case a
+      // prior grammar session in this chain hid it.
+      document.getElementById('right-col').style.display = '';
+      document.getElementById('col-resizer').style.display = '';
+      document.getElementById('left-col').classList.remove('solo');
+      showCmdSidebar('writing');
     } else {
       // Header + explanation arrive as one combined io.output() blob — pull the
       // explanation body out from between the separator and the closing rule.
@@ -92,6 +128,7 @@ function handleOutput(text) {
       const explMatch = text.match(/-{5,}[\r\n]+([\s\S]*)\n=+/);
       document.getElementById('writing-pad').style.display = 'none';
       document.getElementById('grammar-box').style.display = 'block';
+      document.getElementById('grammar-resizer').style.display = 'block';
       document.getElementById('word-count').style.display = 'none';
       // /btw during grammar answer-collection must be typed inline in the block —
       // a separate Ask call here would collide with the single prompt_block() read.
@@ -101,6 +138,12 @@ function handleOutput(text) {
       if (topicMatch) document.getElementById('grammar-topic-title').textContent = topicMatch[1].trim();
       document.getElementById('grammar-explanation').textContent = explMatch ? explMatch[1].trim() : '';
       updateChip('chip-module', 'Grammar');
+      // The right column (tutor/btw) is unused in grammar — reclaim the width
+      // for the explanation/exercises panel instead of leaving it idle.
+      document.getElementById('right-col').style.display = 'none';
+      document.getElementById('col-resizer').style.display = 'none';
+      document.getElementById('left-col').classList.add('solo');
+      showCmdSidebar('grammar');
     }
     return; // don't render the raw ASCII header
   }
@@ -149,6 +192,7 @@ function resetForNewModuleSession() {
   localStorage.removeItem('draftText');
 
   document.getElementById('grammar-box').style.display = 'none';
+  document.getElementById('grammar-resizer').style.display = 'none';
   document.getElementById('grammar-topic-title').textContent = '';
   document.getElementById('grammar-explanation').textContent = '';
   document.getElementById('grammar-exercises').style.display = 'none';
@@ -226,6 +270,7 @@ function goBackToSetupForChaining() {
   document.getElementById('session').style.display = 'none';
   document.getElementById('setup').style.display = 'flex';
   document.getElementById('setup-output').innerHTML = '';
+  showCmdSidebar('setup');
 }
 
 function handleDone() {
@@ -236,6 +281,7 @@ function handleDone() {
   document.getElementById('btw-btn').disabled   = true;
   document.getElementById('done-btn').style.display = 'none';
   localStorage.removeItem('draftText');
+  hideCmdSidebar();
 }
 
 async function finishSession() {

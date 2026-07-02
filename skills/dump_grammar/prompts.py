@@ -1,8 +1,16 @@
+GENERIC_SCOPE_FALLBACK = (
+    "If the topic name above contains a qualifier clause (specific verbs, "
+    "\"regular\" vs \"irregular\", a named subset, etc.), treat that clause as "
+    "a hard scope boundary — do not generalize beyond what it names."
+)
+
 DUMP_GRAMMAR_PROMPT = """\
 You are a {language} grammar teacher writing a comprehensive explanation of:
 "{topic}"
 
 Target level: {level}
+
+{scope_block}
 
 Include:
 - Core rule statement

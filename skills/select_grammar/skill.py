@@ -23,6 +23,7 @@ class SelectGrammarSkill(SkillProtocol):
         language = input.parameters.get("language", "German").capitalize()
         error_frequency: dict[str, int] = input.parameters.get("error_frequency", {})
         recent_topics: list[str] = input.parameters.get("recent_topics", [])
+        suggested_focus = input.parameters.get("suggested_focus") or "(none)"
 
         topics_map = get_grammar_topics(language)
         if topics_map is None or not topics_map.topics:
@@ -39,6 +40,7 @@ class SelectGrammarSkill(SkillProtocol):
             level=input.level.upper(),
             grammar_topics_yaml=grammar_topics_yaml,
             error_frequency_json=json.dumps(error_frequency, ensure_ascii=False),
+            suggested_focus=suggested_focus,
             recent_topics=", ".join(recent_topics) or "(none)",
         )
 

@@ -61,14 +61,13 @@ class TestWebIOHandler:
 
     def test_render_exercises_enqueues_event(self):
         io = WebIOHandler()
-        io.render_exercises({"exercises": [{"prompt": "Der ___ Mann", "exercise_type": "fill_blank"}]})
+        groups = [{"exercise_type": "fill_blank", "instruction": "Fill in the blank.",
+                   "exercises": [{"prompt": "Der ___ Mann"}]}]
+        io.render_exercises({"groups": groups})
         ev = io.get_event(timeout=1.0)
         assert ev == {
             "type": "data",
-            "payload": {
-                "event": "exercises_ready",
-                "exercises": [{"prompt": "Der ___ Mann", "exercise_type": "fill_blank"}],
-            },
+            "payload": {"event": "exercises_ready", "groups": groups},
         }
 
     def test_render_results_enqueues_event(self):
@@ -100,9 +99,11 @@ class TestTerminalIOHandler:
 
     def test_render_exercises_matches_prior_grammar_module_format(self, capsys):
         io = TerminalIOHandler()
-        io.render_exercises({"exercises": [
-            {"prompt": "Der ___ Mann", "exercise_type": "fill_blank"},
-            {"prompt": "Die ___ Frau", "exercise_type": "fill_blank"},
+        io.render_exercises({"groups": [
+            {"exercise_type": "fill_blank", "instruction": None, "exercises": [
+                {"prompt": "Der ___ Mann"},
+                {"prompt": "Die ___ Frau"},
+            ]},
         ]})
         out = capsys.readouterr().out
         assert "1. Der ___ Mann" in out
@@ -110,8 +111,36 @@ class TestTerminalIOHandler:
 
     def test_render_exercises_empty_list_prints_nothing(self, capsys):
         io = TerminalIOHandler()
-        io.render_exercises({"exercises": []})
+        io.render_exercises({"groups": []})
         assert capsys.readouterr().out == ""
+
+    def test_render_exercises_includes_instruction_once_per_group(self, capsys):
+        io = TerminalIOHandler()
+        io.render_exercises({"groups": [
+            {"exercise_type": "true_false", "instruction": "Answer richtig or falsch.", "exercises": [
+                {"prompt": "Es ist wichtig, gegen den Wind zu kämpfen."},
+                {"prompt": "Der Hund ist blau."},
+            ]},
+        ]})
+        out = capsys.readouterr().out
+        assert out.count("Answer richtig or falsch.") == 1
+        assert "1. Es ist wichtig" in out
+        assert "2. Der Hund ist blau." in out
+
+    def test_render_exercises_numbers_continue_across_groups(self, capsys):
+        io = TerminalIOHandler()
+        io.render_exercises({"groups": [
+            {"exercise_type": "fill_in_the_blank", "instruction": "Fill in the blank.", "exercises": [
+                {"prompt": "p1"}, {"prompt": "p2"},
+            ]},
+            {"exercise_type": "error_correction", "instruction": "Find and fix.", "exercises": [
+                {"prompt": "p3"},
+            ]},
+        ]})
+        out = capsys.readouterr().out
+        assert "1. p1" in out
+        assert "2. p2" in out
+        assert "3. p3" in out
 
     def test_render_results_matches_prior_grammar_module_format(self, capsys):
         io = TerminalIOHandler()

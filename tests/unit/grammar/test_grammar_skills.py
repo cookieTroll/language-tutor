@@ -60,6 +60,47 @@ class TestSelectGrammarSkill:
         assert "Present tense — regular verbs" in prompt_text
         assert "verb_conjugation" in prompt_text
 
+    def test_suggested_focus_reaches_prompt(self):
+        """The orchestrator's recommended focus must reach the LLM prompt so
+        the module actually honors what the confirm screen suggested, instead
+        of re-deriving a topic independently."""
+        from skills.select_grammar.skill import SelectGrammarSkill
+        payload = json.dumps({
+            "topic": "Dative case — prepositions",
+            "difficulty": "b1",
+            "scope": "major",
+            "reason": "matches suggested focus",
+        })
+        llm = make_llm([payload])
+
+        skill = SelectGrammarSkill()
+        skill.run(
+            make_input(
+                language="german",
+                error_frequency={"noun_declension": 4},
+                recent_topics=[],
+                suggested_focus="noun_declension",
+            ),
+            llm,
+        )
+
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "noun_declension" in prompt_text
+
+    def test_missing_suggested_focus_defaults_to_none_placeholder(self):
+        from skills.select_grammar.skill import SelectGrammarSkill
+        payload = json.dumps({
+            "topic": "Basic word order", "difficulty": "a1", "scope": "minor", "reason": "x",
+        })
+        llm = make_llm([payload])
+
+        skill = SelectGrammarSkill()
+        out = skill.run(make_input(language="german", error_frequency={}, recent_topics=[]), llm)
+
+        assert out.success is True
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "(none)" in prompt_text
+
     def test_selects_minor_topic_when_no_major_fits(self):
         from skills.select_grammar.skill import SelectGrammarSkill
         payload = json.dumps({
@@ -252,6 +293,36 @@ class TestDumpGrammarSkill:
         assert out.success is False
         assert "connection refused" in out.metadata["error"]
 
+    def test_curated_topic_scope_notes_reach_prompt(self):
+        """The A2 Präteritum topic is deliberately narrow (haben/sein/modals
+        only) — its curated out_of_scope must reach the prompt so the
+        explanation doesn't drift into irregular main-verb Präteritum, which
+        generate_exercises might then test without ever having been explained."""
+        from skills.dump_grammar.skill import DumpGrammarSkill
+        llm = make_llm(["# Präteritum\n..."])
+
+        skill = DumpGrammarSkill()
+        skill.run(
+            make_input(level="a2", topic="Präteritum — haben, sein, and modal verbs", language="german"),
+            llm,
+        )
+
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "Out of scope" in prompt_text
+        assert "gehen→ging" in prompt_text
+
+    def test_uncurated_topic_gets_generic_scope_fallback(self):
+        from skills.dump_grammar.skill import DumpGrammarSkill
+        llm = make_llm(["explanation"])
+
+        skill = DumpGrammarSkill()
+        skill.run(
+            make_input(level="b1", topic="sondern vs. aber", language="german"), llm,
+        )
+
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "hard scope boundary" in prompt_text
+
 
 # ---------------------------------------------------------------------------
 # GenerateExercisesSkill
@@ -271,6 +342,35 @@ def _exercise(**overrides) -> dict:
 
 
 class TestGenerateExercisesSkill:
+
+    def test_interleaved_types_are_regrouped_by_first_occurrence(self):
+        """The prompt asks the model to batch same-type exercises together, but
+        if it still interleaves them, the skill must regroup — stable, by each
+        type's first occurrence — since display and answer-line grading both
+        rely on this order."""
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        payload = json.dumps({"exercises": [
+            _exercise(type="fill_in_the_blank", prompt="p1", correct_answer="a1"),
+            _exercise(type="word_order", prompt="p2", correct_answer="a2", error_tag="word_order"),
+            _exercise(type="fill_in_the_blank", prompt="p3", correct_answer="a3"),
+            _exercise(type="error_correction", prompt="p4", correct_answer="a4", error_tag="word_order"),
+            _exercise(type="fill_in_the_blank", prompt="p5", correct_answer="a5"),
+        ]})
+        llm = make_llm([payload])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(
+            make_input(level="a1", topic="Dative case", language="german", exercise_count=5), llm,
+        )
+
+        assert out.success is True
+        types = [ex["exercise_type"] for ex in out.metadata["exercises"]]
+        prompts = [ex["prompt"] for ex in out.metadata["exercises"]]
+        assert types == [
+            "fill_in_the_blank", "fill_in_the_blank", "fill_in_the_blank",
+            "word_order", "error_correction",
+        ]
+        assert prompts == ["p1", "p3", "p5", "p2", "p4"]
 
     def test_generates_mixed_exercises_with_derived_grading(self):
         from skills.generate_exercises.skill import GenerateExercisesSkill
@@ -307,6 +407,39 @@ class TestGenerateExercisesSkill:
         assert out.success is False
         assert out.metadata["exercises"] == []
         llm.complete.assert_not_called()
+
+    def test_curated_topic_scope_notes_reach_prompt(self):
+        """Mirrors the dump_grammar scope test — generate_exercises must see
+        the same curated in_scope/out_of_scope so it doesn't test irregular
+        main verbs on a topic scoped to haben/sein/modals only."""
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        payload = json.dumps({"exercises": [_exercise(
+            prompt="Ich ___ (können) das nicht.", correct_answer="konnte", error_tag="verb_tense",
+        )]})
+        llm = make_llm([payload])
+
+        skill = GenerateExercisesSkill()
+        skill.run(
+            make_input(
+                level="a2", topic="Präteritum — haben, sein, and modal verbs", language="german",
+            ),
+            llm,
+        )
+
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "Out of scope" in prompt_text
+        assert "gehen→ging" in prompt_text
+
+    def test_uncurated_topic_gets_generic_scope_fallback(self):
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        payload = json.dumps({"exercises": [_exercise()]})
+        llm = make_llm([payload])
+
+        skill = GenerateExercisesSkill()
+        skill.run(make_input(level="b1", topic="sondern vs. aber", language="german"), llm)
+
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "hard scope boundary" in prompt_text
 
     def test_unrecognized_language_falls_back_to_default_taxonomy(self):
         """No language config means get_taxonomy falls back to the default map
@@ -470,11 +603,29 @@ class TestGradeExercisesSkill:
         assert out.success is True
         assert out.metadata["results"][0]["correct"] is False
 
-    def test_feedback_forced_empty_when_correct(self):
+    def test_feedback_preserved_when_correct(self):
+        """Feedback on a correct=true item is kept, not blanked — used for
+        non-penalizing notes like flagging a typo that didn't affect the
+        grammar rule being tested."""
         from skills.grade_exercises.skill import GradeExercisesSkill
         items = [_item(index=0, already_known_wrong=False)]
         payload = json.dumps({"results": [
-            {"index": 0, "correct": True, "feedback": "stray text that should be dropped"},
+            {"index": 0, "correct": True, "feedback": "Note: 'Gester' should be 'Gestern'."},
+        ]})
+        llm = make_llm([payload])
+
+        skill = GradeExercisesSkill()
+        out = skill.run(make_input(level="a1", items=items, language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["results"][0]["correct"] is True
+        assert out.metadata["results"][0]["feedback"] == "Note: 'Gester' should be 'Gestern'."
+
+    def test_feedback_optional_when_correct(self):
+        from skills.grade_exercises.skill import GradeExercisesSkill
+        items = [_item(index=0, already_known_wrong=False)]
+        payload = json.dumps({"results": [
+            {"index": 0, "correct": True, "feedback": ""},
         ]})
         llm = make_llm([payload])
 

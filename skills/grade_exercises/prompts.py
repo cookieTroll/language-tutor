@@ -5,10 +5,16 @@ explain why the reference answer is correct and theirs isn't, don't re-judge
 correctness. For the rest, the reference correct_answer is ONE example of a
 valid answer, not the only acceptable one — an answer using different content
 or vocabulary is still correct as long as it applies the target grammar rule
-correctly. Judge each answer against the grammar rule being tested, not
-against how closely it matches the reference text. Only mark an answer wrong
-if it violates the grammar rule itself (wrong case, wrong tense, wrong word
-order, etc.), not because it says something different from the example.
+correctly. Judge each answer against the grammar rule being tested (see each
+item's error_tag), not against how closely it matches the reference text.
+Only mark an answer wrong if it violates the grammar rule itself (wrong case,
+wrong tense, wrong word order, etc.), not because it says something different
+from the example. A spelling slip or typo that doesn't affect the rule being
+tested (e.g. a dropped letter in an otherwise correct word) should NOT fail
+the exercise — mark it correct=true, unless the error_tag itself is about
+spelling/orthography — but still add a short feedback note flagging the typo
+so the student sees it (feedback is allowed even when correct=true; only
+required when correct=false).
 
 {items_json}
 
