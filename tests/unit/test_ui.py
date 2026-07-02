@@ -252,6 +252,21 @@ class TestStaticAssets:
         assert r.status_code == 200
         assert b"renderDiff" in r.data
 
+    def test_writing_ui_js_served(self, client):
+        r = client.get("/static/writing-ui.js")
+        assert r.status_code == 200
+        assert b"submitWriting" in r.data
+
+    def test_grammar_ui_js_served(self, client):
+        r = client.get("/static/grammar-ui.js")
+        assert r.status_code == 200
+        assert b"submitGrammarAnswers" in r.data
+
+    def test_decor_js_served(self, client):
+        r = client.get("/static/decor.js")
+        assert r.status_code == 200
+        assert b"cycleTheme" in r.data
+
 
 # ── JS syntax ─────────────────────────────────────────────────────────────────
 
@@ -273,3 +288,12 @@ class TestJSSyntax:
 
     def test_diff_js_syntax(self, node_available):
         self._check("ui/static/diff.js")
+
+    def test_writing_ui_js_syntax(self, node_available):
+        self._check("ui/static/writing-ui.js")
+
+    def test_grammar_ui_js_syntax(self, node_available):
+        self._check("ui/static/grammar-ui.js")
+
+    def test_decor_js_syntax(self, node_available):
+        self._check("ui/static/decor.js")
