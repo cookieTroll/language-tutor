@@ -45,9 +45,9 @@ Detailed specs for each component live in `docs/`. This document is the human-fa
 | **1c** | `IOHandler` protocol + light local frontend (chat window + session file browser) |
 | **2a** | Grammar module |
 | **2b** | On-demand writing history summary (`/history` command — topics, recurring mistakes, level trend; not a per-session field) |
-| **2c** | CEFR estimator — aggregates per-session text-level estimates (Step 5) into a user-level estimate |
+| **2c** | Level & Progress — merges the former "CEFR estimator" and "Level progression tracking" (3b) into one build: a mastery-ratio progress bar per module (topics mastered, texts written, weak/strong tags) plus a text-level trend from Step 5's per-session estimates, shown alongside rather than blended together |
 | **3a** | Vocab module |
-| **3b** | Level progression tracking |
+| ~~**3b**~~ | merged into 2c above |
 | **3c** | Anki export |
 | **3d** | MCP Server |
 
@@ -115,7 +115,7 @@ skills/
 │   └── prompts.py
 ├── pick_topic/             # session skill (Layer 1b, planned)
 ├── summarize_progress/     # session skill (Layer 1b, planned)
-├── cefr_estimator/         # session skill (Layer 2c, planned)
+├── cefr_estimator/         # session skill (Layer 2c "Level & Progress", planned)
 ├── select_grammar/         # session skill (Layer 2a, planned)
 ├── dump_grammar/           # session skill (Layer 2a, planned)
 ├── generate_exercises/     # session skill (Layer 2a, planned)
@@ -241,7 +241,7 @@ language-tutor/
 │   ├── btw_handler/        # utility skill (implemented)
 │   ├── pick_topic/         # Layer 1b
 │   ├── summarize_progress/ # Layer 1b
-│   ├── cefr_estimator/     # Layer 2c
+│   ├── cefr_estimator/     # Layer 2c "Level & Progress"
 │   ├── select_grammar/     # Layer 2a
 │   ├── dump_grammar/       # Layer 2a
 │   ├── generate_exercises/ # Layer 2a

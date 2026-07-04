@@ -1,4 +1,5 @@
 from skills.detect_mistakes.skill import DetectMistakesSkill
+from skills.verify_mistakes.skill import VerifyMistakesSkill
 from skills.classify_mistakes.skill import ClassifyMistakesSkill
 from skills.explain_mistakes.skill import ExplainMistakesSkill
 from skills.write_correction.skill import WriteCorrectionSkill
@@ -11,6 +12,7 @@ def get_writing_skills() -> dict:
     """Returns the instantiated skills required by the writing module."""
     return {
         "detect_mistakes":           DetectMistakesSkill(),
+        "verify_mistakes":           VerifyMistakesSkill(),
         "classify_mistakes":         ClassifyMistakesSkill(),
         "explain_mistakes":          ExplainMistakesSkill(),
         "write_correction":          WriteCorrectionSkill(),

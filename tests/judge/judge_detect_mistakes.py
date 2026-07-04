@@ -14,7 +14,7 @@ import pytest
 from tests.judge.utils import load_cases, make_llm, strip_markdown_json, write_results
 
 JUDGE_PROMPT = """\
-You are evaluating a German language error detector (Step 1 of a writing pipeline).
+You are evaluating a {level} {language} language error detector (Step 1 of a writing pipeline).
 This step's sole job: find erroneous text fragments. It does NOT classify or correct them.
 
 Student text: {user_text}
@@ -42,7 +42,7 @@ Return JSON only:
   "score": <float 0.0-1.0>,
   "reasoning": "<one sentence>",
   "missed_errors": ["<expected fragment not detected>", ...],
-  "false_positives": ["<detected fragment that is correct German>", ...]
+  "false_positives": ["<detected fragment that is correct {language}>", ...]
 }}"""
 
 
@@ -62,6 +62,8 @@ def _judge(judge_llm, case: dict, detected: list[dict]) -> dict:
     )
 
     prompt = JUDGE_PROMPT.format(
+        level=case["level"],
+        language=case["language"].capitalize(),
         user_text=case["user_text"],
         expected_fragments=expected_str,
         detected_fragments=detected_str,

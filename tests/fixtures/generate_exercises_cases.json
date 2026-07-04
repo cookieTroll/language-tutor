@@ -5,30 +5,34 @@
     "level": "a1",
     "language": "german",
     "topic": "Present tense — regular verbs",
-    "exercise_count": 4
+    "exercise_count": 4,
+    "exercise_type": "fill_in_the_blank"
   },
   {
     "id": "ge_two_way_prepositions_a2",
-    "description": "A2 topic with a genuine case-choice rule — fill_in_the_blank/multiple_choice fit naturally",
+    "description": "A2 topic with a genuine case-choice rule — multiple_choice fits naturally",
     "level": "a2",
     "language": "german",
     "topic": "Two-way prepositions (Wechselpräpositionen) — dative vs accusative",
-    "exercise_count": 4
+    "exercise_count": 4,
+    "exercise_type": "multiple_choice"
   },
   {
     "id": "ge_subordinate_clauses_b1",
-    "description": "B1 word-order topic — expect at least one word_order or transformation exercise",
+    "description": "B1 word-order topic — fixed to the word_order exercise type",
     "level": "b1",
     "language": "german",
     "topic": "Subordinate clauses — obwohl, während, nachdem, bevor",
-    "exercise_count": 5
+    "exercise_count": 5,
+    "exercise_type": "word_order"
   },
   {
     "id": "ge_extended_participle_b2",
-    "description": "B2 advanced declension/word-order topic — open-ended types (transformation, error_correction) expected alongside exact-match",
+    "description": "B2 advanced declension/word-order topic — fixed to the transformation exercise type",
     "level": "b2",
     "language": "german",
     "topic": "Extended participle constructions (erweiterte Partizipialattribute)",
-    "exercise_count": 5
+    "exercise_count": 5,
+    "exercise_type": "transformation"
   }
 ]

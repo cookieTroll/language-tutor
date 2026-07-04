@@ -61,6 +61,8 @@ class JSONSessionStore(BaseSessionStore):
             "completed_at": self._dt_to_str(log.completed_at),
             "duration_minutes": log.duration_minutes,
             "text_level_estimate": log.text_level_estimate,
+            "word_count": log.word_count,
+            "score": log.score,
         }
         self._write(self.sessions_file, sessions)
 
@@ -128,6 +130,8 @@ class JSONSessionStore(BaseSessionStore):
                     completed_at=self._str_to_dt(r["completed_at"]),
                     duration_minutes=r["duration_minutes"],
                     text_level_estimate=r.get("text_level_estimate"),
+                    word_count=r.get("word_count"),
+                    score=r.get("score"),
                 )
             )
         return result
@@ -167,6 +171,8 @@ class JSONSessionStore(BaseSessionStore):
                     completed_at=self._str_to_dt(r["completed_at"]),
                     duration_minutes=r["duration_minutes"],
                     text_level_estimate=r.get("text_level_estimate"),
+                    word_count=r.get("word_count"),
+                    score=r.get("score"),
                 )
             )
         return result
@@ -198,6 +204,8 @@ class JSONSessionStore(BaseSessionStore):
             completed_at=self._str_to_dt(r["completed_at"]),
             duration_minutes=r["duration_minutes"],
             text_level_estimate=r.get("text_level_estimate"),
+            word_count=r.get("word_count"),
+            score=r.get("score"),
         )
 
     # 6. get_error_frequency
@@ -263,6 +271,8 @@ class JSONSessionStore(BaseSessionStore):
                             completed_at=self._str_to_dt(r["completed_at"]),
                             duration_minutes=r["duration_minutes"],
                             text_level_estimate=r.get("text_level_estimate"),
+                            word_count=r.get("word_count"),
+                            score=r.get("score"),
                         )
                     )
         return result

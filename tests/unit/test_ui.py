@@ -80,6 +80,16 @@ class TestWebIOHandler:
             "payload": {"event": "grammar_results_complete", "items": items, "score": 1.0},
         }
 
+    def test_render_progress_enqueues_event(self):
+        io = WebIOHandler()
+        modules = [{"module": "grammar", "mastery_ratio": 0.5}]
+        io.render_progress({"current_level": "a1", "modules": modules, "trend": []})
+        ev = io.get_event(timeout=1.0)
+        assert ev == {
+            "type": "data",
+            "payload": {"event": "progress_ready", "current_level": "a1", "modules": modules, "trend": []},
+        }
+
 
 # ── TerminalIOHandler ───────────────────────────────────────────────────────────
 
@@ -156,6 +166,34 @@ class TestTerminalIOHandler:
         assert "Correct answer: right" in out
         assert "Feedback: nope" in out
         assert "Score: 50% (1/2)" in out
+
+    def test_render_progress_shows_bar_and_stats(self, capsys):
+        io = TerminalIOHandler()
+        io.render_progress({
+            "current_level": "a1",
+            "modules": [
+                {"module": "grammar", "mastery_ratio": 0.5, "topics_mastered": 1, "topics_total": 2,
+                 "weak_tags": ["Dative case errors"], "strong_tags": ["Present tense"]},
+                {"module": "writing", "mastery_ratio": 0.4, "texts_written": 2, "total_words": 120,
+                 "words_at_current_level": 120, "weak_tags": [], "strong_tags": []},
+            ],
+            "trend": [{"date": "2026-07-01", "level": "a1"}, {"date": "2026-07-02", "level": "a2"}],
+        })
+        out = capsys.readouterr().out
+        assert "LEVEL & PROGRESS (A1)" in out
+        assert "Grammar:" in out and "50%" in out
+        assert "Topics mastered: 1/2" in out
+        assert "Strong: Present tense" in out
+        assert "Weak: Dative case errors" in out
+        assert "Texts written: 2" in out
+        assert "Words written: 120 total, 120 at current level" in out
+        assert "Recent text-level trend: A1 -> A2" in out
+
+    def test_render_progress_no_trend_omits_trend_line(self, capsys):
+        io = TerminalIOHandler()
+        io.render_progress({"current_level": "a1", "modules": [], "trend": []})
+        out = capsys.readouterr().out
+        assert "trend" not in out.lower()
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

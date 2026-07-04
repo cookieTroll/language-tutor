@@ -59,7 +59,12 @@ def test_writing_module_run():
         text='{"mistakes": [{"fragment": "Ich aufstehen", "error_type_hint": "separable verb position"}]}',
         model="test-model"
     )
-    # 3. Step 2 — classify_mistakes
+    # 3. Step 1.5 — verify_mistakes
+    resp_verify = LLMResponse(
+        text='{"verified": [{"fragment": "Ich aufstehen", "keep": true}]}',
+        model="test-model"
+    )
+    # 4. Step 2 — classify_mistakes
     resp_classify = LLMResponse(
         text='{"classified": [{"fragment": "Ich aufstehen", "error_tag": "verb_conjugation", "correction": "Ich stehe auf"}]}',
         model="test-model"
@@ -84,7 +89,7 @@ def test_writing_module_run():
         }),
         model="test-model"
     )
-    llm.complete.side_effect = [resp_btw_ans, resp_detect, resp_classify, resp_explain, resp_correct, resp_summarise]
+    llm.complete.side_effect = [resp_btw_ans, resp_detect, resp_verify, resp_classify, resp_explain, resp_correct, resp_summarise]
 
     ctx = ModuleContext(
         user_id="user1",
