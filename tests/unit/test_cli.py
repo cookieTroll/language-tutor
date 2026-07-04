@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from ui.cli import main
 from orchestrator.protocols import ExerciseRecommendation
+from shared.io import TerminalIOHandler
 
 @patch("ui.cli.sys.argv", ["ltut", "invalid-subcommand"])
 @patch("ui.cli.print")
@@ -75,7 +76,7 @@ def test_cli_main_flow(mock_print, mock_input, mock_orchestrator_cls, mock_build
     # Assert orchestrator instantiation and session execution
     call_args = mock_orchestrator_cls.call_args
     assert call_args[0] == (mock_build_storage.return_value, mock_llm, mock_config)
-    assert "io" in call_args[1]
+    assert isinstance(call_args[1].get("io"), TerminalIOHandler)
     call_kwargs = mock_orch.run_session.call_args
     assert call_kwargs[0][0] == "john"
     assert call_kwargs[1]["language"] is None

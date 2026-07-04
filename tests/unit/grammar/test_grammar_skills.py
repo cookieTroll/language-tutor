@@ -708,4 +708,3 @@ class TestGradeExercisesSkill:
         assert out.success is False
         assert out.metadata["results"] == []
         assert "error" in out.metadata
-        assert "error" in out.metadata

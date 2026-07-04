@@ -297,6 +297,102 @@ class TestEstimateTextLevelSkill:
 
 
 # ---------------------------------------------------------------------------
+# TopicPickerSkill
+# ---------------------------------------------------------------------------
+
+class TestTopicPickerSkill:
+
+    def test_generates_topic_from_valid_response(self):
+        from skills.topic_picker.skill import TopicPickerSkill
+        payload = json.dumps({
+            "topic": "Describe a recent trip.",
+            "requirements": "Minimum 100 words. Use past tense.",
+            "task_label": "recent_trip",
+        })
+        llm = make_llm([payload])
+
+        skill = TopicPickerSkill()
+        out = skill.run(
+            make_input(
+                level="a2", language="german", recent_topics=["Mein Morgen"],
+                error_tags=["dative_case"], suggested_focus="dative prepositions",
+                min_words=100,
+            ),
+            llm,
+        )
+
+        assert out.success is True
+        assert out.metadata["topic"] == "Describe a recent trip."
+        assert out.metadata["requirements"] == "Minimum 100 words. Use past tense."
+        assert out.metadata["task_label"] == "recent_trip"
+        assert out.metadata["min_words"] == 100
+        assert out.metadata["suggested_focus"] == "dative prepositions"
+
+    def test_prompt_includes_recent_topics_and_error_tags(self):
+        """The prompt must steer away from recent topics and toward recurring
+        error tags — verify the actual values reach the LLM, not just that
+        some prompt was sent."""
+        from skills.topic_picker.skill import TopicPickerSkill
+        payload = json.dumps({
+            "topic": "t", "requirements": "r", "task_label": "x",
+        })
+        llm = make_llm([payload])
+
+        skill = TopicPickerSkill()
+        skill.run(
+            make_input(
+                level="b1", language="german", recent_topics=["Mein Morgen", "Das Wetter"],
+                error_tags=["dative_case", "word_order"], suggested_focus="dative prepositions",
+                min_words=120,
+            ),
+            llm,
+        )
+
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "Mein Morgen, Das Wetter" in prompt_text
+        assert "dative_case, word_order" in prompt_text
+        assert "dative prepositions" in prompt_text
+        assert "120" in prompt_text
+
+    def test_markdown_fenced_response_is_stripped(self):
+        from skills.topic_picker.skill import TopicPickerSkill
+        payload = "```json\n" + json.dumps({
+            "topic": "t", "requirements": "r", "task_label": "x",
+        }) + "\n```"
+        llm = make_llm([payload])
+
+        skill = TopicPickerSkill()
+        out = skill.run(make_input(level="a1", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["topic"] == "t"
+
+    def test_missing_key_retries_then_succeeds(self):
+        from skills.topic_picker.skill import TopicPickerSkill
+        bad = json.dumps({"topic": "t", "requirements": "r"})  # missing task_label
+        good = json.dumps({"topic": "t", "requirements": "r", "task_label": "x"})
+        llm = make_llm([bad, good])
+
+        skill = TopicPickerSkill()
+        out = skill.run(make_input(level="a1", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["task_label"] == "x"
+        assert llm.complete.call_count == 2
+
+    def test_missing_key_fails_after_retries_exhausted(self):
+        from skills.topic_picker.skill import TopicPickerSkill
+        bad = json.dumps({"topic": "t", "requirements": "r"})  # missing task_label
+        llm = make_llm([bad, bad, bad])
+
+        skill = TopicPickerSkill()
+        out = skill.run(make_input(level="a1", language="german"), llm)
+
+        assert out.success is False
+        assert "error" in out.metadata
+
+
+# ---------------------------------------------------------------------------
 # Full pipeline integration (all skills mocked)
 # ---------------------------------------------------------------------------
 

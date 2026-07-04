@@ -194,6 +194,64 @@ def test_detect_mistakes_self_correction_retry():
 
 
 # ---------------------------------------------------------------------------
+# _pick_topic — blank-input path calls TopicPickerSkill (Layer 1a)
+# ---------------------------------------------------------------------------
+
+def test_pick_topic_blank_input_uses_topic_picker_skill():
+    """Pressing Enter (blank topic input) must call the real TopicPickerSkill
+    and use its output — not just fall through to the manual-topic branch."""
+    import json
+    module = WritingModule()
+    ctx = _make_ctx()
+    mock_io = MagicMock(spec=IOHandler)
+    mock_io.prompt.return_value = ""  # blank -> defer to TopicPickerSkill
+
+    llm = MagicMock(spec=BaseLLM)
+    llm.config = MagicMock()
+    llm.config.max_skill_retries = 3
+    llm.config.show_incomplete_responses = False
+    llm.config.show_cut_by_limit_tag = True
+    llm.complete.return_value = LLMResponse(
+        text=json.dumps({
+            "topic": "Describe a recent trip.",
+            "requirements": "Minimum 100 words.",
+            "task_label": "recent_trip",
+        }),
+        model="test-model",
+    )
+
+    wp = module._pick_topic(ctx, llm, mock_io)
+
+    assert wp.topic == "Describe a recent trip."
+    assert wp.requirements == "Minimum 100 words."
+    assert wp.task_label == "recent_trip"
+
+
+def test_pick_topic_falls_back_when_topic_picker_skill_fails():
+    """If TopicPickerSkill exhausts retries, _pick_topic must fall back to a
+    default topic (not raise) and log the failure via log_skill_error."""
+    module = WritingModule()
+    ctx = _make_ctx()
+    mock_io = MagicMock(spec=IOHandler)
+    mock_io.prompt.return_value = ""
+
+    llm = MagicMock(spec=BaseLLM)
+    llm.config = MagicMock()
+    llm.config.max_skill_retries = 2
+    llm.config.show_incomplete_responses = False
+    llm.config.show_cut_by_limit_tag = True
+    llm.complete.return_value = LLMResponse(text="not valid json", model="test-model")
+
+    with patch("modules.writing.agent.log_skill_error") as mock_log:
+        wp = module._pick_topic(ctx, llm, mock_io)
+        mock_log.assert_called_once()
+        assert mock_log.call_args.args[0] == "writing"
+        assert mock_log.call_args.args[1] == "topic_picker"
+
+    assert wp.topic == "Describe your day"
+
+
+# ---------------------------------------------------------------------------
 # _handle_btw — evaluation context threading (Layer 2a-vi)
 # ---------------------------------------------------------------------------
 
