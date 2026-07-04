@@ -31,12 +31,17 @@ function handleExercisesReady(payload) {
   }).join('');
   box.style.display = groups.length ? 'block' : 'none';
 
+  document.getElementById('grammar-loading').style.display = 'none';
+  document.getElementById('submit-btn').disabled = false;
+
   const pad = document.getElementById('grammar-pad');
   pad.style.display = 'block';
   pad.disabled = false;
   pad.value = '';
   pad.focus();
-  phase = 'writing'; // shared "collecting a submittable answer" phase, reused across modules
+  phase = 'writing'; // shared "collecting a submittable answer" phase, reused across modules —
+                      // only set once exercises actually exist, so an early Submit/Ctrl+Enter
+                      // can't be read as a (blank) answer before the pad is ready.
 }
 
 function handleGrammarResultsComplete(payload) {

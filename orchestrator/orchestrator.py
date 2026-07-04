@@ -268,12 +268,15 @@ class Orchestrator(OrchestratorProtocol):
             f"{focus_line}"
         )
 
+        history_hint = (
+            " (writing-history report: /history for last 10 sessions,"
+            " /history <n> e.g. /history 5 for last n sessions,"
+            " /history <n>d e.g. /history 7d for last n days)"
+        ) if self.io.show_cli_hints else ""
+
         while True:
             confirm = self.io.prompt(
-                "\nStart this module? [Y/n]"
-                " (writing-history report: /history for last 10 sessions,"
-                " /history <n> e.g. /history 5 for last n sessions,"
-                " /history <n>d e.g. /history 7d for last n days): "
+                f"\nStart this module? [Y/n]{history_hint}: "
             ).strip().lower()
 
             if confirm.startswith("/history"):

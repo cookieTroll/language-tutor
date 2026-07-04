@@ -17,6 +17,12 @@ Include:
 - Full declension table or conjugation table if applicable
 - Common cases and edge cases
 - Common mistakes to avoid
+- Usage in practice: how often and in what contexts this form is actually used
+  (e.g. spoken vs. written register, formal vs. informal), and what natives
+  typically use instead when this form is dispreferred or rare. If the topic
+  is a form that is grammatically valid but uncommon in everyday use, say so
+  explicitly and name the more common alternative — do not let the learner
+  assume a form is standard just because it is being taught.
 
 MANDATORY — Examples section: include a dedicated "Examples" section with AT LEAST
 4 example sentences (aim for 4-6), each one on its own line with its English

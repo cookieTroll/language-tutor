@@ -5,7 +5,11 @@
 
 // ── State ────────────────────────────────────────────────────────────────────
 let sid = null;
-let phase = 'idle';           // idle | setup | writing | evaluating | follow-up | done
+let phase = 'idle';           // idle | setup | loading | writing | evaluating | follow-up | done
+                              // 'loading': a module header has been shown but its answer pad
+                              // isn't interactive yet (e.g. grammar exercises still generating) —
+                              // Submit/Ctrl+Enter must no-op, distinct from 'writing' which is
+                              // shared across modules as "collecting a submittable answer".
 let inSessionPhase = false;   // true once any module (writing/grammar) has started its interactive phase
 let activeModule = null;      // 'writing' | 'grammar' | null — which panel is showing
 let lastOutputText = '';
@@ -76,6 +80,8 @@ function handleEvent(ev) {
 }
 
 function handleOutput(text) {
+  // Any event means the backend responded — whatever we were waiting on is over.
+  hideSetupLoading();
   if (!text) return;
   lastOutputText = text;
 
@@ -96,6 +102,8 @@ function handleOutput(text) {
 
     if (isWritingHeader) {
       activeModule = 'writing';
+      phase = 'writing'; // writing pad is interactive immediately — unlike grammar,
+                          // there's no further generation step before it's usable
       const reqMatch = text.match(/Requirements:\s*(.+)/);
       document.getElementById('writing-pad').style.display = 'block';
       document.getElementById('grammar-pad').style.display = 'none';
@@ -138,6 +146,13 @@ function handleOutput(text) {
       if (topicMatch) document.getElementById('grammar-topic-title').textContent = topicMatch[1].trim();
       document.getElementById('grammar-explanation').textContent = explMatch ? explMatch[1].trim() : '';
       updateChip('chip-module', 'Grammar');
+      // Exercises are still being generated at this point (phase stays 'loading' —
+      // see handleExercisesReady in grammar-ui.js) — show a "preparing" indicator
+      // and keep the answer pad/submit unusable until exercises_ready arrives, so
+      // an early Submit click can't be read as a (blank) answer.
+      document.getElementById('grammar-loading').style.display = 'flex';
+      document.getElementById('grammar-pad').disabled = true;
+      document.getElementById('submit-btn').disabled = true;
       // The right column (tutor/btw) is unused in grammar — reclaim the width
       // for the explanation/exercises panel instead of leaving it idle.
       document.getElementById('right-col').style.display = 'none';
@@ -182,6 +197,7 @@ function resetForNewModuleSession() {
   document.getElementById('eval-overlay').style.display = 'none';
   markEvalStep(0);
   document.getElementById('done-banner').style.display = 'none';
+  document.getElementById('grammar-loading').style.display = 'none';
 
   document.getElementById('topic-box').style.display = 'none';
   document.getElementById('topic-title').textContent = '';
@@ -209,6 +225,7 @@ function resetForNewModuleSession() {
 }
 
 function handlePrompt(text) {
+  hideSetupLoading(); // the backend is asking for input, so whatever we were waiting on is done
   const trimmed = (text || '').trim();
 
   // Module-agnostic end-of-session chaining prompt (2a-vii bridge, either direction).
@@ -335,12 +352,15 @@ function showSetupInput(placeholder) {
 }
 
 function switchToSession() {
-  // Module-specific setup (pad focus/draft-restore/visibility) happens in
-  // handleOutput()'s header branch, since it differs between writing and grammar.
+  // Module-specific setup (pad focus/draft-restore/visibility, and — for writing
+  // only — setting phase = 'writing') happens in handleOutput()'s header branch,
+  // since it differs between writing and grammar. Grammar's pad isn't interactive
+  // yet at this point (exercises are still generating), so phase stays 'loading'
+  // until handleExercisesReady() flips it — see grammar-ui.js.
   document.getElementById('setup').style.display   = 'none';
   document.getElementById('session').style.display = 'flex';
   startTimer();
-  phase = 'writing';
+  phase = 'loading';
 }
 
 function updateChip(id, text) {
@@ -367,7 +387,19 @@ async function submitSetup() {
   const text = inp.value;
   document.getElementById('setup-input-row').style.display = 'none';
   appendSetup('> ' + text);
+  showSetupLoading();
   await sendInput(text);
+}
+
+// ── Setup loading indicator ──────────────────────────────────────────────────
+// Some setup steps (e.g. confirming the CEFR level) trigger an LLM call before
+// the next prompt is shown, with nothing on screen in the meantime — this fills
+// that gap. Hidden again as soon as any event arrives (handleOutput/handlePrompt).
+function showSetupLoading() {
+  document.getElementById('setup-loading').style.display = 'flex';
+}
+function hideSetupLoading() {
+  document.getElementById('setup-loading').style.display = 'none';
 }
 
 function handleSubmitClick() {
