@@ -7,11 +7,13 @@ from orchestrator.protocols import OrchestratorProtocol, ProgressSummary, Exerci
 from orchestrator.session_manager import SessionManager
 from skills.summarize_progress.skill import SummarizeProgressSkill
 from skills.summarize_writing_history.skill import SummarizeWritingHistorySkill
+from skills.cefr_estimator.skill import CefrEstimatorSkill
 from skills.protocols import SkillInput
 from modules.registry import MODULE_REGISTRY
 from shared.io import IOHandler
 from shared.error_log import log_skill_error
 from lang.loader import using_defaults
+from orchestrator.mastery import get_module_mastery, get_level_trend, ModuleMastery
 
 DEFAULT_RECOMMENDATION = ExerciseRecommendation(
     module="writing",
@@ -271,7 +273,8 @@ class Orchestrator(OrchestratorProtocol):
         history_hint = (
             " (writing-history report: /history for last 10 sessions,"
             " /history <n> e.g. /history 5 for last n sessions,"
-            " /history <n>d e.g. /history 7d for last n days)"
+            " /history <n>d e.g. /history 7d for last n days,"
+            " /progress for mastery + level progress)"
         ) if self.io.show_cli_hints else ""
 
         while True:
@@ -281,6 +284,10 @@ class Orchestrator(OrchestratorProtocol):
 
             if confirm.startswith("/history"):
                 self._handle_history_command(user_id, language, confirm)
+                continue
+
+            if confirm == "/progress":
+                self._handle_progress_command(user_id, language)
                 continue
 
             module_key = recommendation.module
@@ -383,3 +390,62 @@ class Orchestrator(OrchestratorProtocol):
             return
 
         self.io.output(f"\n--- Writing History ({scope_label}) ---\n{out.metadata['history_summary']}")
+
+    def _render_bar(self, ratio: float, width: int = 20) -> str:
+        filled = round(max(0.0, min(ratio, 1.0)) * width)
+        return "[" + "█" * filled + "░" * (width - filled) + "]"
+
+    def _print_module_mastery(self, label: str, mastery: ModuleMastery) -> None:
+        bar = self._render_bar(mastery.mastery_ratio)
+        self.io.output(f"\n{label}: {bar} {mastery.mastery_ratio:.0%}")
+        if mastery.module == "grammar":
+            self.io.output(f"  Topics mastered: {mastery.topics_mastered}/{mastery.topics_total}")
+        if mastery.module == "writing":
+            self.io.output(
+                f"  Texts written: {mastery.texts_written}  "
+                f"Words written: {mastery.total_words} total, {mastery.words_at_current_level} at current level"
+            )
+        if mastery.strong_tags:
+            self.io.output(f"  Strong: {', '.join(mastery.strong_tags)}")
+        if mastery.weak_tags:
+            self.io.output(f"  Weak: {', '.join(mastery.weak_tags)}")
+
+    def _handle_progress_command(self, user_id: str, language: str) -> None:
+        """On-demand mastery + level progress report (Layer 2c). Same on-demand shape
+        as /history: nothing is written back to storage except the optional,
+        user-confirmed level-up at the end."""
+        profile = self.store.get_user_profile(user_id, language)
+        current_level = profile.level if profile else self.store.get_current_level(user_id)
+
+        self.io.output(
+            "\n=================================================="
+            f"\n          LEVEL & PROGRESS ({current_level.upper()})"
+            "\n=================================================="
+        )
+
+        grammar_mastery = get_module_mastery(self.store, user_id, language, "grammar")
+        writing_mastery = get_module_mastery(self.store, user_id, language, "writing")
+        self._print_module_mastery("Grammar", grammar_mastery)
+        self._print_module_mastery("Writing", writing_mastery)
+
+        trend = get_level_trend(self.store, user_id, language, module="writing")
+        if trend:
+            sparkline = " -> ".join(f"{t['level'].upper()}" for t in trend[-5:])
+            self.io.output(f"\nRecent text-level trend: {sparkline}")
+
+        self.io.output("\n==================================================")
+
+        skill = CefrEstimatorSkill()
+        out = skill.run(
+            SkillInput(user_id=user_id, level=current_level, parameters={"mastery": grammar_mastery}),
+            self.llm,
+        )
+        if out.metadata.get("should_level_up"):
+            next_level = out.metadata["next_level"]
+            choice = self.io.prompt(
+                f"\nYou've mastered all curated grammar topics for {current_level.upper()}. "
+                f"Advance to {next_level.upper()}? [Y/n]: "
+            ).strip().lower()
+            if choice != "n":
+                self.store.write_level(user_id, next_level, "estimated")
+                self.io.output(f"[*] Level updated to {next_level.upper()}.")

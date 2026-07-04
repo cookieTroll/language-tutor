@@ -689,6 +689,85 @@ def test_handle_history_command_skill_failure_logged_not_crashed(store_and_llm):
     assert any("Could not generate" in call.args[0] for call in io.output.call_args_list)
 
 
+# ── Layer 2c: /progress command ────────────────────────────────────────────
+
+_PROGRESS_TOPICS = GrammarTopicsMap(topics=[
+    GrammarTopic(
+        topic="Present tense — regular verbs",
+        difficulty="a1",
+        scope="major",
+        related_error_tags=["verb_conjugation"],
+    ),
+])
+
+
+@patch("orchestrator.mastery.get_taxonomy", return_value=None)
+@patch("orchestrator.mastery.get_grammar_topics", return_value=_PROGRESS_TOPICS)
+def test_handle_progress_command_no_sessions_no_crash(mock_topics, mock_tax, store_and_llm):
+    store, llm, config, io = store_and_llm
+    now = datetime.now()
+    store.write_user_profile(UserProfile(
+        user_id="user1", language="german", level="a1", level_source="stated",
+        active=True, created_at=now, updated_at=now,
+    ))
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    orchestrator._handle_progress_command("user1", "german")
+
+    assert any("LEVEL & PROGRESS" in call.args[0] for call in io.output.call_args_list)
+
+
+@patch("orchestrator.mastery.get_taxonomy", return_value=None)
+@patch("orchestrator.mastery.get_grammar_topics", return_value=_PROGRESS_TOPICS)
+def test_handle_progress_command_confirmed_level_up_writes_level(mock_topics, mock_tax, store_and_llm):
+    """All curated a1 topics mastered -> user confirms -> level actually advances to a2."""
+    store, llm, config, io = store_and_llm
+    now = datetime.now()
+    store.write_user_profile(UserProfile(
+        user_id="user1", language="german", level="a1", level_source="stated",
+        active=True, created_at=now, updated_at=now,
+    ))
+    store.write_session(SessionLog(
+        user_id="user1", session_id="g1", language="german", module="grammar",
+        task_label="present_tense_regular_verbs", task_description="d", comment="", errors=[],
+        level="a1", date=now, file_path="p", status="completed",
+        started_at=now, completed_at=now, duration_minutes=5.0, score=0.9,
+    ))
+    io.prompt.return_value = "y"
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    orchestrator._handle_progress_command("user1", "german")
+
+    profile = store.get_user_profile("user1", "german")
+    assert profile.level == "a2"
+    assert profile.level_source == "estimated"
+
+
+@patch("orchestrator.mastery.get_taxonomy", return_value=None)
+@patch("orchestrator.mastery.get_grammar_topics", return_value=_PROGRESS_TOPICS)
+def test_handle_progress_command_declined_level_up_does_not_write(mock_topics, mock_tax, store_and_llm):
+    store, llm, config, io = store_and_llm
+    now = datetime.now()
+    store.write_user_profile(UserProfile(
+        user_id="user1", language="german", level="a1", level_source="stated",
+        active=True, created_at=now, updated_at=now,
+    ))
+    store.write_session(SessionLog(
+        user_id="user1", session_id="g1", language="german", module="grammar",
+        task_label="present_tense_regular_verbs", task_description="d", comment="", errors=[],
+        level="a1", date=now, file_path="p", status="completed",
+        started_at=now, completed_at=now, duration_minutes=5.0, score=0.9,
+    ))
+    io.prompt.return_value = "n"
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    orchestrator._handle_progress_command("user1", "german")
+
+    profile = store.get_user_profile("user1", "german")
+    assert profile.level == "a1"
+    assert profile.level_source == "stated"
+
+
 def test_get_confirmed_module_loops_on_history_then_confirms_normally(store_and_llm):
     """/history re-prompts instead of starting a module; a normal answer afterward
     is unaffected — the existing [Y/n] / override flow still works."""

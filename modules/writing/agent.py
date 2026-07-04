@@ -362,6 +362,7 @@ class WritingModule(ModuleProtocol):
             ],
             suggested_focus=wp.suggested_focus,
             text_level_estimate=pipeline.text_level_estimate,
+            word_count=sum(len(l.split()) for l in user_lines),
         )
 
         result = ModuleResult(

@@ -145,6 +145,8 @@ class SessionManager:
             completed_at=result.completed_at,
             duration_minutes=result.duration_minutes,
             text_level_estimate=getattr(file_content, "text_level_estimate", None),
+            word_count=getattr(file_content, "word_count", None),
+            score=getattr(file_content, "score", None),
         )
         self.store.write_session(final_log)
 
