@@ -105,7 +105,42 @@ start a new layer (2c/3a and beyond stay cut) — except possibly MCP, see below
 
 ---
 
-## 4. Course concepts — where you actually stand
+## 4. Points you omitted — worth adding
+
+Beyond what you listed, four things in the code are worth a specific mention rather
+than folding into generic "typed contracts" or "memory" framing:
+
+1. **Interrupted-session handling (resume / log / discard, WAL-based checkpointing).**
+   If the app dies or is closed mid-session, restart offers to resume, generate an
+   LLM summary of the partial transcript and discard, or discard outright. Shows the
+   system treats real-world interruption as first-class, not an afterthought — and
+   it's demoable: kill the process mid-write, restart, show the prompt. Good video
+   beat, cheap to show.
+2. **Self-correction on LLM output, not just validation.** When a skill's structured
+   output fails a Pydantic/taxonomy check, `call_with_self_correction` feeds the
+   validation error back to the LLM and retries — an actual small agentic loop, not
+   "validate and reject." More concrete than "typed contracts" and shows the
+   contracts are load-bearing, not decorative.
+3. **Severity-graded, level-aware feedback.** Each mistake is graded
+   `critical`/`expected`/`minor` based on the gap between the user's CEFR level and
+   the level that error tag is normally mastered at; `tips[]` are sorted by distance
+   from the user's level. A pedagogy point, not an engineering one — it's part of the
+   answer to "why not just paste this into ChatGPT": a flat correction list doesn't
+   grade by what you're actually ready to hear.
+4. **Zero-cost, zero-key local dev/test loop.** The full unit test suite runs against
+   `MockLLM` and the JSON storage backend — no API key, no network, no Ollama install
+   required to clone the repo and run tests. A cheap, concrete answer if a judge
+   wants to try it without setting up billing first.
+
+Best odds of making the final cut given the budgets in §9/§10: **#1** is a strong,
+cheap video beat (worth a slot around 3:30–4:15 alongside "the build"); **#3** is a
+strong, cheap writeup sentence in the "why agents" section. #2 and #4 are fine as
+one-liners if there's room left over — don't let them crowd out the writing↔grammar
+bridge demo, which stays the centerpiece.
+
+---
+
+## 5. Course concepts — where you actually stand
 
 The rubric wants at least three of: Agent/Multi-agent system (ADK), MCP Server,
 Antigravity, Security features, Deployability, Agent skills. A repo grep for `ADK`,
@@ -136,7 +171,7 @@ about which ones you claim.
 
 ---
 
-## 5. Pushback on the pitch framing
+## 6. Pushback on the pitch framing
 
 **Holds up as stated:** "one interface for all" (writing + grammar share the same
 orchestrator/module/skill shape and the same UI), the memory/personalization loop,
@@ -160,7 +195,7 @@ UI detail (confirmed in `ui/static/decor.js`).
 
 ---
 
-## 6. MCP, reconsidered — a data server, not a skill wrapper
+## 7. MCP, reconsidered — a data server, not a skill wrapper
 
 Better idea than the original Layer 3d spec: expose read-only tools over
 `StorageProtocol` — `get_error_frequency`, `get_sessions_by_module`,
@@ -185,7 +220,7 @@ line, not a requirement — skip without guilt if Friday runs long.
 
 ---
 
-## 7. Track
+## 8. Track
 
 **Agents for Good fits the pitch better than Concierge Agents.** Concierge's "keeps
 personal information safe" language fits the local-run privacy angle, but the
@@ -197,7 +232,7 @@ secondary point, not the frame.
 
 ---
 
-## 8. Video — 5 minutes, timed
+## 9. Video — 5 minutes, timed
 
 | Time | Beat | Show |
 |---|---|---|
@@ -209,7 +244,7 @@ secondary point, not the frame.
 
 ---
 
-## 9. Writeup — 2,500 words, budgeted
+## 10. Writeup — 2,500 words, budgeted
 
 | Section | Words |
 |---|---|
