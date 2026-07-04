@@ -180,6 +180,23 @@ features. #1 below is the one to fix first; it's a functional bug, not polish.
    requirements.txt` → `ollama create gemma2-9b-tutor -f Modelfile` → run. Fifteen
    minutes, and it's the difference between the demo working or not for anyone who
    isn't you.
+
+   Two smaller things surfaced while checking this, worth fixing in the same pass:
+   - **`requirements.txt` and `pyproject.toml` list different dependencies.**
+     `requirements.txt` has `flask`, `pytest`, `google-generativeai` but no
+     `pydantic`; `pyproject.toml`'s `dependencies` has `pydantic`, `openai`,
+     `pyyaml` but no `flask`/`pytest`/`google-generativeai`. Today it happens to
+     work either way — `openai>=1.0.0` pulls `pydantic` in transitively (verified:
+     installs 2.13.x) — but `pyproject.toml` also declares a console-script entry
+     point (`ltut = ui.cli:main`), which invites a judge to `pip install -e .`
+     instead of `pip install -r requirements.txt`; that path silently omits Flask,
+     so the web UI wouldn't run. Pick one manifest as the source of truth (or keep
+     both but make them match) and say which one the quickstart uses.
+   - **All setup instructions are PowerShell-only.** Every example in
+     `PROVIDERS.md` uses `$env:VAR = "..."` — nothing works verbatim on a Mac/Linux
+     judge's shell (`export VAR=...` in bash/zsh instead). Cheap fix: a one-line
+     "macOS/Linux: use `export VAR=value`" note at the top of `PROVIDERS.md`, or a
+     second code block per example — not a full rewrite.
 2. **`app.run(debug=True, threaded=True, port=5000)` in `ui/app.py:202`.** Flask's
    debug mode ships the Werkzeug interactive debugger — a known remote-code-execution
    vector if the process is ever reachable from outside localhost. It binds to
