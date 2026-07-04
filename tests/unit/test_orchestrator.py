@@ -714,7 +714,11 @@ def test_handle_progress_command_no_sessions_no_crash(mock_topics, mock_tax, sto
 
     orchestrator._handle_progress_command("user1", "german")
 
-    assert any("LEVEL & PROGRESS" in call.args[0] for call in io.output.call_args_list)
+    io.render_progress.assert_called_once()
+    data = io.render_progress.call_args.args[0]
+    assert data["current_level"] == "a1"
+    assert {m["module"] for m in data["modules"]} == {"grammar", "writing"}
+    assert data["trend"] == []
 
 
 @patch("orchestrator.mastery.get_taxonomy", return_value=None)

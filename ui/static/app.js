@@ -43,6 +43,7 @@ const CMD_HINTS = {
     { cmd: '/history', desc: 'Last 10 writing sessions' },
     { cmd: '/history &lt;n&gt;', desc: 'e.g. /history 5 — last n sessions' },
     { cmd: '/history &lt;n&gt;d', desc: 'e.g. /history 7d — last n days' },
+    { cmd: '/progress', desc: 'Mastery dials + level trend, with option to level up' },
   ],
   writing: [
     { cmd: '/btw &lt;question&gt;', desc: 'Ask the tutor a question, typed in the answer box' },
@@ -311,9 +312,14 @@ async function finishSession() {
 }
 
 function handleData(payload) {
+  // progress_ready (unlike the other data events) fires during the setup phase,
+  // right after submitSetup()'s showSetupLoading() — mirror handleOutput/handlePrompt
+  // and clear it here too, since no output/prompt event necessarily follows first.
+  hideSetupLoading();
   if (payload.event === 'evaluation_complete')      return handleEvaluationComplete(payload);
   if (payload.event === 'exercises_ready')          return handleExercisesReady(payload);
   if (payload.event === 'grammar_results_complete') return handleGrammarResultsComplete(payload);
+  if (payload.event === 'progress_ready')           return handleProgressReady(payload);
 }
 
 function escapeHtml(str) {

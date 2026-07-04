@@ -1,4 +1,5 @@
 import os
+from dataclasses import asdict
 from datetime import datetime, timedelta
 from config import AppConfig
 from memory.protocols import StorageProtocol, SessionLog, UserProfile
@@ -13,7 +14,7 @@ from modules.registry import MODULE_REGISTRY
 from shared.io import IOHandler
 from shared.error_log import log_skill_error
 from lang.loader import using_defaults
-from orchestrator.mastery import get_module_mastery, get_level_trend, ModuleMastery
+from orchestrator.mastery import get_module_mastery, get_level_trend
 
 DEFAULT_RECOMMENDATION = ExerciseRecommendation(
     module="writing",
@@ -391,49 +392,27 @@ class Orchestrator(OrchestratorProtocol):
 
         self.io.output(f"\n--- Writing History ({scope_label}) ---\n{out.metadata['history_summary']}")
 
-    def _render_bar(self, ratio: float, width: int = 20) -> str:
-        filled = round(max(0.0, min(ratio, 1.0)) * width)
-        return "[" + "█" * filled + "░" * (width - filled) + "]"
-
-    def _print_module_mastery(self, label: str, mastery: ModuleMastery) -> None:
-        bar = self._render_bar(mastery.mastery_ratio)
-        self.io.output(f"\n{label}: {bar} {mastery.mastery_ratio:.0%}")
-        if mastery.module == "grammar":
-            self.io.output(f"  Topics mastered: {mastery.topics_mastered}/{mastery.topics_total}")
-        if mastery.module == "writing":
-            self.io.output(
-                f"  Texts written: {mastery.texts_written}  "
-                f"Words written: {mastery.total_words} total, {mastery.words_at_current_level} at current level"
-            )
-        if mastery.strong_tags:
-            self.io.output(f"  Strong: {', '.join(mastery.strong_tags)}")
-        if mastery.weak_tags:
-            self.io.output(f"  Weak: {', '.join(mastery.weak_tags)}")
-
     def _handle_progress_command(self, user_id: str, language: str) -> None:
         """On-demand mastery + level progress report (Layer 2c). Same on-demand shape
         as /history: nothing is written back to storage except the optional,
-        user-confirmed level-up at the end."""
+        user-confirmed level-up at the end.
+
+        Rendering itself is delegated to the IOHandler (io.render_progress), the same
+        way render_evaluation/render_exercises/render_results work — this method only
+        gathers structured data, so TerminalIOHandler can draw ASCII bars while the web
+        UI renders an actual dial (see ui/static/progress-ui.js)."""
         profile = self.store.get_user_profile(user_id, language)
         current_level = profile.level if profile else self.store.get_current_level(user_id)
 
-        self.io.output(
-            "\n=================================================="
-            f"\n          LEVEL & PROGRESS ({current_level.upper()})"
-            "\n=================================================="
-        )
-
         grammar_mastery = get_module_mastery(self.store, user_id, language, "grammar")
         writing_mastery = get_module_mastery(self.store, user_id, language, "writing")
-        self._print_module_mastery("Grammar", grammar_mastery)
-        self._print_module_mastery("Writing", writing_mastery)
-
         trend = get_level_trend(self.store, user_id, language, module="writing")
-        if trend:
-            sparkline = " -> ".join(f"{t['level'].upper()}" for t in trend[-5:])
-            self.io.output(f"\nRecent text-level trend: {sparkline}")
 
-        self.io.output("\n==================================================")
+        self.io.render_progress({
+            "current_level": current_level,
+            "modules": [asdict(grammar_mastery), asdict(writing_mastery)],
+            "trend": trend,
+        })
 
         skill = CefrEstimatorSkill()
         out = skill.run(
