@@ -153,14 +153,34 @@ bridge demo, which stays the centerpiece.
 
 ## 5. Small fixes that map to explicit rubric lines
 
-A second pass over the code (not just the docs) turned up four items — three cheap
-fixes, one correction to a claim you were about to make. All tests still pass (225
-passed, `pytest tests/ -x -q --ignore=tests/judge --ignore=tests/e2e`) and no API keys
-or secrets are committed anywhere in the tree, so none of this is an emergency — but
-each one lines up with a specific, named rubric criterion, which makes them cheap
-points relative to new features.
+A second pass over the code (not just the docs) turned up five items — four cheap
+fixes plus one correction to a claim you were about to make. All tests still pass
+(225 passed, `pytest tests/ -x -q --ignore=tests/judge --ignore=tests/e2e`) and no
+API keys or secrets are committed anywhere in the tree — but each one lines up with
+a specific, named rubric criterion, which makes them cheap points relative to new
+features. #1 below is the one to fix first; it's a functional bug, not polish.
 
-1. **`app.run(debug=True, threaded=True, port=5000)` in `ui/app.py:202`.** Flask's
+1. **The default setup path is broken for a cold clone.** `config.yaml` (used
+   whenever `LTUT_CONFIG` isn't set — i.e. the "just clone and run" path) references
+   a custom Ollama model name, `gemma2-9b-tutor`, built locally from the repo's own
+   `Modelfile` (`FROM gemma2:9b`, custom `num_ctx`/stop tokens). `llm/ollama_setup.py`
+   auto-`pull`s a missing model, but `ollama pull gemma2-9b-tutor` will fail —
+   that name only exists after someone runs
+   `ollama create gemma2-9b-tutor -f Modelfile` once, and **that step isn't
+   documented anywhere** (`PROVIDERS.md`, `README.md`, `docs/llm_backends.md` — none
+   of them mention it, or `ollama create`, or the `Modelfile` at all). Separately,
+   **no doc anywhere tells a new user to `pip install -r requirements.txt`** first
+   either — every run example in `PROVIDERS.md` jumps straight to setting env vars
+   and running `python -m ui.cli`. A judge who clones the repo and follows
+   `PROVIDERS.md`'s own "Ollama (default)" instructions verbatim hits a confusing
+   failure before ever seeing the app run. This is the single highest-priority fix
+   in this whole review — it directly undermines "Public Project Link" (repo +
+   setup instructions is your stated path, §5 below) and the Documentation score.
+   Fix: add a real quickstart to the README — clone → `pip install -r
+   requirements.txt` → `ollama create gemma2-9b-tutor -f Modelfile` → run. Fifteen
+   minutes, and it's the difference between the demo working or not for anyone who
+   isn't you.
+2. **`app.run(debug=True, threaded=True, port=5000)` in `ui/app.py:202`.** Flask's
    debug mode ships the Werkzeug interactive debugger — a known remote-code-execution
    vector if the process is ever reachable from outside localhost. It binds to
    Flask's default host today, so it isn't exposed yet, but it directly undercuts the
@@ -168,11 +188,11 @@ points relative to new features.
    `app.py` — which Category 2's code review explicitly invites. Gate it behind an
    env var (`debug=os.environ.get("LTUT_DEBUG") == "1"`) or just drop it before the
    video. One line.
-2. **You already have a real security detail you haven't claimed.** `ui/app.py:188-193`
+3. **You already have a real security detail you haven't claimed.** `ui/app.py:188-193`
    (`session_view`) checks `abs_path.startswith(data_root_abs)` before serving a
    session file by path — a genuine path-traversal guard, not a generic gesture. Add
    it to the "Solid, claim these → Security features" bullets in §6.
-3. **`docs/DESIGN.md`'s architecture tree and repo-structure listing are stale.**
+4. **`docs/DESIGN.md`'s architecture tree and repo-structure listing are stale.**
    The grammar module and its skills (`select_grammar`, `dump_grammar`,
    `generate_exercises`, `grade_exercises`) are annotated `(planned)` / "Layer 2a" in
    the ASCII diagrams (lines ~77–123, ~230–249) even though Layer 2a is fully done.
@@ -180,7 +200,7 @@ points relative to new features.
    exist. Harmless while `DESIGN.md` stays an internal doc, but §2 recommends pulling
    this diagram straight into the README — do that *after* fixing the annotations,
    or the README will tell judges a finished module is still planned.
-4. **Rubric line, not house style: "Your code should contain comments pertinent to
+5. **Rubric line, not house style: "Your code should contain comments pertinent to
    implementation, design and behaviors."** This project's own convention (comment
    only the non-obvious WHY) is good practice, but comment density in the core files
    is thin — `orchestrator.py`, `modules/grammar/agent.py`, `modules/writing/agent.py`
@@ -329,6 +349,14 @@ priority order, matching the ranking in §3:
 | 3:30–4:15 | The build | Typed contracts, Pydantic-validated LLM output, LLM-as-judge test tier, swappable local/hosted backend — fast, confident, no code scrolling. |
 | 4:15–5:00 | Close | One line on scope honesty (PoC, A1–B2 German, one language pair) + what's next. End on the funny background if it's still on screen — memorable beats polished. |
 
+**One thing to make sure actually happens on screen, not just in speech:** the
+rubric's key-concept table assigns a specific "where to demonstrate" location per
+concept — most are "Code," but **Deployability is scored specifically in the
+Video**. Right now "swappable local/hosted backend" is a spoken line in "The build"
+— stronger to actually show it: a two-second cut to a terminal with `$env:LTUT_CONFIG
+= "config.gemini.yaml"` (or just a slide listing Ollama/Gemini/Vertex with a "same
+code, one env var" caption) satisfies that cell literally instead of by inference.
+
 ---
 
 ## 11. Writeup — 2,500 words, budgeted
@@ -348,3 +376,30 @@ priority order, matching the ranking in §3:
 Cut candidates if over budget: the `lang/` content-map detail (one sentence instead
 of a subsection), and the grammar module's internal exercise-type taxonomy (judges
 care that theory→exercises→grading works, not its full type system).
+
+---
+
+## 12. Submission logistics, not just content
+
+Three small items that aren't code or writing, but are easy to forget until the
+last hour:
+
+- **Cover image.** Required to submit the Writeup, separate from the video. Use an
+  actual screenshot of the running app rather than a generic graphic — the
+  correction-highlight view (colored mistake spans + tips) or the grammar exercise
+  view both show real product, and either one doubles as a Media Gallery image
+  without extra work. The funny background can be in frame; it's a legitimate
+  personality signal, not just decoration.
+- **One real diagram image, not ASCII.** The video rubric explicitly wants "images
+  and a description of the overall agent architecture," and the writeup wants
+  "relevant diagrams or images." The three-grain box diagram in `DESIGN.md` (the one
+  in §5 item 4, once its `(planned)` labels are fixed) is the right content — but as
+  a monospace code block it reads fine in a GitHub README, less well as a video
+  slide or an embedded writeup image. Redrawing it as three or four boxes with
+  arrows (any slide tool, ten minutes) gets reused three times: video slide, writeup
+  image, and — optionally — a cleaner replacement in the README itself.
+- **Title and subtitle.** The rubric asks for both by name on the Writeup, and
+  §11's word budget already reserves 150 words for "title + subtitle + problem
+  statement" but the actual title hasn't been decided yet. Worth nailing down
+  before drafting the rest, since the rest of the writeup should read like it's
+  arguing for that title's claim, not the other way around.
