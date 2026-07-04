@@ -144,10 +144,13 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ## Layer 3d — MCP Server
 
-- [ ] [ ] [ ] Create `ui/mcp_server.py` using `mcp` / `FastMCP`
-- [ ] [ ] [ ] Implement `explain_grammar` tool (instantiates and runs the grammar explainer skill)
-- [ ] [ ] [ ] Implement `get_vocab_drill` tool (instantiates and runs the vocab drill skill)
-- [ ] [ ] [ ] Document running and testing the MCP server in README.md
+- [x] [x] [ ] `memory/protocols.py` — add `StorageProtocol.get_session_by_id(session_id)` (no existing way to look up a single session directly — only "recent N" or "by module") and `list_users()` (distinct user_ids); implemented in both `sqlite_store.py` and `json_store.py`
+- [x] [x] [ ] `ui/mcp_server.py` — FastMCP server (`mcp` package, stdio transport), built on the same `build_storage(config)` the CLI/UI already use; `LTUT_CONFIG` env var override matches `ui/app.py`'s pattern
+- [x] [x] [ ] Memory-backed tools: `list_users`, `list_languages`, `get_progress` (wraps `get_session_aggregate` + current level), `list_sessions`, `get_session` (single session detail, ownership-checked), `get_recurring_errors`, `get_vocab_flags`, `export_writing_history` (compiles completed writing sessions into one text blob — returns text directly rather than writing to `data/exports/`, to keep the server strictly read-only)
+- [x] [x] [ ] `get_session`/`export_writing_history` reuse the path-traversal guard already used by `ui/app.py`'s `/sessions/<path:rel_path>` route when reading a session YAML file directly off disk
+- [x] [x] [ ] Reference-data tools over `lang/loader.py` (no user data, no LLM calls): `get_error_taxonomy(language)` (tag → description, for interpreting `get_recurring_errors` output) and `get_grammar_topic_list(language)` (curated topics + difficulty + related error tags, for cross-referencing against recurring errors)
+- [x] [x] [ ] `tests/unit/test_mcp_server.py` — seeded-storage fixture exercising every tool (progress defaults to active language, ownership check on `get_session`, days/count filtering on `export_writing_history`, taxonomy/topic lookups); `tests/unit/test_storage.py` — `get_session_by_id`/`list_users` on both backends
+- [x] [x] [ ] Document running and testing the MCP server in README.md
 
 ---
 

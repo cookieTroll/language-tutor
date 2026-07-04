@@ -138,6 +138,44 @@ def test_session_lifecycle(storage):
     assert recent[0].errors[0]["error_tag"] == "dative_case"
     assert recent[0].errors[0]["fragment"] == "mit meinen"
 
+def test_get_session_by_id(storage):
+    user_id = "user1"
+    date_now = datetime.now()
+
+    storage.write_user_profile(
+        UserProfile(
+            user_id=user_id, language="german", level="a1", level_source="stated",
+            active=True, created_at=date_now, updated_at=date_now
+        )
+    )
+    log = SessionLog(
+        user_id=user_id, session_id="sess1", language="german", module="writing",
+        task_label="writing_free", task_description="Write about your day", comment="",
+        errors=[{"error_tag": "dative_case", "fragment": "mit meinen", "explanation": "mit takes dative"}],
+        level="a1", date=date_now, file_path="sessions/user1/german/sess1.yaml",
+        status="completed", started_at=date_now, completed_at=date_now,
+    )
+    storage.write_session(log)
+
+    found = storage.get_session_by_id("sess1")
+    assert found is not None
+    assert found.session_id == "sess1"
+    assert found.user_id == user_id
+    assert len(found.errors) == 1
+
+    assert storage.get_session_by_id("does-not-exist") is None
+
+def test_list_users(storage):
+    date_now = datetime.now()
+    for uid in ("zed", "alice"):
+        storage.write_user_profile(
+            UserProfile(
+                user_id=uid, language="german", level="a1", level_source="stated",
+                active=True, created_at=date_now, updated_at=date_now
+            )
+        )
+    assert storage.list_users() == ["alice", "zed"]
+
 def test_error_frequency(storage):
     user_id = "user1"
     date_now = datetime.now()

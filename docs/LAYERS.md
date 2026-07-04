@@ -157,8 +157,15 @@ See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii f
 
 ## Layer 3d — MCP Server
 
-- `ui/mcp_server.py` — MCP server implementation (FastMCP)
-- Exposes tools wrapping pure skills:
-  - `explain_grammar(topic, level)` (wraps `explain_grammar` skill)
-  - `get_vocab_drill(topic, level)` (wraps vocab generation skill)
-- CLI/UI instructions for connecting to local MCP server
+> Redesigned from the original plan: rather than wrapping session skills
+> (`explain_grammar` was dropped in Layer 2a; a vocab drill skill doesn't
+> exist yet — Layer 3a), this is a read-only server over the `memory/`
+> storage layer plus `lang/maps/` reference data. No LLM calls, no writes.
+
+- `ui/mcp_server.py` — FastMCP server (stdio transport), built on `build_storage()`
+- Tools: `list_users`, `list_languages`, `get_progress`, `list_sessions`,
+  `get_session`, `get_recurring_errors`, `get_vocab_flags`,
+  `export_writing_history`, `get_error_taxonomy`, `get_grammar_topic_list`
+- `memory/protocols.py` — added `StorageProtocol.list_users()` and
+  `get_session_by_id()`, implemented in both `sqlite_store.py`/`json_store.py`
+- Running/testing documented in README.md
