@@ -197,6 +197,18 @@ features. #1 below is the one to fix first; it's a functional bug, not polish.
      judge's shell (`export VAR=...` in bash/zsh instead). Cheap fix: a one-line
      "macOS/Linux: use `export VAR=value`" note at the top of `PROVIDERS.md`, or a
      second code block per example — not a full rewrite.
+
+   **Recommended fix scope — do this today, not during the output days:**
+   `llm/ollama_setup.py`'s `ensure_ollama_ready` currently just calls `ollama pull
+   gemma2-9b-tutor` and lets it fail. Since the `Modelfile` it needs already sits in
+   the repo root, have it detect the missing custom model and run
+   `ollama create gemma2-9b-tutor -f Modelfile` automatically instead of failing —
+   this is the same self-healing instinct the codebase already applies elsewhere
+   (`call_with_self_correction`), just pointed at onboarding instead of LLM output.
+   Pair it with the README quickstart above. That's the whole scope — **don't**
+   build a fuller first-run wizard or interactive setup flow; the rubric needs setup
+   to *work*, not to delight, and a wizard would eat into the two output days for a
+   criterion that only needs to stop failing.
 2. **`app.run(debug=True, threaded=True, port=5000)` in `ui/app.py:202`.** Flask's
    debug mode ships the Werkzeug interactive debugger — a known remote-code-execution
    vector if the process is ever reachable from outside localhost. It binds to
@@ -363,7 +375,7 @@ priority order, matching the ranking in §3:
 | 0:00–0:45 | Problem | The paywall problem in one breath — good correction/tutoring is locked behind subscriptions; this runs on your own machine or your own API key, free either way. |
 | 0:45–1:30 | Why agents | One architecture slide: orchestrator routes to modules, modules compose skills, memory boundary is hard. Say it's hand-built multi-agent, not framework-borrowed — own it honestly. |
 | 1:30–3:30 | Demo — feature clips | 2-3 separately-recorded clips per the priority list above, stitched with a one-line spoken bridge between each ("once it notices a pattern, it offers..."). Each clip only needs to look clean on its own — no dependency between takes. |
-| 3:30–4:15 | The build | Typed contracts, Pydantic-validated LLM output, LLM-as-judge test tier, swappable local/hosted backend — fast, confident, no code scrolling. |
+| 3:30–4:15 | The build | Typed contracts, Pydantic-validated LLM output, LLM-as-judge test tier, swappable local/hosted backend — fast, confident, no code scrolling. Optional text overlay here: "225 unit tests, 0 API calls" — a cheap visual credibility beat, not something to narrate. |
 | 4:15–5:00 | Close | One line on scope honesty (PoC, A1–B2 German, one language pair) + what's next. End on the funny background if it's still on screen — memorable beats polished. |
 
 **One thing to make sure actually happens on screen, not just in speech:** the
@@ -389,6 +401,18 @@ code, one env var" caption) satisfies that cell literally instead of by inferenc
 | Honest scope — what's PoC, what's cut, why | 250 |
 | Journey / what you'd do with more time | 250 |
 | **Total** | **2,500** |
+
+In "Testing approach," open with the one number worth stating: 225 unit tests, no
+API key or network required, full suite in under 20 seconds. It's evidence for the
+section's own claim ("how do you know the prompts work"), not a stat to dwell on —
+one sentence, then move to the two-LLM judge design which is the more interesting
+part. Don't add commit count, lines of code, or similar project-scale metrics
+anywhere in the writeup — they don't map to any rubric criterion, and a leaner,
+well-architected agent should have *less* code than a sprawling one, so leading
+with a big number undercuts the "clean three-grain design" pitch. A lighthearted
+stat (e.g. coffee consumed) can live as a single visual gag in the video's closing
+beat where the funny background already is — personality, not evidence, budgeted
+separately from writeup words.
 
 Cut candidates if over budget: the `lang/` content-map detail (one sentence instead
 of a subsection), and the grammar module's internal exercise-type taxonomy (judges
