@@ -24,12 +24,12 @@ GRAMMAR_TOPIC = "Present tense — regular verbs"  # exact curated match, skips 
 
 
 @pytest.mark.e2e
-def test_writing_to_grammar_bridge_chains_live():
+def test_writing_to_grammar_bridge_chains_live(isolated_e2e_config):
     """Seed a recurring verb_conjugation error, reproduce it in a live writing
     session, accept the resulting next_actions prompt, and confirm a grammar
     session actually starts within the same CLI process (forced_recommendation)."""
     user_id = f"bridge_smoke_{int(time.time())}"
-    seed_recurring_error(user_id, TAG, count=2, config_path="config.test.yaml")
+    seed_recurring_error(user_id, TAG, count=2, config_path=isolated_e2e_config)
 
     inputs = "\n".join([
         user_id,
@@ -50,7 +50,7 @@ def test_writing_to_grammar_bridge_chains_live():
         "n",                                 # decline another session — ends the CLI loop
     ]) + "\n"
 
-    env = {**os.environ, "LTUT_CONFIG": "config.test.yaml", "PYTHONIOENCODING": "utf-8"}
+    env = {**os.environ, "LTUT_CONFIG": isolated_e2e_config, "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         [sys.executable, "-m", "ui.cli"],
         input=inputs,
