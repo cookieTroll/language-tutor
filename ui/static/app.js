@@ -169,7 +169,7 @@ function handleOutput(text) {
     appendSetup(text);
   } else {
     // Detect pipeline progress steps (writing evaluation only)
-    const stepMatch = text.match(/^\[(\d+)\/6\]/);
+    const stepMatch = text.match(/^\[(\d+)\/7\]/);
     if (stepMatch) {
       const n = parseInt(stepMatch[1]);
       markEvalStep(n);
@@ -453,7 +453,7 @@ async function sendInput(text) {
 
 // ── Eval progress ─────────────────────────────────────────────────────────────
 function markEvalStep(n) {
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 7; i++) {
     const el = document.getElementById('p' + i);
     if (!el) continue;
     el.classList.remove('active', 'done');
