@@ -339,7 +339,10 @@ class TestStaticAssets:
 
 @pytest.fixture(scope="module")
 def node_available():
-    result = subprocess.run(["node", "--version"], capture_output=True)
+    try:
+        result = subprocess.run(["node", "--version"], capture_output=True)
+    except FileNotFoundError:
+        pytest.skip("node not available")
     if result.returncode != 0:
         pytest.skip("node not available")
 
@@ -364,3 +367,6 @@ class TestJSSyntax:
 
     def test_decor_js_syntax(self, node_available):
         self._check("ui/static/decor.js")
+
+    def test_progress_ui_js_syntax(self, node_available):
+        self._check("ui/static/progress-ui.js")
