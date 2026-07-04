@@ -13,6 +13,17 @@ Student's text:
 
 Identify genuine grammatical, vocabulary, and spelling errors — things that are objectively wrong and have a specific correction.
 
+Go sentence by sentence, and within each sentence check ALL of these categories
+independently, even after you've already found an error in that sentence or a
+nearby one: verb conjugation/tense/auxiliary, noun-adjective agreement (gender,
+case, number), article/case, word order, spelling. A single sentence can contain
+more than one unrelated error (e.g. a wrong verb conjugation AND a wrong adjective
+ending in the same sentence), and two consecutive sentences can each contain a
+different kind of error. Finding one or two obvious errors (like a wrong verb form)
+does not mean the scan is done — do not stop early, and do not let an obvious error
+in one sentence distract you from checking the sentence right after it just as
+carefully.
+
 Rules:
 - Only flag text that is definitively incorrect. If a sentence is grammatically correct, do not flag it even if it sounds simple or unusual.
 - Do not flag style, register, or idiomatic preferences — only objective errors.
