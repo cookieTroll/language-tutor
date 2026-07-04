@@ -102,14 +102,32 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ---
 
-## Layer 2c — CEFR Estimator
+## Layer 2c — Level & Progress
 
-> Complements Step 5 (per-session text-level estimate on raw text). This layer estimates the *user's* accumulated level from session history.
+> Merges the original Layer 2c (CEFR Estimator) and Layer 3b (Level Progression Tracking) into
+> one build: both turned out to be different renderings of the same underlying mastery data, not
+> independent features — see `docs/TODO.md` for how this was resolved. Complements Step 5
+> (per-session `text_level_estimate` on raw text) by aggregating it, and other per-session
+> signals, into a user-level view.
+>
+> Explicitly dropped: a fixed "N texts to reach the next level" or "N words to reach the next
+> level" threshold sourced from external research. Checked both — exam boards (Goethe, telc)
+> publish per-text word-count *targets* (e.g. telc B1 ≈ 100–120 words), and vocabulary-size
+> research gives a lemma-count gap per level (~1,500 words known, Milton's CEFR vocabulary-breadth
+> monograph), but no published source gives a cumulative writing-output volume or text count
+> needed to progress a level — for either metric, this looks like a genuine gap in the literature,
+> not a search miss. Word/text counts are shown as flavor stats on the progress bar, not used as
+> the level-up gate.
+
+- [ ] [ ] [ ] `word_count: int` field on `WritingSessionContent` / `SessionLog` (`memory/protocols.py`) — computed once at submission from `user_text` (same computation already used by the live `/word_count` command, `modules/writing/agent.py:203`). Threaded through both backends the same way `text_level_estimate` was in Layer 2b: `json_store.py` (write + all `SessionLog`-constructing reads) and `sqlite_store.py` (`schema.sql` column + idempotent `ALTER TABLE ... ADD COLUMN` guard in `_init_db()`)
+- [ ] [ ] [ ] `get_module_mastery(user_id, language, module)` — grammar: `topics_attempted`, `topics_mastered` (score ≥ `GRAMMAR_MASTERY_THRESHOLD`), weak tags from `get_error_frequency(module="grammar")`; writing: `texts_written` (completed session count), same weak/strong tag lookup (grammar error tags surface during writing too — same tag space); both: `total_words`, `words_at_current_level` (sum of `word_count` filtered to `sessions.level == user_profiles.level` — the level is already stored per session, so no separate time-based "since last level-up" tracking is needed)
+- [ ] [ ] [ ] Weak/strong tag → human label: reuse `get_error_taxonomy(language)` / `get_grammar_topic_list(language)` already built for the MCP server (Layer 3d) — don't duplicate the lookup
+- [ ] [ ] [ ] `get_level_trend(user_id, language, module="writing")` — chronological `[(date, text_level_estimate)]` pulled directly from `sessions.text_level_estimate` (Layer 2b field); no new computation, no LLM call
 - [ ] [ ] [ ] Define minimum session count before estimation is meaningful (suggest: 5 writing sessions)
-- [ ] [ ] [ ] `skills/cefr_estimator/skill.py` — reads session logs (including `text_level_estimate` from Step 5 session files), estimates user level from error frequency + exercise scores + writing complexity trend
-- [ ] [ ] [ ] Writes to `user_levels` table with `source='estimated'`
-- [ ] [ ] [ ] Expose as on-demand skill (user asks "what level am I?") or post-session trigger
-- [ ] [ ] [ ] Decide and document: estimated level vs stated level — suggest only, do not override without user confirmation
+- [ ] [ ] [ ] `skills/cefr_estimator/skill.py` — the level-up decision is a threshold crossing on `get_module_mastery`'s mastery ratio (~`GRAMMAR_MASTERY_THRESHOLD`, i.e. structured coverage), not a separate blended heuristic over multiple fuzzy signals; `get_level_trend` is informational only, shown alongside rather than folded into the gate (a text-level trend that's ahead of or behind the mastery ratio is itself a useful, demoable signal — don't collapse it away). Writes to `user_profiles.level` with `level_source='estimated'` — no `user_levels` table exists or is needed (see `docs/memory.md`; `user_profiles.level_source` already supports `'estimated'`)
+- [ ] [ ] [ ] Decide and document: estimated level vs stated level — suggest only, do not override `user_profiles.level` without user confirmation
+- [ ] [ ] [ ] UI: progression bar per module — fill % = mastery ratio from `get_module_mastery`, weak/strong topic chips, word-count flavor stats (`total_words`, `words_at_current_level`); separate small trend sparkline from `get_level_trend` showing how close recent texts already read to the next level
+- [ ] [ ] [ ] Expose `cefr_estimator` as on-demand skill (user asks "what level am I?") or post-session trigger — same interaction shape as the existing `/history` command
 
 ---
 
@@ -126,10 +144,11 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ---
 
-## Layer 3b — Level Progression Tracking
+## Layer 3b — merged into Layer 2c
 
-- [ ] [ ] [ ] Surface level history in frontend: timeline of `user_levels` rows (stated + estimated)
-- [ ] [ ] [ ] Orchestrator progress summary includes current level + trend if multiple estimates exist
+> Level progression tracking turned out to be the same mastery/trend data as the CEFR estimator,
+> just rendered differently. See "Layer 2c — Level & Progress" above — the progression bar and
+> trend sparkline items there are what this layer used to describe separately.
 
 ---
 

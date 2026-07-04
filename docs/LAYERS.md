@@ -16,7 +16,7 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 - `memory/protocols.py` — `StorageProtocol` (composed from `SessionStore`, `LevelStore`, `BtwLogStore`, `VocabStore`, `ProfileStore`), `SessionLog`, `SessionAggregate`, `SessionFileContent` (base + `WritingSessionContent`), `UserProfile`, `VocabFlag`, `BtwEntry`
 - `memory/sqlite_store.py` — full `StorageProtocol` implementation including `user_profiles` table
 - `memory/json_store.py` — dev/test backend
-- `memory/schema.sql` — all tables (sessions, errors, btw_log, vocab_flags, user_levels, user_profiles)
+- `memory/schema.sql` — all tables (sessions, errors, btw_log, vocab_flags, user_profiles)
 - `modules/protocols.py` — `ModuleProtocol`, `ModuleContext`, `ModuleResult`, `ContextRequest`
 - `modules/registry.py` — `MODULE_REGISTRY`, `get_registry_description()`
 - `skills/protocols.py` — `SkillProtocol`, `SkillInput`, `SkillOutput`
@@ -121,10 +121,16 @@ See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii f
 
 ---
 
-## Layer 2c — CEFR Estimator
+## Layer 2c — Level & Progress
 
-- `skills/estimate_cefr/` — reads session logs, estimates level
-- `memory/protocols.py` — `write_level()` with `source='estimated'`
+> Merges the original Layer 2c (CEFR Estimator) and Layer 3b (Level Progression Tracking) —
+> both turned out to be different views over the same mastery data, not independent features.
+
+- `memory/protocols.py` — `WritingSessionContent.word_count` / `SessionLog.word_count` added (same idempotent-migration pattern as `text_level_estimate` in Layer 2b)
+- `get_module_mastery(user_id, language, module)` — topics mastered/attempted, weak/strong tags (reuses `get_error_taxonomy`/`get_grammar_topic_list` from Layer 3d), word-count flavor stats
+- `get_level_trend(user_id, language, module="writing")` — chronological `text_level_estimate` pull, no new computation
+- `skills/cefr_estimator/` — level-up is a threshold crossing on the mastery ratio (~`GRAMMAR_MASTERY_THRESHOLD`); `write_level()` with `source='estimated'` on `user_profiles` (no separate `user_levels`/`level_history` table — see `docs/memory.md`)
+- UI: progression bar (mastery % + weak/strong chips + word counts) + text-level trend sparkline, in session browser and progress summary
 - Trigger: on-demand ("what level am I?") or post-session hook
 
 ---
@@ -140,10 +146,7 @@ See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii f
 
 ---
 
-## Layer 3b — Level Progression Tracking
-
-- `ui/app.py` — updated: level history timeline in session browser
-- Orchestrator progress summary updated to include level trend
+## Layer 3b — merged into Layer 2c above (see "Level & Progress")
 
 ---
 
