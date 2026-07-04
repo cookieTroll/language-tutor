@@ -171,6 +171,35 @@ class JSONSessionStore(BaseSessionStore):
             )
         return result
 
+    def get_session_by_id(self, session_id: str) -> SessionLog | None:
+        sessions = self._read(self.sessions_file)
+        r = sessions.get(session_id)
+        if not r:
+            return None
+        errors = self._read(self.errors_file)
+        sess_errors = [
+            {"error_tag": ev["error_tag"], "fragment": ev["source_text"], "correction": "", "explanation": ev["error_detail"]}
+            for ev in errors.values() if ev["session_id"] == session_id
+        ]
+        return SessionLog(
+            user_id=r["user_id"],
+            session_id=r["session_id"],
+            language=r["language"],
+            module=r["module"],
+            task_label=r["task_label"],
+            task_description=r["task_description"],
+            comment=r["comment"],
+            errors=sess_errors,
+            level=r["level"],
+            date=self._str_to_dt(r["date"]),
+            file_path=r["file_path"],
+            status=r["status"],
+            started_at=self._str_to_dt(r["started_at"]),
+            completed_at=self._str_to_dt(r["completed_at"]),
+            duration_minutes=r["duration_minutes"],
+            text_level_estimate=r.get("text_level_estimate"),
+        )
+
     # 6. get_error_frequency
     def get_error_frequency(self, user_id: str, language: str, module: str | None = None) -> dict[str, int]:
         sessions = self._read(self.sessions_file)
@@ -410,3 +439,8 @@ class JSONSessionStore(BaseSessionStore):
         profiles = self._read(self.profiles_file)
         active = [v["language"] for v in profiles.values() if v["user_id"] == user_id and v["active"]]
         return active[0] if active else None
+
+    # 19. list_users
+    def list_users(self) -> list[str]:
+        profiles = self._read(self.profiles_file)
+        return sorted({v["user_id"] for v in profiles.values()})

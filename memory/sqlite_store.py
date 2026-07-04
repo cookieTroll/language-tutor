@@ -185,6 +185,16 @@ class SQLiteSessionStore(BaseSessionStore):
         finally:
             conn.close()
 
+    def get_session_by_id(self, session_id: str) -> SessionLog | None:
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+            ).fetchone()
+            return self._hydrate_session_log(row, conn) if row else None
+        finally:
+            conn.close()
+
     # 6. get_error_frequency
     def get_error_frequency(self, user_id: str, language: str, module: str | None = None) -> dict[str, int]:
         conn = self._get_conn()
@@ -517,5 +527,14 @@ class SQLiteSessionStore(BaseSessionStore):
             if row:
                 return row["language"]
             return None
+        finally:
+            conn.close()
+
+    # 19. list_users
+    def list_users(self) -> list[str]:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute("SELECT DISTINCT user_id FROM user_profiles ORDER BY user_id").fetchall()
+            return [r["user_id"] for r in rows]
         finally:
             conn.close()
