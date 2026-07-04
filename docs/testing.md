@@ -73,6 +73,10 @@ Each judge uses two LLM instances:
 
 This keeps evaluation independent from the system under test. Set `LTUT_JUDGE_CONFIG` to use a stronger model as judge while keeping a local model as executor.
 
+**Local model choice:** tested `qwen2.5:7b` vs `gemma2:9b` as the local Ollama executor —
+qwen 7b wasn't strong enough for reliable structured output on this skill set (more judge
+failures / self-correction retries), so `gemma2:9b` is the current default for local runs.
+
 ---
 
 ### Running judges

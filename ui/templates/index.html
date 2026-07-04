@@ -288,7 +288,30 @@ mark.mistake-hl {
   height: 45vh; min-height: 120px; overflow-y: auto;
 }
 #grammar-box .topic-title { color: var(--bright); font-size: 0.92rem; margin-bottom: 8px; }
-#grammar-box .grammar-explanation { color: var(--sub); font-size: 0.86rem; line-height: 1.6; white-space: pre-wrap; }
+#grammar-box .grammar-explanation { color: var(--sub); font-size: 0.86rem; line-height: 1.6; }
+#grammar-box .grammar-explanation p { margin: 0 0 10px; }
+#grammar-box .grammar-explanation h4,
+#grammar-box .grammar-explanation h5,
+#grammar-box .grammar-explanation h6 {
+  color: var(--bright); margin: 14px 0 6px; letter-spacing: 0.3px;
+}
+#grammar-box .grammar-explanation h4 { font-size: 0.95rem; }
+#grammar-box .grammar-explanation h5 { font-size: 0.9rem; }
+#grammar-box .grammar-explanation h6 { font-size: 0.86rem; text-transform: uppercase; color: var(--muted); }
+#grammar-box .grammar-explanation ul,
+#grammar-box .grammar-explanation ol { margin: 0 0 10px; padding-left: 22px; }
+#grammar-box .grammar-explanation li { margin: 3px 0; }
+#grammar-box .grammar-explanation code {
+  background: var(--surface); border-radius: 3px; padding: 1px 5px; font-size: 0.82rem;
+}
+#grammar-box .grammar-explanation table.md-table {
+  border-collapse: collapse; margin: 6px 0 12px; font-size: 0.82rem;
+}
+#grammar-box .grammar-explanation table.md-table th,
+#grammar-box .grammar-explanation table.md-table td {
+  border: 1px solid var(--border); padding: 4px 9px; text-align: left;
+}
+#grammar-box .grammar-explanation table.md-table th { color: var(--bright); background: var(--surface); }
 
 /* Drag handle between the explanation panel and the exercises/pad below it —
    lets the explanation take up to 80% of the column on large screens instead
@@ -542,6 +565,10 @@ mark.mistake-hl {
         </div>
         <div id="grammar-results"></div>
         <div id="eval-overlay">
+          <div class="loading-row" style="display: flex;">
+            <span>Working</span>
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
           <div class="prog-item eval-heading">Evaluating…</div>
           <div class="prog-item" id="p1">[1/6] Estimating text level</div>
           <div class="prog-item" id="p2">[2/6] Detecting mistakes</div>
@@ -554,7 +581,7 @@ mark.mistake-hl {
           <span id="word-count">0 words</span>
           <div id="font-ctrl">
             <span class="fa">A</span>
-            <input type="range" id="font-slider" min="12" max="20" value="16" step="1">
+            <input type="range" id="font-slider" min="12" max="32" value="16" step="1">
             <span class="fb">A</span>
           </div>
           <button class="btn-submit" id="submit-btn" onclick="handleSubmitClick()">Submit  Ctrl+↵</button>
