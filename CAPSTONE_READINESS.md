@@ -299,11 +299,33 @@ secondary point, not the frame.
 
 ## 10. Video — 5 minutes, timed
 
+**Revised approach:** assembled from a few separately-recorded pieces, each focused
+on one feature, not one continuous take. Say so up front ("I'll skip the typing/
+thinking time and show the interesting parts") — an honest framing move, not a
+cop-out, and it removes the single biggest production risk in the original plan
+(a live LLM demo staying clean for a 2-minute unbroken take). The rubric's own demo
+language ("can include images, an animation, or a video of the agent working")
+doesn't require unbroken realtime, so nothing is lost against the criteria. It also
+buys editing insurance: a clip that doesn't render well gets re-recorded on its
+own, nothing else is affected.
+
+Since it's pieces rather than one flow, pick which features earn a clip — in
+priority order, matching the ranking in §3:
+
+1. **The bridge trigger** (non-negotiable — this is the pitch): a recurring error
+   surfaces "start grammar practice on X now?", accepted, theory + exercises appear.
+2. **The correction step**: a short German paragraph in → severity-graded
+   correction + tips out. Establishes what "writing module" means before the bridge
+   clip needs it.
+3. **The close of the loop** (cut if time is short): exercises graded → suggested
+   next writing topic uses the grammar just learned. Nice-to-have; #1 alone still
+   carries the pitch without it.
+
 | Time | Beat | Show |
 |---|---|---|
 | 0:00–0:45 | Problem | The paywall problem in one breath — good correction/tutoring is locked behind subscriptions; this runs on your own machine or your own API key, free either way. |
 | 0:45–1:30 | Why agents | One architecture slide: orchestrator routes to modules, modules compose skills, memory boundary is hard. Say it's hand-built multi-agent, not framework-borrowed — own it honestly. |
-| 1:30–3:30 | Demo — the loop | Live: write a short German paragraph → correction + tips appear → a recurring error triggers "start grammar practice on X now?" → accept → theory + exercises appear → grade → suggested next writing topic uses the grammar just learned. One continuous take carries the whole pitch. |
+| 1:30–3:30 | Demo — feature clips | 2-3 separately-recorded clips per the priority list above, stitched with a one-line spoken bridge between each ("once it notices a pattern, it offers..."). Each clip only needs to look clean on its own — no dependency between takes. |
 | 3:30–4:15 | The build | Typed contracts, Pydantic-validated LLM output, LLM-as-judge test tier, swappable local/hosted backend — fast, confident, no code scrolling. |
 | 4:15–5:00 | Close | One line on scope honesty (PoC, A1–B2 German, one language pair) + what's next. End on the funny background if it's still on screen — memorable beats polished. |
 
