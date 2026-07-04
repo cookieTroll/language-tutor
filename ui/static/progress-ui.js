@@ -72,5 +72,6 @@ function makeProgressTagChip(text, kind) {
   const span = document.createElement('span');
   span.className = 'tag-chip ' + kind;
   span.textContent = text;
+  span.title = text; // taxonomy descriptions can be long sentences — chip itself is truncated via CSS
   return span;
 }
