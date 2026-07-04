@@ -12,22 +12,18 @@ Level: {level}
 
 {scope_block}
 
-Allowed exercise types — choose EXACTLY ONE type that best fits the topic and
-level, and use that same type for every exercise below. Do not mix types
-within this batch — the student works through one exercise style per round,
-and can ask for another round afterward if they want to practice a different
-angle on the same topic.
-Types marked (exact) have one unambiguous correct answer; types marked (llm)
-allow multiple valid phrasings, so just supply one reference correct_answer
-and don't worry about exact wording:
-{exercise_types}
+Use EXACTLY this exercise type for every exercise below — do not use any other
+type and do not vary the type across exercises. The student works through one
+exercise style per round, and can ask for another round afterward if they want
+to practice a different angle on the same topic:
+{exercise_type_line}
 
 Allowed error_tag values (use EXACTLY one of these strings for each exercise):
 {taxonomy}
 
 For each exercise, provide:
 - prompt: the exercise text exactly as shown to the student
-- type: one of the exercise type names listed above
+- type: must be exactly "{exercise_type}"
 - correct_answer: the reference correct answer
 - accepted_answers: (optional) list of other acceptable phrasings — exact-match types only, [] otherwise
 - error_tag: the single best matching tag from the taxonomy above
@@ -41,7 +37,7 @@ Return JSON only. No markdown.
   "exercises": [
     {{
       "prompt": "<exercise text testing {topic}, in {language}>",
-      "type": "<one of the exercise type names above>",
+      "type": "{exercise_type}",
       "correct_answer": "<the reference correct answer>",
       "accepted_answers": [],
       "error_tag": "<a valid taxonomy tag>",

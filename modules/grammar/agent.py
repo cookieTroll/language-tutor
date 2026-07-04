@@ -1,3 +1,4 @@
+import random
 import uuid
 from datetime import datetime
 
@@ -74,7 +75,8 @@ class GrammarModule(ModuleProtocol):
         all_errors: list[dict] = []
 
         while True:
-            exercises = self._generate_exercises(ctx, topic_info, llm, io)
+            used_types = [item["exercise_type"] for item in all_items]
+            exercises = self._generate_exercises(ctx, topic_info, llm, io, used_types)
             self._display_exercises(ctx, exercises, io)
 
             if exercises:
@@ -212,15 +214,37 @@ class GrammarModule(ModuleProtocol):
             f"\n=================================================="
         )
 
+    def _pick_exercise_type(self, ctx: ModuleContext, used_types: list[str]) -> str:
+        """Chosen here, not left to the LLM — generate_exercises used to ask the
+        model to pick one type and stick to it, but weaker local models would
+        drift across types mid-batch, which was silently filtered out afterward
+        and could shrink a requested batch of N down to just a few. The type
+        vocabulary (lang/maps/exercise_types) is pedagogically generic rather than
+        topic-specific, so a random pick avoiding the immediately previous round's
+        type is just as good as asking the model, at zero extra LLM latency."""
+        types_map = get_exercise_types(ctx.language)
+        if not types_map or not types_map.type_names:
+            return ""  # let generate_exercises' own missing-map check produce the error
+        candidates = sorted(types_map.type_names)
+        last_used = used_types[-1] if used_types else None
+        pool = [t for t in candidates if t != last_used] or candidates
+        return random.choice(pool)
+
     def _generate_exercises(
-        self, ctx: ModuleContext, topic_info: dict, llm: BaseLLM, io: IOHandler
+        self, ctx: ModuleContext, topic_info: dict, llm: BaseLLM, io: IOHandler, used_types: list[str]
     ) -> list[dict]:
+        exercise_type = self._pick_exercise_type(ctx, used_types)
+        parameters = {
+            "topic": topic_info["topic"],
+            "language": ctx.language,
+            "exercise_type": exercise_type,
+        }
+        # Same override pattern as suggested_focus above — normally unset, letting
+        # generate_exercises fall back to its own default batch size.
+        if "exercise_count" in ctx.parameters:
+            parameters["exercise_count"] = ctx.parameters["exercise_count"]
         out = self.skills["generate_exercises"].run(
-            SkillInput(
-                user_id=ctx.user_id,
-                level=ctx.level,
-                parameters={"topic": topic_info["topic"], "language": ctx.language},
-            ),
+            SkillInput(user_id=ctx.user_id, level=ctx.level, parameters=parameters),
             llm,
         )
         if out.success:

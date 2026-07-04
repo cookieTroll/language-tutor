@@ -12,14 +12,16 @@ class GenerateExercisesSkill(SkillProtocol):
     name = "generate_exercises"
     description = (
         "Generates targeted exercises for a grammar topic, all of a single "
-        "exercise type, each tagged with a taxonomy-validated error_tag."
+        "exercise type chosen by the caller (not the LLM), each tagged with a "
+        "taxonomy-validated error_tag."
     )
     skill_type = "session"
 
     def run(self, input: SkillInput, llm: BaseLLM) -> SkillOutput:
         topic = input.parameters.get("topic", "").strip()
         language = input.parameters.get("language", "German").capitalize()
-        exercise_count = input.parameters.get("exercise_count", 7)
+        exercise_count = input.parameters.get("exercise_count", 10)
+        exercise_type = input.parameters.get("exercise_type", "").strip()
 
         if not topic:
             return SkillOutput(
@@ -44,6 +46,22 @@ class GenerateExercisesSkill(SkillProtocol):
                 metadata={"exercises": [], "error": f"No exercise_types map found for language '{language}'."},
             )
 
+        # The exercise type is picked by the caller (modules/grammar/agent.py), not
+        # the LLM — the old "ask the model to choose one type" design let weaker
+        # local models drift across types mid-batch, which was silently filtered
+        # out afterward and could shrink a requested batch of N down to just a few.
+        exercise_type_line = exercise_types_map.describe_one(exercise_type)
+        if exercise_type_line is None:
+            return SkillOutput(
+                skill_name=self.name,
+                success=False,
+                metadata={
+                    "exercises": [],
+                    "error": f"Unknown exercise_type '{exercise_type}'. "
+                             f"Allowed: {sorted(exercise_types_map.type_names)}",
+                },
+            )
+
         # Same scope-boundary lookup as dump_grammar — the two skills are
         # independent LLM calls given only the topic string, so without this
         # they can silently disagree on scope (see GrammarTopic.in_scope docstring).
@@ -56,7 +74,8 @@ class GenerateExercisesSkill(SkillProtocol):
             exercise_count=exercise_count,
             topic=topic,
             level=input.level.upper(),
-            exercise_types=exercise_types_map.format_for_prompt(),
+            exercise_type=exercise_type,
+            exercise_type_line=exercise_type_line,
             taxonomy=taxonomy.format_for_prompt(),
             scope_block=scope_block,
         )
@@ -80,13 +99,16 @@ class GenerateExercisesSkill(SkillProtocol):
                     if key not in item:
                         raise ValueError(f"Missing key '{key}' in exercise: {item!r}")
 
-                exercise_type = str(item["type"]).strip()
-                grading = exercise_types_map.grading_for(exercise_type)
-                if grading is None:
+                item_type = str(item["type"]).strip()
+                # exercise_type is fixed by the caller, not chosen by the model — a
+                # mismatch means the model drifted off the requested type. That used
+                # to be silently filtered out after the fact; now it's a hard retry.
+                if item_type != exercise_type:
                     raise ValueError(
-                        f"Unknown exercise type '{exercise_type}'. "
-                        f"Allowed: {sorted(exercise_types_map.type_names)}"
+                        f"Exercise type '{item_type}' does not match the requested "
+                        f"type '{exercise_type}' for exercise {item.get('prompt')!r}"
                     )
+                grading = exercise_types_map.grading_for(item_type)
 
                 # Taxonomy is the single contract for valid error_tag values — an
                 # unvalidated hallucinated tag here would silently corrupt
@@ -108,7 +130,7 @@ class GenerateExercisesSkill(SkillProtocol):
 
                 parsed.append({
                     "prompt": str(item["prompt"]),
-                    "exercise_type": exercise_type,
+                    "exercise_type": item_type,
                     "grading": grading,
                     "correct_answer": str(item["correct_answer"]),
                     "accepted_answers": [str(a) for a in accepted_answers],
@@ -116,15 +138,13 @@ class GenerateExercisesSkill(SkillProtocol):
                     "distractor_hint": str(item.get("distractor_hint", "")),
                 })
 
-            # Defensive single-type enforcement: the prompt asks for exactly one
-            # exercise type per batch, but smaller/local models don't reliably
-            # comply (observed: one exercise per type across several types in a
-            # single response) — enforce it here instead of trusting the model.
-            # Keep only exercises matching the first one's type; this is the
-            # single source of exercise order, so both the UI and the positional
-            # answer-line matching in modules/grammar/agent.py inherit it for free.
-            single_type = parsed[0]["exercise_type"]
-            return [ex for ex in parsed if ex["exercise_type"] == single_type]
+            if len(parsed) != exercise_count:
+                raise ValueError(
+                    f"Expected exactly {exercise_count} exercises of type "
+                    f"'{exercise_type}', got {len(parsed)}"
+                )
+
+            return parsed
 
         try:
             exercises = call_with_self_correction(llm, messages, parse, temperature=0.6)

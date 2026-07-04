@@ -3,7 +3,7 @@ Unit tests for the Layer 2a grammar module. All LLM calls are mocked — no live
 network access.
 """
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from llm.base import BaseLLM, LLMResponse
 from modules.protocols import ModuleContext
@@ -113,8 +113,12 @@ class TestGrammarModuleRun:
         llm.complete.side_effect = [resp_select, resp_dump, resp_generate, resp_grade]
 
         module = GrammarModule()
-        ctx = _make_ctx()
-        result, session_content = module.run(ctx, llm, mock_io)
+        ctx = _make_ctx(parameters={"exercise_count": 2})
+        # Exercise type is now picked in code (random from the language's type
+        # vocabulary) rather than by the LLM — pin it so it matches resp_generate's
+        # canned "transformation" exercises.
+        with patch("modules.grammar.agent.random.choice", return_value="transformation"):
+            result, session_content = module.run(ctx, llm, mock_io)
 
         assert result.module == "grammar"
         assert session_content.topic == "Present tense — regular verbs"
@@ -194,8 +198,9 @@ class TestGrammarModuleRun:
         llm.complete.side_effect = [resp_dump, resp_generate, resp_grade]
 
         module = GrammarModule()
-        ctx = _make_ctx()
-        result, session_content = module.run(ctx, llm, mock_io)
+        ctx = _make_ctx(parameters={"exercise_count": 2})
+        with patch("modules.grammar.agent.random.choice", return_value="fill_in_the_blank"):
+            result, session_content = module.run(ctx, llm, mock_io)
 
         # Manual topic matched a curated entry -> resolved as major, no select_grammar call
         assert session_content.topic == "Articles — nominative case"
@@ -255,8 +260,11 @@ class TestGrammarModuleRun:
         llm.complete.side_effect = [resp_dump, round1_generate, round2_generate, round2_grade]
 
         module = GrammarModule()
-        ctx = _make_ctx()
-        result, session_content = module.run(ctx, llm, mock_io)
+        ctx = _make_ctx(parameters={"exercise_count": 1})
+        # Round 1 picks fill_in_the_blank, round 2 (used_types now includes it)
+        # picks true_false — matching each round's canned exercise type.
+        with patch("modules.grammar.agent.random.choice", side_effect=["fill_in_the_blank", "true_false"]):
+            result, session_content = module.run(ctx, llm, mock_io)
 
         assert len(session_content.items) == 2  # one per round, pooled
         assert session_content.items[0]["correct"] is True
@@ -325,8 +333,9 @@ class TestGrammarModuleRun:
         llm.complete.side_effect = [resp_dump, resp_generate]
 
         module = GrammarModule()
-        ctx = _make_ctx()
-        result, session_content = module.run(ctx, llm, mock_io)
+        ctx = _make_ctx(parameters={"exercise_count": 2})
+        with patch("modules.grammar.agent.random.choice", return_value="fill_in_the_blank"):
+            result, session_content = module.run(ctx, llm, mock_io)
 
         assert llm.complete.call_count == 2
         assert session_content.score == 0.0
