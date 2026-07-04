@@ -27,20 +27,30 @@ Hard deadline: Jul 7, 11:59pm PT = Wed Jul 8, 08:59am GMT+2.
 ## 1. Reality check
 
 Everything through Layer 2a (grammar module, writing↔grammar bridge, both directions)
-is fully checked off in `CHECKLIST_FINISHED.md` — Impl, Val, and Fin. Layer 2b
-(`/history`) is implemented but not yet validated. Nothing beyond that is required for
-submission.
+is fully checked off in `CHECKLIST_FINISHED.md` — Impl, Val, and Fin. Nothing beyond
+that is required for submission.
+
+**Correction from the previous pass:** Layer 2b is *not* "implemented, not validated" —
+it's not implemented at all. `docs/CHECKLIST.md` shows all four 2b items unchecked
+(`[ ] [ ] [ ]`), and the code confirms it: `comparison_note` on `WritingSessionContent`
+is a stub that the summarise-session prompt is explicitly told to `Set comparison_note
+to null` (`skills/summarise_session/writing/prompts.py:44`, `skill.py:87`). There's no
+`/history` command in `ui/cli.py` either — that was a mischaracterization in the prior
+version of this doc.
 
 | Layer | What it is | Status |
 |---|---|---|
 | PoC → 1a → 1b → 1c | Evaluator pipeline, routing, progress summary, web UI | done |
 | 2a (i–viii) | Grammar module + bidirectional writing↔grammar bridge | done |
-| 2b | `/history` on-demand summary | implemented, not validated |
+| 2b | Cross-session writing comparison (`comparison_note`) | not started |
 | 2c / 3a / 3b / 3c / 3d | CEFR estimator, vocab module, level tracking, Anki export, MCP server | not started — correctly cut |
 
-2c–3d were always later layers; the checklist's own "cut rule" already says a clean,
-stable core beats a shaky feature-complete one. The one loose end worth closing is
-**validating 2b** — it's already built and mid-flight.
+2b belongs in the same bucket as 2c–3d, not in a special "almost done" category — the
+checklist's own "cut rule" says a clean, stable core beats a shaky feature-complete
+one. Comparing today's writing to a past session is a nice-to-have on top of the
+memory story you're already telling with `error_frequency` + `next_actions`; it isn't
+load-bearing for the pitch. **Recommendation: leave 2b cut, same as 2c–3d.** Spend the
+time on the items below instead.
 
 ---
 
@@ -96,12 +106,13 @@ weight (50 pts), and demo-ability in 5 minutes — not by engineering effort spe
    near-zero rubric weight. Worth 10 seconds in the video for watchability and
    personality.
 
-**For the two dev/polish days (Fri–Sat):** close out README and finish validating
-2b first — cheap, closes an open loop. Then do a single real end-to-end run of the
-writing→grammar bridge with the actual LLM backend you'll demo with, not just the
-automated e2e test, since that's the one flow the whole video hangs on. That likely
-fills Friday. Saturday is genuinely spare: stabilize whatever felt shakiest, don't
-start a new layer (2c/3a and beyond stay cut) — except possibly MCP, see below.
+**For the two dev/polish days (Fri–Sat):** close out README first (§2), then the four
+small fixes in §5 below — all cheap, all map to explicit rubric lines. Then do a
+single real end-to-end run of the writing→grammar bridge with the actual LLM backend
+you'll demo with, not just the automated e2e test, since that's the one flow the whole
+video hangs on. That likely fills Friday. Saturday is genuinely spare: stabilize
+whatever felt shakiest, don't start a new layer (2b/2c/3a and beyond stay cut) —
+except possibly MCP, see §8.
 
 ---
 
@@ -140,7 +151,58 @@ bridge demo, which stays the centerpiece.
 
 ---
 
-## 5. Course concepts — where you actually stand
+## 5. Small fixes that map to explicit rubric lines
+
+A second pass over the code (not just the docs) turned up four items — three cheap
+fixes, one correction to a claim you were about to make. All tests still pass (225
+passed, `pytest tests/ -x -q --ignore=tests/judge --ignore=tests/e2e`) and no API keys
+or secrets are committed anywhere in the tree, so none of this is an emergency — but
+each one lines up with a specific, named rubric criterion, which makes them cheap
+points relative to new features.
+
+1. **`app.run(debug=True, threaded=True, port=5000)` in `ui/app.py:202`.** Flask's
+   debug mode ships the Werkzeug interactive debugger — a known remote-code-execution
+   vector if the process is ever reachable from outside localhost. It binds to
+   Flask's default host today, so it isn't exposed yet, but it directly undercuts the
+   "Security features" concept you're planning to claim (§6) if a judge opens
+   `app.py` — which Category 2's code review explicitly invites. Gate it behind an
+   env var (`debug=os.environ.get("LTUT_DEBUG") == "1"`) or just drop it before the
+   video. One line.
+2. **You already have a real security detail you haven't claimed.** `ui/app.py:188-193`
+   (`session_view`) checks `abs_path.startswith(data_root_abs)` before serving a
+   session file by path — a genuine path-traversal guard, not a generic gesture. Add
+   it to the "Solid, claim these → Security features" bullets in §6.
+3. **`docs/DESIGN.md`'s architecture tree and repo-structure listing are stale.**
+   The grammar module and its skills (`select_grammar`, `dump_grammar`,
+   `generate_exercises`, `grade_exercises`) are annotated `(planned)` / "Layer 2a" in
+   the ASCII diagrams (lines ~77–123, ~230–249) even though Layer 2a is fully done.
+   `ui/mcp_server.py` is listed in the repo tree (line 265) but the file doesn't
+   exist. Harmless while `DESIGN.md` stays an internal doc, but §2 recommends pulling
+   this diagram straight into the README — do that *after* fixing the annotations,
+   or the README will tell judges a finished module is still planned.
+4. **Rubric line, not house style: "Your code should contain comments pertinent to
+   implementation, design and behaviors."** This project's own convention (comment
+   only the non-obvious WHY) is good practice, but comment density in the core files
+   is thin — `orchestrator.py`, `modules/grammar/agent.py`, `modules/writing/agent.py`
+   each sit around 2–3% comment lines, mostly section headers. You don't need a
+   rewrite; you need five or six targeted comments at the spots that are already the
+   most non-obvious: the `error_frequency ≥ 2` recurrence threshold,
+   `GRAMMAR_MASTERY_THRESHOLD = 0.8`, the memory-boundary enforcement in the
+   orchestrator, the `call_with_self_correction` retry loop, and the path-traversal
+   check above. That satisfies the letter of the rubric with the same comments you'd
+   want for your own sake reading this back in six months.
+
+Separately — the rubric's "Public Project Link" wants either a live, login-free demo
+or a public GitHub repo with detailed setup instructions. Given the time left, treat
+the GitHub repo + `PROVIDERS.md` as the deliverable, not a hosted deploy: standing up
+a public instance this week adds real risk (the `debug=True` issue above becomes
+much more serious the moment it's internet-facing, and there's no auth layer at all).
+Say so explicitly in the writeup rather than leaving judges to guess which path you
+took.
+
+---
+
+## 6. Course concepts — where you actually stand
 
 The rubric wants at least three of: Agent/Multi-agent system (ADK), MCP Server,
 Antigravity, Security features, Deployability, Agent skills. A repo grep for `ADK`,
@@ -154,7 +216,10 @@ about which ones you claim.
   Say so plainly rather than staying silent on ADK.
 - **Security features** — no keys in code, `${VAR}` resolution at load time, `.env`
   gitignored, Vertex AI path uses ADC (no static key at all), Pydantic validation on
-  every LLM output before it touches storage.
+  every LLM output before it touches storage, and a path-traversal guard on the
+  session-file viewer route (`ui/app.py:188-193`, checks the resolved path stays
+  under `data_root` before serving it). Fix the `debug=True` item in §5 first, then
+  claim this with a straight face.
 - **Deployability** — one config swap between local (Ollama, private, free) and
   hosted (Gemini/Vertex/OpenAI-compat) API. Same evidence as ranking #2 above.
 - **Agent skills** — the project's own atomic grain is literally named "skills,"
@@ -171,7 +236,7 @@ about which ones you claim.
 
 ---
 
-## 6. Pushback on the pitch framing
+## 7. Pushback on the pitch framing
 
 **Holds up as stated:** "one interface for all" (writing + grammar share the same
 orchestrator/module/skill shape and the same UI), the memory/personalization loop,
@@ -195,7 +260,7 @@ UI detail (confirmed in `ui/static/decor.js`).
 
 ---
 
-## 7. MCP, reconsidered — a data server, not a skill wrapper
+## 8. MCP, reconsidered — a data server, not a skill wrapper
 
 Better idea than the original Layer 3d spec: expose read-only tools over
 `StorageProtocol` — `get_error_frequency`, `get_sessions_by_module`,
@@ -220,7 +285,7 @@ line, not a requirement — skip without guilt if Friday runs long.
 
 ---
 
-## 8. Track
+## 9. Track
 
 **Agents for Good fits the pitch better than Concierge Agents.** Concierge's "keeps
 personal information safe" language fits the local-run privacy angle, but the
@@ -232,7 +297,7 @@ secondary point, not the frame.
 
 ---
 
-## 9. Video — 5 minutes, timed
+## 10. Video — 5 minutes, timed
 
 | Time | Beat | Show |
 |---|---|---|
@@ -244,7 +309,7 @@ secondary point, not the frame.
 
 ---
 
-## 10. Writeup — 2,500 words, budgeted
+## 11. Writeup — 2,500 words, budgeted
 
 | Section | Words |
 |---|---|
