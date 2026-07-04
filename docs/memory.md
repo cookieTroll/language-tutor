@@ -26,7 +26,10 @@ Per-user, per-language profile. Replaces the old `user_levels` table. One row pe
 
 **Primary key:** `(user_id, language)`
 
-Level history is not stored here — `user_profiles` holds current state. If level history is needed later (Layer 3b), add a separate `level_history` table. Keeping it simple for now.
+Level history is not stored here — `user_profiles` holds current state only. Layer 2c ("Level &
+Progress") deliberately does not add a `level_history` table: the trend it needs is derived from
+data already stored per session (`sessions.text_level_estimate`, `sessions.level`, `sessions.score`,
+and the new `sessions.word_count`), queried chronologically. No new table, no dual-write risk.
 
 ### `sessions` table
 

@@ -1,4 +1,4 @@
-# GermanTutor — Development Checklist
+﻿# GermanTutor — Development Checklist
 
 Each item has three progress tracking checkboxes:
 `[Impl]` (Implemented - code made) | `[Val]` (Validated - user sign-off) | `[Fin]` (Finished - second sign-off at stage end)
@@ -37,17 +37,6 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ---
 
-## Layer 2c — CEFR Estimator
-
-> Complements Step 5 (per-session text-level estimate on raw text). This layer estimates the *user's* accumulated level from session history.
-- [ ] [ ] [ ] Define minimum session count before estimation is meaningful (suggest: 5 writing sessions)
-- [ ] [ ] [ ] `skills/cefr_estimator/skill.py` — reads session logs (including `text_level_estimate` from Step 5 session files), estimates user level from error frequency + exercise scores + writing complexity trend
-- [ ] [ ] [ ] Writes to `user_levels` table with `source='estimated'`
-- [ ] [ ] [ ] Expose as on-demand skill (user asks "what level am I?") or post-session trigger
-- [ ] [ ] [ ] Decide and document: estimated level vs stated level — suggest only, do not override without user confirmation
-
----
-
 ## Layer 3a — Vocab Skill
 
 - [ ] [ ] [ ] `/add_vocab <word>` CLI command — lets user manually flag a word mid-session; module appends it to `vocab_signals` in `ModuleResult.metadata` (same path as `/btw`-flagged words); `SessionManager.finalize_session` then calls `write_vocab_flag()` — module stays storage-free, memory boundary stays in orchestrator
@@ -61,10 +50,11 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 ---
 
-## Layer 3b — Level Progression Tracking
+## Layer 3b — merged into Layer 2c
 
-- [ ] [ ] [ ] Surface level history in frontend: timeline of `user_levels` rows (stated + estimated)
-- [ ] [ ] [ ] Orchestrator progress summary includes current level + trend if multiple estimates exist
+> Level progression tracking turned out to be the same mastery/trend data as the CEFR estimator,
+> just rendered differently. See "Layer 2c — Level & Progress" in `docs/CHECKLIST_FINISHED.md` —
+> the progression bar and trend sparkline items there are what this layer used to describe separately.
 
 ---
 

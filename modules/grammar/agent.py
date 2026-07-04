@@ -1,4 +1,3 @@
-import re
 import uuid
 from datetime import datetime
 
@@ -7,6 +6,7 @@ from memory.protocols import GrammarSessionContent
 from llm.base import BaseLLM
 from shared.io import IOHandler
 from shared.error_log import log_skill_error
+from shared.slugify import slugify_topic
 from skills.protocols import SkillInput
 from skills.select_grammar.skill import resolve_manual_topic
 from modules.grammar.skills import get_grammar_skills
@@ -145,8 +145,7 @@ class GrammarModule(ModuleProtocol):
     # ------------------------------------------------------------------
 
     def _task_label(self, topic_info: dict) -> str:
-        slug = re.sub(r"[^a-z0-9]+", "_", topic_info["topic"].lower()).strip("_")
-        return slug or "grammar_practice"
+        return slugify_topic(topic_info["topic"])
 
     def _pick_topic(self, ctx: ModuleContext, llm: BaseLLM, io: IOHandler) -> dict:
         io.output("\nEnter your own grammar topic, or press Enter for a suggestion:")

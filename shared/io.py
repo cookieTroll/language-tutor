@@ -20,6 +20,11 @@ class IOHandler(Protocol):
     def render_results(self, data: dict) -> None:
         """Render graded exercise results. data: {"items": [...], "score": float}."""
         ...
+    def render_progress(self, data: dict) -> None:
+        """Render mastery/level-progress data (Layer 2c /progress command).
+        data: {"current_level": str, "modules": [asdict(ModuleMastery), ...], "trend": [{"date", "level"}, ...]}.
+        """
+        ...
     def start_timer(self, label: str = "Writing") -> None: ...
     def stop_timer(self) -> None: ...
 
@@ -153,6 +158,41 @@ class TerminalIOHandler:
         self.output(f"\nScore: {score:.0%} ({correct_count}/{len(items)})")
         self.output("==================================================\n")
 
+    def _render_bar(self, ratio: float, width: int = 20) -> str:
+        filled = round(max(0.0, min(ratio, 1.0)) * width)
+        return "[" + "█" * filled + "░" * (width - filled) + "]"
+
+    def render_progress(self, data: dict) -> None:
+        level = (data.get("current_level") or "").upper()
+        self.output(
+            "\n=================================================="
+            f"\n          LEVEL & PROGRESS ({level})"
+            "\n=================================================="
+        )
+        for m in data.get("modules", []):
+            ratio = m.get("mastery_ratio", 0.0)
+            bar = self._render_bar(ratio)
+            self.output(f"\n{m['module'].capitalize()}: {bar} {ratio:.0%}")
+            if m["module"] == "grammar":
+                self.output(f"  Topics mastered: {m.get('topics_mastered', 0)}/{m.get('topics_total', 0)}")
+            if m["module"] == "writing":
+                self.output(
+                    f"  Texts written: {m.get('texts_written', 0)}  "
+                    f"Words written: {m.get('total_words', 0)} total, "
+                    f"{m.get('words_at_current_level', 0)} at current level"
+                )
+            if m.get("strong_tags"):
+                self.output(f"  Strong: {', '.join(m['strong_tags'])}")
+            if m.get("weak_tags"):
+                self.output(f"  Weak: {', '.join(m['weak_tags'])}")
+
+        trend = data.get("trend", [])
+        if trend:
+            sparkline = " -> ".join(t["level"].upper() for t in trend[-5:])
+            self.output(f"\nRecent text-level trend: {sparkline}")
+
+        self.output("\n==================================================")
+
 
 class WebIOHandler:
     """Bridges a blocking session thread to an HTTP/SSE client via two queues.
@@ -189,6 +229,9 @@ class WebIOHandler:
 
     def render_results(self, data: dict) -> None:
         self._out_q.put({"type": "data", "payload": {"event": "grammar_results_complete", **data}})
+
+    def render_progress(self, data: dict) -> None:
+        self._out_q.put({"type": "data", "payload": {"event": "progress_ready", **data}})
 
     def start_timer(self, label: str = "Writing") -> None:
         pass  # web UI manages its own timer in JS

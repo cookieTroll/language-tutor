@@ -426,6 +426,39 @@ mark.mistake-hl {
   padding: 1px 5px; font-size: 0.74rem;
 }
 #cmd-sidebar .cmd-item .cmd-desc { color: var(--muted); margin-top: 1px; }
+
+/* ── Progress dial (Layer 2c /progress) ── */
+.progress-block {
+  margin: 10px 0; padding: 14px 16px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.progress-title {
+  font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); margin-bottom: 12px;
+}
+.dial-row { display: flex; gap: 24px; flex-wrap: wrap; }
+.dial-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 150px; }
+.dial {
+  --pct: 0;
+  width: 88px; height: 88px; border-radius: 50%; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--surface) 0);
+}
+.dial::before {
+  content: ''; position: absolute; inset: 7px; border-radius: 50%; background: var(--panel);
+}
+.dial .dial-pct { position: relative; z-index: 1; font-weight: bold; font-size: 0.95rem; color: var(--bright); }
+.dial-label { font-size: 0.8rem; color: var(--sub); }
+.dial-stats { font-size: 0.72rem; color: var(--muted); text-align: center; }
+.dial-tags { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.tag-chip {
+  font-size: 0.68rem; padding: 1px 7px; border-radius: 8px;
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; cursor: default;
+}
+.tag-chip.strong { background: rgba(52,211,153,.15); color: var(--green); }
+.tag-chip.weak   { background: rgba(248,113,113,.15); color: var(--accent); }
+.progress-trend { margin-top: 10px; font-size: 0.78rem; color: var(--sub); }
 </style>
 </head>
 <body>
@@ -549,6 +582,7 @@ mark.mistake-hl {
 <script src="/static/writing-ui.js"></script>
 <script src="/static/diff.js"></script>
 <script src="/static/grammar-ui.js"></script>
+<script src="/static/progress-ui.js"></script>
 <script src="/static/decor.js"></script>
 </body>
 </html>
