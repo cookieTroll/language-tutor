@@ -45,20 +45,19 @@ function handleExercisesReady(payload) {
 }
 
 function handleGrammarResultsComplete(payload) {
-  // GrammarModule has no follow-up phase (unlike writing) — module.run() returns
-  // right after grading, so no btw/done follow-up UI is offered here.
+  // A "do another round on this topic?" prompt follows this event (see
+  // showGrammarAgainPrompt in this file / handlePrompt in app.js) — so unlike a
+  // one-shot module, the explanation stays visible as reference material instead
+  // of being hidden as "stale".
   const items = payload.items || [];
   const score = payload.score || 0;
 
   document.getElementById('grammar-pad').style.display = 'none';
   document.getElementById('submit-btn').disabled = true;
-  document.getElementById('btw-btn').disabled = true;
 
-  // Explanation/exercise list are stale once graded — hiding them gives
-  // #grammar-results (and the footer/done-banner below it) room in #left-col,
-  // which has overflow:hidden and no scrollbar of its own.
-  document.getElementById('grammar-box').style.display = 'none';
-  document.getElementById('grammar-resizer').style.display = 'none';
+  // Exercise list is redundant with the itemized results below — hide it to
+  // give #grammar-results (and the footer/done-banner below it) room in
+  // #left-col, which has overflow:hidden and no scrollbar of its own.
   document.getElementById('grammar-exercises').style.display = 'none';
 
   const wrap = document.createElement('div');
@@ -98,6 +97,8 @@ function handleGrammarResultsComplete(payload) {
   out.style.display = 'block';
   out.appendChild(wrap);
 
+  document.getElementById('grammar-grading').style.display = 'none';
+
   if (score >= 0.999) fireConfetti();
 
   out.scrollTop = out.scrollHeight;
@@ -105,14 +106,57 @@ function handleGrammarResultsComplete(payload) {
 
 async function submitGrammarAnswers() {
   // GrammarModule calls io.prompt_block() exactly once — send the whole textarea
-  // value (including any inline /btw lines) as a single sendInput() call, unlike
-  // submitWriting()'s per-line loop for io.prompt()'s N round trips.
+  // value as a single sendInput() call, unlike submitWriting()'s per-line loop
+  // for io.prompt()'s N round trips.
   if (phase !== 'writing' || activeModule !== 'grammar') return;
   const pad = document.getElementById('grammar-pad');
 
   phase = 'evaluating';
   pad.disabled = true;
   document.getElementById('submit-btn').disabled = true;
-  appendTutor('Grading your answers…', 'progress');
+  // #tutor-output (appendTutor's target) is hidden for grammar sessions — show
+  // the grading state in the left column instead, same pattern as grammar-loading.
+  document.getElementById('grammar-grading').style.display = 'flex';
   await sendInput(pad.value);
+}
+
+// ── Intra-session continuation ("another exercise?") ──────────────────────────
+function showGrammarAgainPrompt(topic) {
+  const wrap = document.createElement('div');
+  wrap.className = 'invite-msg';
+  wrap.innerHTML =
+    `Try another exercise on <b>${escapeHtml(topic)}</b>? ` +
+    `<button class="btn-ask" id="grammar-again-yes">Yes</button> ` +
+    `<button class="btn-ask" id="grammar-again-no">No</button>`;
+  const out = document.getElementById('grammar-results');
+  out.appendChild(wrap);
+  out.scrollTop = out.scrollHeight;
+
+  document.getElementById('grammar-again-yes').onclick = () => {
+    wrap.remove();
+    resetGrammarForNextRound();
+    sendInput('y');
+  };
+  document.getElementById('grammar-again-no').onclick = () => {
+    wrap.remove();
+    sendInput('n');
+  };
+}
+
+function resetGrammarForNextRound() {
+  // Backend is about to generate a fresh batch of exercises on the same topic —
+  // clear the previous round's exercises/results and re-show the "preparing"
+  // state, mirroring the very first round (see handleOutput's grammar branch
+  // in app.js). The explanation panel is left as-is — it stays visible for
+  // reference across every round.
+  document.getElementById('grammar-results').innerHTML = '';
+  document.getElementById('grammar-results').style.display = 'none';
+  document.getElementById('grammar-exercises').innerHTML = '';
+  document.getElementById('grammar-exercises').style.display = 'none';
+  document.getElementById('grammar-pad').value = '';
+  document.getElementById('grammar-pad').disabled = true;
+  document.getElementById('grammar-pad').style.display = 'none';
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('grammar-loading').style.display = 'flex';
+  phase = 'loading';
 }

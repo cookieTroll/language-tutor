@@ -42,8 +42,9 @@ _TAXONOMY_TAGS = _load_taxonomy_tags()
 
 
 class ScriptedIOHandler:
-    """Minimal IOHandler double: always accepts the select_grammar suggestion
-    and submits a blank answer block. No /btw usage."""
+    """Minimal IOHandler double: always accepts the select_grammar suggestion,
+    submits a blank answer block, and declines the "another exercise?"
+    continuation prompt so the session runs exactly one round."""
 
     show_cli_hints = False
 
@@ -56,6 +57,8 @@ class ScriptedIOHandler:
         self.output_lines.append(text)
 
     def prompt(self, text: str = "") -> str:
+        if text.startswith("\nAnother exercise on"):
+            return "n"
         return self._topic_input
 
     def prompt_block(self, text: str = "") -> str:
@@ -172,7 +175,6 @@ def test_grammar_module_session(executor_llm, judge_llm, results_collector, case
             f"[{case['id']}] invalid error_tag: {item['error_tag']}"
         )
     assert len(result.errors) == len(session_content.items)
-    assert result.metadata["btw_entries"] == []
 
     try:
         verdict = _judge(judge_llm, case, session_content.topic, session_content.explanation, session_content.items)

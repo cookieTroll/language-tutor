@@ -47,9 +47,8 @@ const CMD_HINTS = {
   writing: [
     { cmd: '/btw &lt;question&gt;', desc: 'Ask the tutor a question, typed in the answer box' },
   ],
-  grammar: [
-    { cmd: '/btw &lt;question&gt;', desc: 'Type on its own line inside your answer block' },
-  ],
+  // No grammar entry — /btw isn't supported there (its answer had nowhere
+  // visible to render, since the tutor panel is hidden for grammar sessions).
 };
 
 function showCmdSidebar(phaseKey) {
@@ -138,11 +137,6 @@ function handleOutput(text) {
       document.getElementById('grammar-box').style.display = 'block';
       document.getElementById('grammar-resizer').style.display = 'block';
       document.getElementById('word-count').style.display = 'none';
-      // /btw during grammar answer-collection must be typed inline in the block —
-      // a separate Ask call here would collide with the single prompt_block() read.
-      document.getElementById('btw-inp').disabled = true;
-      document.getElementById('btw-btn').disabled = true;
-      document.getElementById('btw-inp').placeholder = 'Type /btw questions directly in your answer block';
       if (topicMatch) document.getElementById('grammar-topic-title').textContent = topicMatch[1].trim();
       document.getElementById('grammar-explanation').textContent = explMatch ? explMatch[1].trim() : '';
       updateChip('chip-module', 'Grammar');
@@ -153,12 +147,14 @@ function handleOutput(text) {
       document.getElementById('grammar-loading').style.display = 'flex';
       document.getElementById('grammar-pad').disabled = true;
       document.getElementById('submit-btn').disabled = true;
-      // The right column (tutor/btw) is unused in grammar — reclaim the width
-      // for the explanation/exercises panel instead of leaving it idle.
+      // The right column (tutor panel) is unused in grammar — reclaim the width
+      // for the explanation/exercises panel instead of leaving it idle. /btw isn't
+      // offered here at all (see CMD_HINTS comment above), so btw-inp/btw-btn are
+      // simply left alone — they're inert while the column is hidden.
       document.getElementById('right-col').style.display = 'none';
       document.getElementById('col-resizer').style.display = 'none';
       document.getElementById('left-col').classList.add('solo');
-      showCmdSidebar('grammar');
+      hideCmdSidebar();
     }
     return; // don't render the raw ASCII header
   }
@@ -198,6 +194,7 @@ function resetForNewModuleSession() {
   markEvalStep(0);
   document.getElementById('done-banner').style.display = 'none';
   document.getElementById('grammar-loading').style.display = 'none';
+  document.getElementById('grammar-grading').style.display = 'none';
 
   document.getElementById('topic-box').style.display = 'none';
   document.getElementById('topic-title').textContent = '';
@@ -232,6 +229,15 @@ function handlePrompt(text) {
   const chainMatch = trimmed.match(/^Session complete\. Start (\w+) practice(?: on '([^']*)')? now\?/);
   if (chainMatch) {
     showChainPrompt(chainMatch[1], chainMatch[2] || '');
+    return;
+  }
+
+  // Grammar's intra-session "do another round?" prompt — must be checked before
+  // the generic activeModule === 'grammar' branch below, or it'd be treated as
+  // the block-answer prompt and shown in #grammar-pad instead of as a Yes/No choice.
+  const grammarAgainMatch = trimmed.match(/^Another exercise on '([^']*)'\?/);
+  if (grammarAgainMatch) {
+    showGrammarAgainPrompt(grammarAgainMatch[1]);
     return;
   }
 

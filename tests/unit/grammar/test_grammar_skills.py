@@ -343,11 +343,11 @@ def _exercise(**overrides) -> dict:
 
 class TestGenerateExercisesSkill:
 
-    def test_interleaved_types_are_regrouped_by_first_occurrence(self):
-        """The prompt asks the model to batch same-type exercises together, but
-        if it still interleaves them, the skill must regroup — stable, by each
-        type's first occurrence — since display and answer-line grading both
-        rely on this order."""
+    def test_interleaved_types_are_filtered_to_first_type_occurrence(self):
+        """The prompt asks for exactly one exercise type per batch, but smaller/
+        local models don't reliably comply (observed live: one exercise per type
+        across several types in a single response) — the skill must enforce this
+        in Python, keeping only exercises matching the first one's type."""
         from skills.generate_exercises.skill import GenerateExercisesSkill
         payload = json.dumps({"exercises": [
             _exercise(type="fill_in_the_blank", prompt="p1", correct_answer="a1"),
@@ -366,16 +366,15 @@ class TestGenerateExercisesSkill:
         assert out.success is True
         types = [ex["exercise_type"] for ex in out.metadata["exercises"]]
         prompts = [ex["prompt"] for ex in out.metadata["exercises"]]
-        assert types == [
-            "fill_in_the_blank", "fill_in_the_blank", "fill_in_the_blank",
-            "word_order", "error_correction",
-        ]
-        assert prompts == ["p1", "p3", "p5", "p2", "p4"]
+        assert types == ["fill_in_the_blank", "fill_in_the_blank", "fill_in_the_blank"]
+        assert prompts == ["p1", "p3", "p5"]
 
-    def test_generates_mixed_exercises_with_derived_grading(self):
+    def test_grading_derived_from_exercise_type_map(self):
+        """grading is derived from lang/maps/exercise_types, not trusted from the
+        model — verified here for an llm-graded type (exact-type derivation is
+        already exercised by the fill_in_the_blank cases throughout this file)."""
         from skills.generate_exercises.skill import GenerateExercisesSkill
         payload = json.dumps({"exercises": [
-            _exercise(type="fill_in_the_blank", error_tag="noun_declension"),
             _exercise(
                 type="word_order", error_tag="word_order",
                 prompt="Reorder: heute / ich / Deutsch / lerne",
@@ -386,16 +385,14 @@ class TestGenerateExercisesSkill:
 
         skill = GenerateExercisesSkill()
         out = skill.run(
-            make_input(level="a1", topic="Dative case", language="german", exercise_count=2), llm,
+            make_input(level="a1", topic="Dative case", language="german", exercise_count=1), llm,
         )
 
         assert out.success is True
         exercises = out.metadata["exercises"]
-        assert len(exercises) == 2
-        assert exercises[0]["exercise_type"] == "fill_in_the_blank"
-        assert exercises[0]["grading"] == "exact"
-        assert exercises[1]["exercise_type"] == "word_order"
-        assert exercises[1]["grading"] == "llm"
+        assert len(exercises) == 1
+        assert exercises[0]["exercise_type"] == "word_order"
+        assert exercises[0]["grading"] == "llm"
 
     def test_empty_topic_short_circuits_without_llm_call(self):
         from skills.generate_exercises.skill import GenerateExercisesSkill

@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 
 from llm.base import BaseLLM, LLMResponse
 from modules.protocols import ModuleContext
-from memory.protocols import BtwEntry
 from shared.io import IOHandler
 
 
@@ -44,41 +43,23 @@ class TestParseAnswerBlock:
 
     def test_exact_count_passes_through_unchanged(self):
         from modules.grammar.agent import parse_answer_block
-        answers, btw = parse_answer_block("mit\nbei\nauf", 3)
+        answers = parse_answer_block("mit\nbei\nauf", 3)
         assert answers == ["mit", "bei", "auf"]
-        assert btw == []
 
     def test_pads_short_block_with_empty_strings(self):
         from modules.grammar.agent import parse_answer_block
-        answers, btw = parse_answer_block("mit", 3)
+        answers = parse_answer_block("mit", 3)
         assert answers == ["mit", "", ""]
-        assert btw == []
 
     def test_truncates_long_block(self):
         from modules.grammar.agent import parse_answer_block
-        answers, btw = parse_answer_block("mit\nbei\nauf\nvon", 2)
+        answers = parse_answer_block("mit\nbei\nauf\nvon", 2)
         assert answers == ["mit", "bei"]
-        assert btw == []
-
-    def test_extracts_btw_lines_and_preserves_answer_order(self):
-        from modules.grammar.agent import parse_answer_block
-        raw = "mit\n/btw what does bei mean?\nauf"
-        answers, btw = parse_answer_block(raw, 2)
-        assert answers == ["mit", "auf"]
-        assert btw == ["what does bei mean?"]
-
-    def test_multiple_btw_lines(self):
-        from modules.grammar.agent import parse_answer_block
-        raw = "/btw first question\nmit\n/btw second question\nauf"
-        answers, btw = parse_answer_block(raw, 2)
-        assert answers == ["mit", "auf"]
-        assert btw == ["first question", "second question"]
 
     def test_empty_block(self):
         from modules.grammar.agent import parse_answer_block
-        answers, btw = parse_answer_block("", 2)
+        answers = parse_answer_block("", 2)
         assert answers == ["", ""]
-        assert btw == []
 
 
 # ---------------------------------------------------------------------------
@@ -88,14 +69,15 @@ class TestParseAnswerBlock:
 class TestGrammarModuleRun:
 
     def test_all_correct_via_select_grammar(self):
-        """No manual topic (empty prompt) -> select_grammar path. One exact-match
-        exercise (correct) and one llm-graded exercise (correct)."""
+        """No manual topic (empty prompt) -> select_grammar path. Both exercises
+        are the same llm-graded type (generate_exercises enforces a single type
+        per batch) and both are graded correct via one batched grade_exercises call."""
         from modules.grammar.agent import GrammarModule
 
         mock_io = MagicMock(spec=IOHandler)
         mock_io.show_cli_hints = True
-        mock_io.prompt.side_effect = [""]  # Enter -> use select_grammar suggestion
-        mock_io.prompt_block.return_value = "gehe\nIch bin gegangen."
+        mock_io.prompt.side_effect = ["", "n"]  # Enter -> select_grammar suggestion; "n" -> end after round 1
+        mock_io.prompt_block.return_value = "Ich bin gegangen.\nEr hat das Buch gelesen."
 
         resp_select = LLMResponse(text=json.dumps({
             "topic": "Present tense — regular verbs",
@@ -106,14 +88,6 @@ class TestGrammarModuleRun:
         resp_dump = LLMResponse(text="# Present tense\nCore rule...", model="test-model")
         resp_generate = LLMResponse(text=json.dumps({"exercises": [
             {
-                "prompt": "Ich ___ (gehen) jeden Tag zur Schule.",
-                "type": "fill_in_the_blank",
-                "correct_answer": "gehe",
-                "accepted_answers": [],
-                "error_tag": "verb_conjugation",
-                "distractor_hint": "",
-            },
-            {
                 "prompt": "Rewrite in Perfekt: Ich gehe zur Schule.",
                 "type": "transformation",
                 "correct_answer": "Ich bin gegangen.",
@@ -121,8 +95,17 @@ class TestGrammarModuleRun:
                 "error_tag": "verb_tense",
                 "distractor_hint": "",
             },
+            {
+                "prompt": "Rewrite in Perfekt: Er liest das Buch.",
+                "type": "transformation",
+                "correct_answer": "Er hat das Buch gelesen.",
+                "accepted_answers": [],
+                "error_tag": "verb_tense",
+                "distractor_hint": "",
+            },
         ]}), model="test-model")
         resp_grade = LLMResponse(text=json.dumps({"results": [
+            {"index": 0, "correct": True, "feedback": ""},
             {"index": 1, "correct": True, "feedback": ""},
         ]}), model="test-model")
 
@@ -140,7 +123,7 @@ class TestGrammarModuleRun:
         assert all(item["correct"] for item in session_content.items)
         assert session_content.score == 1.0
         assert result.errors == []
-        assert result.metadata["btw_entries"] == []
+        assert result.metadata == {}
 
     def test_suggested_focus_from_orchestrator_reaches_select_grammar(self):
         """ctx.parameters['suggested_focus'] (set by the orchestrator's
@@ -172,15 +155,17 @@ class TestGrammarModuleRun:
         select_grammar_prompt = llm.complete.call_args_list[0].args[0][0].content
         assert "noun_declension" in select_grammar_prompt
 
-    def test_manual_topic_override_with_wrong_answer_and_btw(self):
-        """User supplies their own topic (skips select_grammar entirely) and
-        asks a /btw question mid-block; one exact-match exercise is wrong."""
+    def test_manual_topic_override_with_wrong_answer(self):
+        """User supplies their own topic (skips select_grammar entirely); one
+        exact-match exercise is wrong, and the user ends the session after
+        round 1 instead of requesting another exercise."""
         from modules.grammar.agent import GrammarModule
 
         mock_io = MagicMock(spec=IOHandler)
         mock_io.show_cli_hints = True
-        mock_io.prompt.side_effect = ["Articles — nominative case"]  # exact curated match
-        mock_io.prompt_block.return_value = "die\n/btw what is the nominative case?\nfalsch"
+        # exact curated match, then "n" -> end after round 1 (no repeat)
+        mock_io.prompt.side_effect = ["Articles — nominative case", "n"]
+        mock_io.prompt_block.return_value = "die\nfalsch"
 
         resp_dump = LLMResponse(text="# Articles\nCore rule...", model="test-model")
         resp_generate = LLMResponse(text=json.dumps({"exercises": [
@@ -193,21 +178,20 @@ class TestGrammarModuleRun:
                 "distractor_hint": "",
             },
             {
-                "prompt": "True or false: nominative marks the subject.",
-                "type": "true_false",
+                "prompt": "Complete with 'richtig' or 'falsch': Der Akkusativ markiert das Subjekt — ___.",
+                "type": "fill_in_the_blank",
                 "correct_answer": "falsch",
                 "accepted_answers": [],
                 "error_tag": "other",
                 "distractor_hint": "",
             },
         ]}), model="test-model")
-        resp_btw = LLMResponse(text="The nominative case marks the subject of the sentence.", model="test-model")
         resp_grade = LLMResponse(text=json.dumps({"results": [
             {"index": 0, "correct": False, "feedback": "'der' is the masculine nominative article, not 'die'."},
         ]}), model="test-model")
 
         llm = _make_llm([])
-        llm.complete.side_effect = [resp_dump, resp_generate, resp_btw, resp_grade]
+        llm.complete.side_effect = [resp_dump, resp_generate, resp_grade]
 
         module = GrammarModule()
         ctx = _make_ctx()
@@ -226,10 +210,60 @@ class TestGrammarModuleRun:
         assert len(result.errors) == 1
         assert result.errors[0]["error_tag"] == "article"
 
-        assert len(result.metadata["btw_entries"]) == 1
-        assert isinstance(result.metadata["btw_entries"][0], BtwEntry)
-        assert result.metadata["btw_entries"][0].answer == "The nominative case marks the subject of the sentence."
-        assert len(session_content.btw_log) == 1
+        assert result.metadata == {}
+        assert session_content.btw_log == []
+
+    def test_another_exercise_accepted_pools_both_rounds(self):
+        """Answering 'y' to the continuation prompt runs a second round on the
+        same topic, and the final session pools items/errors/score across both
+        rounds rather than keeping only the last one."""
+        from modules.grammar.agent import GrammarModule
+
+        mock_io = MagicMock(spec=IOHandler)
+        mock_io.show_cli_hints = True
+        mock_io.prompt.side_effect = ["Articles — nominative case", "y", "n"]
+        mock_io.prompt_block.side_effect = ["der", "falsch"]
+
+        resp_dump = LLMResponse(text="# Articles\nCore rule...", model="test-model")
+        round1_generate = LLMResponse(text=json.dumps({"exercises": [
+            {
+                "prompt": "___ Mann ist groß. (der/die/das)",
+                "type": "fill_in_the_blank",
+                "correct_answer": "der",
+                "accepted_answers": [],
+                "error_tag": "article",
+                "distractor_hint": "",
+            },
+        ]}), model="test-model")
+        round2_generate = LLMResponse(text=json.dumps({"exercises": [
+            {
+                "prompt": "True or false: nominative marks the subject.",
+                "type": "true_false",
+                "correct_answer": "richtig",
+                "accepted_answers": [],
+                "error_tag": "other",
+                "distractor_hint": "",
+            },
+        ]}), model="test-model")
+        round2_grade = LLMResponse(text=json.dumps({"results": [
+            {"index": 0, "correct": False, "feedback": "Should be 'richtig'."},
+        ]}), model="test-model")
+
+        llm = _make_llm([])
+        # Round 1's single exercise is graded locally (exact match, correct) —
+        # no grade_exercises call needed for it. Round 2's is wrong -> graded.
+        llm.complete.side_effect = [resp_dump, round1_generate, round2_generate, round2_grade]
+
+        module = GrammarModule()
+        ctx = _make_ctx()
+        result, session_content = module.run(ctx, llm, mock_io)
+
+        assert len(session_content.items) == 2  # one per round, pooled
+        assert session_content.items[0]["correct"] is True
+        assert session_content.items[1]["correct"] is False
+        assert session_content.score == 0.5  # 1 of 2 correct, across both rounds
+        assert len(result.errors) == 1
+        assert result.errors[0]["error_tag"] == "other"
 
     def test_no_exercises_produces_zero_score_without_prompting_for_answers(self):
         """generate_exercises failing must not crash and must not prompt for a block."""
@@ -262,7 +296,7 @@ class TestGrammarModuleRun:
 
         mock_io = MagicMock(spec=IOHandler)
         mock_io.show_cli_hints = True
-        mock_io.prompt.side_effect = ["My own topic"]
+        mock_io.prompt.side_effect = ["My own topic", "n"]
         mock_io.prompt_block.return_value = ""  # submit nothing
 
         resp_dump = LLMResponse(text="# Explanation", model="test-model")
@@ -276,11 +310,11 @@ class TestGrammarModuleRun:
                 "distractor_hint": "",
             },
             {
-                "prompt": "Rewrite in Perfekt: Ich gehe zur Schule.",
-                "type": "transformation",
-                "correct_answer": "Ich bin gegangen.",
+                "prompt": "___ Frau ist nett. (der/die/das)",
+                "type": "fill_in_the_blank",
+                "correct_answer": "die",
                 "accepted_answers": [],
-                "error_tag": "verb_tense",
+                "error_tag": "article",
                 "distractor_hint": "",
             },
         ]}), model="test-model")

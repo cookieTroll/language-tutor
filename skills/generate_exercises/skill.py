@@ -11,8 +11,8 @@ from skills.generate_exercises.prompts import GENERATE_EXERCISES_PROMPT, GENERIC
 class GenerateExercisesSkill(SkillProtocol):
     name = "generate_exercises"
     description = (
-        "Generates targeted exercises for a grammar topic, mixing exact-match and "
-        "open-ended types, each tagged with a taxonomy-validated error_tag."
+        "Generates targeted exercises for a grammar topic, all of a single "
+        "exercise type, each tagged with a taxonomy-validated error_tag."
     )
     skill_type = "session"
 
@@ -116,18 +116,15 @@ class GenerateExercisesSkill(SkillProtocol):
                     "distractor_hint": str(item.get("distractor_hint", "")),
                 })
 
-            # Defensive re-clustering: the prompt asks for same-type exercises
-            # grouped consecutively, but don't trust the model to always comply —
-            # regroup here (stable, by first occurrence) so display/grading always
-            # see one batch per type regardless of model output order. This is the
+            # Defensive single-type enforcement: the prompt asks for exactly one
+            # exercise type per batch, but smaller/local models don't reliably
+            # comply (observed: one exercise per type across several types in a
+            # single response) — enforce it here instead of trusting the model.
+            # Keep only exercises matching the first one's type; this is the
             # single source of exercise order, so both the UI and the positional
             # answer-line matching in modules/grammar/agent.py inherit it for free.
-            buckets: dict[str, list[dict]] = {}
-            for ex in parsed:
-                buckets.setdefault(ex["exercise_type"], []).append(ex)
-            grouped: list[dict] = [ex for bucket in buckets.values() for ex in bucket]
-
-            return grouped
+            single_type = parsed[0]["exercise_type"]
+            return [ex for ex in parsed if ex["exercise_type"] == single_type]
 
         try:
             exercises = call_with_self_correction(llm, messages, parse, temperature=0.6)

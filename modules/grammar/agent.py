@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from modules.protocols import ModuleProtocol, ContextRequest, ModuleContext, ModuleResult
-from memory.protocols import GrammarSessionContent, BtwEntry
+from memory.protocols import GrammarSessionContent
 from llm.base import BaseLLM
 from shared.io import IOHandler
 from shared.error_log import log_skill_error
@@ -13,29 +13,18 @@ from modules.grammar.skills import get_grammar_skills
 from lang.loader import get_exercise_types
 
 
-def parse_answer_block(raw_block: str, exercise_count: int) -> tuple[list[str], list[str]]:
-    """Splits a submitted answer block into (answer_lines, btw_questions).
-
-    /btw-prefixed lines are pulled out — handled inline, not counted as an
-    answer — and the remaining lines are padded/truncated to exactly
-    exercise_count, preserving order, so each line still lines up with its
-    exercise index by position.
+def parse_answer_block(raw_block: str, exercise_count: int) -> list[str]:
+    """Splits a submitted answer block into exactly exercise_count lines,
+    padded/truncated as needed, preserving order so each line still lines up
+    with its exercise index by position.
     """
-    btw_questions: list[str] = []
-    answer_lines: list[str] = []
-    for line in raw_block.split("\n"):
-        stripped = line.strip()
-        if stripped.startswith("/btw "):
-            btw_questions.append(stripped[5:].strip())
-        else:
-            answer_lines.append(line)
-
+    answer_lines = raw_block.split("\n")
     if len(answer_lines) < exercise_count:
         answer_lines = answer_lines + [""] * (exercise_count - len(answer_lines))
     else:
         answer_lines = answer_lines[:exercise_count]
 
-    return answer_lines, btw_questions
+    return answer_lines
 
 
 def _normalize(text: str) -> str:
@@ -77,41 +66,59 @@ class GrammarModule(ModuleProtocol):
         explanation = self._dump_grammar(ctx, topic_info, llm, io)
         self._display_explanation(ctx, topic_info, explanation, io)
 
-        exercises = self._generate_exercises(ctx, topic_info, llm, io)
-        self._display_exercises(ctx, exercises, io)
+        # Each round generates one batch of a single exercise type (see
+        # generate_exercises' prompt); after grading, the user can ask for
+        # another round on the same topic or end the session. All rounds'
+        # items/errors are pooled into one session file/score.
+        all_items: list[dict] = []
+        all_errors: list[dict] = []
 
-        if exercises:
-            raw_block = io.prompt_block(
-                "\nEnter your answers below, one per line, in the same order as the exercises."
-                "\nTo ask a question first, prefix a line with '/btw ' (e.g. /btw what does Perfekt mean?)."
-                "\nPress Enter on an empty line to submit."
-            )
-            answer_lines, btw_questions = parse_answer_block(raw_block, len(exercises))
-        else:
-            answer_lines, btw_questions = [], []
+        while True:
+            exercises = self._generate_exercises(ctx, topic_info, llm, io)
+            self._display_exercises(ctx, exercises, io)
 
-        btw_entries = [
-            self._handle_btw(ctx, topic_info["topic"], q, llm, io) for q in btw_questions
-        ]
+            if exercises:
+                raw_block = io.prompt_block(
+                    "\nEnter your answers below, one per line, in the same order as the exercises."
+                    "\nPress Enter on an empty line to submit."
+                )
+                answer_lines = parse_answer_block(raw_block, len(exercises))
+            else:
+                answer_lines = []
 
-        items, errors, score = self._grade_and_score(ctx, topic_info, exercises, answer_lines, llm)
-        self._display_results(items, score, io)
+            items, errors, score = self._grade_and_score(ctx, topic_info, exercises, answer_lines, llm)
+            self._display_results(items, score, io)
+            all_items.extend(items)
+            all_errors.extend(errors)
+
+            if not exercises:
+                break  # generation failed this round — nothing to repeat
+
+            again = io.prompt(
+                f"\nAnother exercise on '{topic_info['topic']}'? [Y/n]: "
+            ).strip().lower()
+            if again == "n":
+                break
 
         completed_at = datetime.now()
         duration_minutes = (completed_at - started_at).total_seconds() / 60.0
         task_label = self._task_label(topic_info)
+        overall_score = (
+            sum(1 for item in all_items if item["correct"]) / len(all_items)
+            if all_items else 0.0
+        )
 
         result = ModuleResult(
             session_id=session_id,
             module=self.name,
             task_label=task_label,
             task_description=f"Topic: {topic_info['topic']}",
-            errors=errors,
-            comment=f"Grammar session on '{topic_info['topic']}' — score {score:.0%}.",
+            errors=all_errors,
+            comment=f"Grammar session on '{topic_info['topic']}' — score {overall_score:.0%}.",
             started_at=started_at,
             completed_at=completed_at,
             duration_minutes=duration_minutes,
-            metadata={"btw_entries": btw_entries},
+            metadata={},
         )
 
         session_content = GrammarSessionContent(
@@ -126,17 +133,9 @@ class GrammarModule(ModuleProtocol):
             topic=topic_info["topic"],
             scope=topic_info["scope"],
             explanation=explanation,
-            items=items,
-            score=score,
-            btw_log=[
-                {
-                    "question": e.question,
-                    "answer": e.answer,
-                    "flagged_word": e.flagged_word,
-                    "timestamp": e.timestamp.strftime("%Y-%m-%dT%H:%M:%S"),
-                }
-                for e in btw_entries
-            ],
+            items=all_items,
+            score=overall_score,
+            btw_log=[],
         )
 
         return result, session_content
@@ -254,44 +253,6 @@ class GrammarModule(ModuleProtocol):
             groups[-1]["exercises"].append({"prompt": ex["prompt"]})
 
         io.render_exercises({"groups": groups})
-
-    def _handle_btw(
-        self, ctx: ModuleContext, topic: str, question: str, llm: BaseLLM, io: IOHandler
-    ) -> BtwEntry:
-        io.output(f"[*] Asking tutor: '{question}'...")
-        session_context = {
-            "module": self.name,
-            "topic": topic,
-            "user_text_so_far": "",
-            "level": ctx.level,
-            "language": ctx.language,
-        }
-        output = self.skills["btw_handler"].run(
-            SkillInput(
-                user_id=ctx.user_id,
-                level=ctx.level,
-                parameters={"question": question, "session_context": session_context},
-            ),
-            llm,
-        )
-        if not output.success:
-            # btw_handler's failure path puts the error text in "answer" itself, not "error"
-            log_skill_error(
-                self.name, "btw_handler", output.metadata.get("answer", ""),
-                {"level": ctx.level, "language": ctx.language, "topic": topic},
-            )
-        answer = output.metadata.get("answer", "No answer received.")
-        io.output(f"\nTutor: {answer}\n")
-        return BtwEntry(
-            btw_id=str(uuid.uuid4()),
-            session_id="",  # session_id not yet assigned at this point
-            user_id=ctx.user_id,
-            language=ctx.language,
-            question=question,
-            answer=answer,
-            flagged_word=output.metadata.get("flagged_word"),
-            timestamp=datetime.now(),
-        )
 
     def _grade_and_score(
         self,

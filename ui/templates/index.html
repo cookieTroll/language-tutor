@@ -253,7 +253,7 @@ mark.mistake-hl {
   0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
   40%           { opacity: 1;    transform: scale(1.15); }
 }
-#grammar-loading { padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+#grammar-loading, #grammar-grading { padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 
 /* Session (two-column) */
 #session { flex: 1; min-height: 0; display: none; flex-direction: column; overflow: hidden; }
@@ -355,6 +355,7 @@ mark.mistake-hl {
 .prog-item { font-size: 0.82rem; color: var(--sub); }
 .prog-item.active { color: var(--accent); }
 .prog-item.done   { color: var(--green); }
+.prog-item.eval-heading { color: var(--muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
 
 /* Right column: tutor panel */
 #right-col {
@@ -502,8 +503,13 @@ mark.mistake-hl {
         <div id="grammar-exercises"></div>
         <textarea id="writing-pad" placeholder="Begin writing here…&#10;&#10;Type line by line. Submit when ready."></textarea>
         <textarea id="grammar-pad" placeholder=""></textarea>
+        <div id="grammar-grading" class="loading-row">
+          <span>Evaluating</span>
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
         <div id="grammar-results"></div>
         <div id="eval-overlay">
+          <div class="prog-item eval-heading">Evaluating…</div>
           <div class="prog-item" id="p1">[1/6] Estimating text level</div>
           <div class="prog-item" id="p2">[2/6] Detecting mistakes</div>
           <div class="prog-item" id="p3">[3/6] Classifying mistakes</div>
