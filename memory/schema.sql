@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     completed_at DATETIME,
     duration_minutes REAL,
     text_level_estimate TEXT,
+    word_count INTEGER,
+    score REAL,
     FOREIGN KEY (user_id, language) REFERENCES user_profiles (user_id, language)
 );
 

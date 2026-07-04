@@ -35,10 +35,15 @@ class SQLiteSessionStore(BaseSessionStore):
             conn.executescript(schema_sql)
             # CREATE TABLE IF NOT EXISTS won't add columns to a table that already existed
             # before this field was introduced — migrate pre-existing local DBs in place.
-            try:
-                conn.execute("ALTER TABLE sessions ADD COLUMN text_level_estimate TEXT")
-            except sqlite3.OperationalError:
-                pass  # column already present
+            for ddl in (
+                "ALTER TABLE sessions ADD COLUMN text_level_estimate TEXT",
+                "ALTER TABLE sessions ADD COLUMN word_count INTEGER",
+                "ALTER TABLE sessions ADD COLUMN score REAL",
+            ):
+                try:
+                    conn.execute(ddl)
+                except sqlite3.OperationalError:
+                    pass  # column already present
             conn.commit()
         finally:
             conn.close()
@@ -80,6 +85,8 @@ class SQLiteSessionStore(BaseSessionStore):
             completed_at=self._str_to_dt(row["completed_at"]),
             duration_minutes=row["duration_minutes"],
             text_level_estimate=row["text_level_estimate"],
+            word_count=row["word_count"],
+            score=row["score"],
         )
 
     # 1. write_session(self, log: SessionLog) -> None
@@ -97,14 +104,15 @@ class SQLiteSessionStore(BaseSessionStore):
                     UPDATE sessions SET
                         user_id = ?, language = ?, module = ?, task_label = ?, task_description = ?,
                         comment = ?, level = ?, date = ?, file_path = ?, status = ?,
-                        started_at = ?, completed_at = ?, duration_minutes = ?, text_level_estimate = ?
+                        started_at = ?, completed_at = ?, duration_minutes = ?, text_level_estimate = ?,
+                        word_count = ?, score = ?
                     WHERE session_id = ?
                     """,
                     (
                         log.user_id, log.language, log.module, log.task_label, log.task_description,
                         log.comment, log.level, self._dt_to_str(log.date), log.file_path, log.status,
                         self._dt_to_str(log.started_at), self._dt_to_str(log.completed_at), log.duration_minutes,
-                        log.text_level_estimate, log.session_id
+                        log.text_level_estimate, log.word_count, log.score, log.session_id
                     )
                 )
             else:
@@ -113,14 +121,14 @@ class SQLiteSessionStore(BaseSessionStore):
                     INSERT INTO sessions (
                         session_id, user_id, language, module, task_label, task_description,
                         comment, level, date, file_path, status, started_at, completed_at, duration_minutes,
-                        text_level_estimate
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        text_level_estimate, word_count, score
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         log.session_id, log.user_id, log.language, log.module, log.task_label, log.task_description,
                         log.comment, log.level, self._dt_to_str(log.date), log.file_path, log.status,
                         self._dt_to_str(log.started_at), self._dt_to_str(log.completed_at), log.duration_minutes,
-                        log.text_level_estimate
+                        log.text_level_estimate, log.word_count, log.score
                     )
                 )
                 

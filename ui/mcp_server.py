@@ -113,6 +113,8 @@ def list_sessions(
             "status": s.status,
             "duration_minutes": s.duration_minutes,
             "text_level_estimate": s.text_level_estimate,
+            "word_count": s.word_count,
+            "score": s.score,
         }
         for s in sessions
     ]
