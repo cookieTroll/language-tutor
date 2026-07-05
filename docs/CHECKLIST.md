@@ -21,7 +21,7 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 - [ ] [ ] [ ] Document decisions in `docs/writing.md`; propagate to taxonomy maps and evaluator prompts
 - [ ] [ ] [ ] Research alternative error taxonomies — compare Weir's framework and SLA classification against current German taxonomy; identify gaps or tags worth adding
 - [ ] [ ] [ ] Define per-tag CEFR mastery level — the level at which each error type is expected to be mastered; drives Step 6 severity (`critical` / `expected` / `minor`)
-- [ ] [ ] [ ] Evaluate whether taxonomy tags surface to the user directly or are mapped to learner-friendly labels in the UI layer
+- [x] [ ] [ ] Evaluate whether taxonomy tags surface to the user directly or are mapped to learner-friendly labels in the UI layer — resolved: raw `error_tag` values (`verb_conjugation`, etc.) now go through `shared/humanize.py::humanize_tag()` (underscore→space, title case) at every render/display site (`TerminalIOHandler`/`WebIOHandler` in `shared/io.py`, plus a `humanize_tag` Jinja filter used in `session.html`/`sessions.html`) rather than being stored or re-derived per site. `weak_tags`/`strong_tags` needed no change — `orchestrator/mastery.py` already resolves those to full taxonomy descriptions or grammar topic names, not raw tag keys
 
 ### Fluency & Idiomatics (deferred — depends on Layer 1a rubric decisions)
 - [ ] [ ] [ ] Define scope: what counts as an idiomatic issue vs a grammar error; which CEFR levels activate this check (suggest B1+)
@@ -71,6 +71,43 @@ Finished items live in `CHECKLIST_FINISHED.md`.
 
 - [ ] [ ] [ ] Identify and evaluate the LLM inference optimization package (cache efficiency + low-level throughput improvements); assess fit with `llm/` abstraction layer and document findings in `docs/llm_backends.md`
 - [ ] [ ] [ ] Investigate `/btw` response latency — measure time from question submission to answer; evaluate whether prompt size, token budget, or the Gemini API cold path is the dominant factor
+
+---
+
+## Language Generation & Configurability
+
+> The `lang/` package (`lang/loader.py`, `lang/models.py`, `lang/maps/*`, `lang/languages/*.yaml`)
+> is already architected to be language-agnostic — a new target language is just new content
+> files in the same shape, no loader/model changes needed. Today that content is hand-authored
+> (German is the only populated language). This section starts closing that gap.
+
+### Generation Utility (in progress — `feature/generate-language-assets`)
+- [ ] [ ] [ ] `lang/generate.py` — `generate_taxonomy` / `generate_cefr_hints` / `generate_grammar_topics`, each validated via the existing Pydantic models (`TaxonomyMap` / `CEFRMap` / `GrammarTopicsMap`) through `skills.protocols.call_with_self_correction`; `write_language_assets()` writes all four files and re-validates end-to-end via a fresh `lang.loader._Registry` pointed at the real `lang/maps`/`lang/languages` directories — reuses the exact cross-reference validation `lang/loader.py` already runs at import time instead of duplicating it
+- [ ] [ ] [ ] `lang/generate_prompts.py` — prompt templates for the three generators (compact inlined example, not the full German file, to keep token cost sane)
+- [ ] [ ] [ ] `scripts/generate_language.py` — CLI entry (`python -m scripts.generate_language <language>`), wires config/LLM the same way `ui/cli.py::main` does; refuses to overwrite an existing `lang/languages/{name}.yaml` without `--force`
+- [ ] [ ] [ ] `lang/loader.py::is_configured()` + `orchestrator._check_language_config` + `ui/cli.py::_language_config_warning` — when a user picks a language with no config file at all, tell them it needs generating (and how) instead of silently falling back to generic defaults
+- [ ] [ ] [ ] `tests/unit/lang/test_generate.py` — mocked-LLM coverage: happy-path parse/validate per generator, self-correction retry when a generated grammar topic references an unknown taxonomy tag, round-trip through a fresh `_Registry` at `tmp_path`
+- [ ] [ ] [ ] Manual smoke test: generate a real second language against a live LLM, inspect the output, run one grammar session end-to-end in that language
+
+### Backlog — Message Catalog (i18n for non-LLM backend text)
+> Not started. `orchestrator.py` has ~14 `io.output`/`io.prompt` call sites (menus, confirmations,
+> status lines) hardcoded in English, independent of `profile.explanation_language` — a user with
+> `explanation_language: spanish` still gets English menus and confirmations. This is distinct from
+> LLM-generated content (feedback, explanations, exercises), which is already parametrized via
+> `{language}`/`{explanation_language}` in nearly every `skills/*/prompts.py` template — only
+> `skills/write_correction/prompts.py` still has real hardcoded German prose to generalize.
+- [ ] [ ] [ ] Design a `lang/messages/{language}.yaml` catalog (id-keyed strings), loaded the same way `lang/maps/*` is (per-concept default + language override)
+- [ ] [ ] [ ] Extract `orchestrator.py`'s hardcoded `io.output`/`io.prompt` strings into catalog lookups
+- [ ] [ ] [ ] Extend the generation utility (above) to also generate a language's message catalog, not just the LLM-facing maps
+
+### Backlog — Fully Configurable Origin / Target / Communication Languages
+> End goal: a catalog of supported languages (backed by `lang/languages/*.yaml` plus the message
+> catalog above) that the user picks from along three independent axes — origin/native language,
+> target/study language, and communication (explanation) language — with an unsupported pick
+> pointed at the generation utility rather than silently degrading to generic defaults.
+- [ ] [ ] [ ] Model "origin language" explicitly — today `UserProfile` only has `language` (target) and `explanation_language`; no distinct native-language concept exists
+- [ ] [ ] [ ] Expose the available-languages catalog to the selection flow (CLI + web) — `lang.loader` already holds the registry internally; needs a public "list configured languages" accessor
+- [ ] [ ] [ ] Validate user selection against the catalog for all three axes; surface "needs generation" consistently across CLI and web, not just the CLI warning path added above
 
 ---
 

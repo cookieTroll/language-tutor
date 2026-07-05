@@ -147,7 +147,7 @@ h2 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 1px; color: 
     {% for m in mistakes %}
     <div class="mistake {{ m.get('severity','') }}">
       <div><span class="frag">{{ m.get('fragment','') }}</span> &rarr; <span class="corr">{{ m.get('correction','') }}</span></div>
-      <div class="tag">[{{ m.get('error_tag','') }}]{% if m.get('severity') %} &middot; {{ m['severity'] }}{% endif %}</div>
+      <div class="tag">[{{ m.get('error_tag','')|humanize_tag }}]{% if m.get('severity') %} &middot; {{ m['severity'] }}{% endif %}</div>
       <div class="expl">{{ m.get('explanation','') }}</div>
     </div>
     {% endfor %}

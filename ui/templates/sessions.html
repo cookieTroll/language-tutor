@@ -77,7 +77,7 @@ tr:hover td { background: var(--panel); }
   <div class="freq-chart">
     {% for tag, count in top_errors %}
     <div class="freq-row">
-      <span class="freq-tag">{{ tag }}</span>
+      <span class="freq-tag">{{ tag|humanize_tag }}</span>
       <div class="freq-bar-wrap">
         <div class="freq-bar" style="width:{{ (count / max_freq * 100)|int }}%"></div>
       </div>
@@ -103,7 +103,7 @@ tr:hover td { background: var(--panel); }
       <td><a href="/sessions/{{ s.rel_path }}">{{ s.topic or '—' }}</a></td>
       <td>
         {% for tag in s.error_tags[:4] %}
-        <span class="tag-chip">{{ tag }}</span>
+        <span class="tag-chip">{{ tag|humanize_tag }}</span>
         {% endfor %}
         {% if s.error_tags|length > 4 %}
         <span class="tag-chip">+{{ s.error_tags|length - 4 }}</span>

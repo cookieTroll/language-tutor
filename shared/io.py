@@ -1,6 +1,7 @@
 from typing import Protocol
 from queue import Queue, Empty
 from shared.timer import SessionTimer
+from shared.humanize import humanize_tag
 
 
 class IOHandler(Protocol):
@@ -94,7 +95,7 @@ class TerminalIOHandler:
                 for m in groups[sev]:
                     counter += 1
                     self.output(
-                        f"{counter}. [{m['error_tag']}] '{m['fragment']}'"
+                        f"{counter}. [{humanize_tag(m['error_tag'])}] '{m['fragment']}'"
                         f"\n   Correction : {m['correction']}"
                         f"\n   Explanation: {m['explanation']}\n"
                     )
@@ -222,6 +223,15 @@ class WebIOHandler:
         self._in_q.put(text)
 
     def render_evaluation(self, data: dict) -> None:
+        # Humanize a display copy of each mistake's error_tag — never mutates the
+        # caller's data, whose raw tag values are the real error_frequency keys.
+        # Keys not present on the source dict are left absent, not synthesized.
+        mistakes = data.get("explained_mistakes")
+        if mistakes:
+            data = {**data, "explained_mistakes": [
+                {**m, **({"error_tag": humanize_tag(m["error_tag"])} if "error_tag" in m else {})}
+                for m in mistakes
+            ]}
         self._out_q.put({"type": "data", "payload": {"event": "evaluation_complete", **data}})
 
     def render_exercises(self, data: dict) -> None:
@@ -231,6 +241,9 @@ class WebIOHandler:
         self._out_q.put({"type": "data", "payload": {"event": "grammar_results_complete", **data}})
 
     def render_progress(self, data: dict) -> None:
+        # weak_tags/strong_tags (orchestrator/mastery.py) are already human-readable
+        # text (taxonomy descriptions or grammar topic names), not raw tag keys —
+        # unlike error_tag above, nothing to humanize here.
         self._out_q.put({"type": "data", "payload": {"event": "progress_ready", **data}})
 
     def start_timer(self, label: str = "Writing") -> None:
