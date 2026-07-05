@@ -39,6 +39,7 @@ class SQLiteSessionStore(BaseSessionStore):
                 "ALTER TABLE sessions ADD COLUMN text_level_estimate TEXT",
                 "ALTER TABLE sessions ADD COLUMN word_count INTEGER",
                 "ALTER TABLE sessions ADD COLUMN score REAL",
+                "ALTER TABLE user_profiles ADD COLUMN explanation_language TEXT NOT NULL DEFAULT 'english'",
             ):
                 try:
                     conn.execute(ddl)
@@ -483,7 +484,8 @@ class SQLiteSessionStore(BaseSessionStore):
                     level_source=row["level_source"],
                     active=bool(row["active"]),
                     created_at=self._str_to_dt(row["created_at"]),
-                    updated_at=self._str_to_dt(row["updated_at"])
+                    updated_at=self._str_to_dt(row["updated_at"]),
+                    explanation_language=row["explanation_language"],
                 )
             return None
         finally:
@@ -498,17 +500,20 @@ class SQLiteSessionStore(BaseSessionStore):
                 
             conn.execute(
                 """
-                INSERT INTO user_profiles (user_id, language, level, level_source, active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO user_profiles
+                    (user_id, language, level, level_source, active, created_at, updated_at, explanation_language)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id, language) DO UPDATE SET
                     level = excluded.level,
                     level_source = excluded.level_source,
                     active = excluded.active,
-                    updated_at = excluded.updated_at
+                    updated_at = excluded.updated_at,
+                    explanation_language = excluded.explanation_language
                 """,
                 (
                     profile.user_id, profile.language, profile.level, profile.level_source,
-                    1 if profile.active else 0, self._dt_to_str(profile.created_at), self._dt_to_str(profile.updated_at)
+                    1 if profile.active else 0, self._dt_to_str(profile.created_at), self._dt_to_str(profile.updated_at),
+                    profile.explanation_language,
                 )
             )
             conn.commit()

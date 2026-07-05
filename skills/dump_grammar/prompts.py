@@ -8,6 +8,10 @@ DUMP_GRAMMAR_PROMPT = """\
 You are a {language} grammar teacher writing a comprehensive explanation of:
 "{topic}"
 
+Write the explanation itself in {explanation_language} — {language} is the subject \
+being taught (grammar terms, declension/conjugation tables, and example sentences are \
+still in {language}), not the language to explain it in.
+
 Target level: {level}
 
 {scope_block}
@@ -25,7 +29,7 @@ Include:
   assume a form is standard just because it is being taught.
 
 MANDATORY — Examples section: include a dedicated "Examples" section with AT LEAST
-4 example sentences (aim for 4-6), each one on its own line with its English
+4 example sentences (aim for 4-6), each one on its own line with its {explanation_language}
 translation. Do not shorten this section or fold it into the rule discussion —
 it must be a clearly separated, numbered or bulleted list of full sentences.
 This is the most commonly skipped section, so do not omit or under-fill it.

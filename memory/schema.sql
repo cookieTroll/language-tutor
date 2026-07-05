@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     active BOOLEAN NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
+    explanation_language TEXT NOT NULL DEFAULT 'english',
     PRIMARY KEY (user_id, language)
 );
 

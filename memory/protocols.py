@@ -120,6 +120,9 @@ class UserProfile(BaseModel):
     active: bool                          # last language selected by user
     created_at: datetime
     updated_at: datetime
+    explanation_language: str = "english"  # meta-commentary language (dump_grammar,
+                                            # /history) — distinct from `language`,
+                                            # the target study language
 
     @field_validator("level")
     @classmethod

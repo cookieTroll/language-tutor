@@ -415,7 +415,8 @@ class JSONSessionStore(BaseSessionStore):
                 level_source=row["level_source"],
                 active=bool(row["active"]),
                 created_at=self._str_to_dt(row["created_at"]),
-                updated_at=self._str_to_dt(row["updated_at"])
+                updated_at=self._str_to_dt(row["updated_at"]),
+                explanation_language=row.get("explanation_language", "english"),
             )
         return None
 
@@ -435,7 +436,8 @@ class JSONSessionStore(BaseSessionStore):
             "level_source": profile.level_source,
             "active": True if profile.active else False,
             "created_at": self._dt_to_str(profile.created_at),
-            "updated_at": self._dt_to_str(profile.updated_at)
+            "updated_at": self._dt_to_str(profile.updated_at),
+            "explanation_language": profile.explanation_language,
         }
         self._write(self.profiles_file, profiles)
 

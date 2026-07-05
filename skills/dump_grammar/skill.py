@@ -15,6 +15,7 @@ class DumpGrammarSkill(SkillProtocol):
     def run(self, input: SkillInput, llm: BaseLLM) -> SkillOutput:
         topic = input.parameters.get("topic", "").strip()
         language = input.parameters.get("language", "German").capitalize()
+        explanation_language = (input.parameters.get("explanation_language") or "english").capitalize()
 
         if not topic:
             return SkillOutput(
@@ -35,6 +36,7 @@ class DumpGrammarSkill(SkillProtocol):
 
         prompt = DUMP_GRAMMAR_PROMPT.format(
             language=language,
+            explanation_language=explanation_language,
             topic=topic,
             level=input.level.upper(),
             scope_block=scope_block,

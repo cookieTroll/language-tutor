@@ -29,6 +29,7 @@ class SummarizeWritingHistorySkill:
 
     def run(self, input: SkillInput, llm: BaseLLM) -> SkillOutput:
         language: str = input.parameters.get("language", "").capitalize()
+        report_language: str = (input.parameters.get("report_language") or "english").capitalize()
         scope_label: str = input.parameters.get("scope_label", "your recent sessions")
         topics: list[str] = input.parameters.get("topics", [])
         recurring_mistakes: list[dict] = input.parameters.get("recurring_mistakes", [])
@@ -46,6 +47,7 @@ class SummarizeWritingHistorySkill:
 
         prompt = SUMMARIZE_WRITING_HISTORY_PROMPT.format(
             language=language,
+            report_language=report_language,
             level=input.level,
             scope_label=scope_label,
             topics=topics_str,
@@ -53,7 +55,10 @@ class SummarizeWritingHistorySkill:
             level_trend=trend_str,
         )
         messages = [
-            LLMMessage(role="system", content=f"You are an encouraging {language} language tutor."),
+            LLMMessage(
+                role="system",
+                content=f"You are an encouraging {language} language tutor, writing in {report_language}.",
+            ),
             LLMMessage(role="user", content=prompt),
         ]
 
