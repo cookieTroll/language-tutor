@@ -106,6 +106,7 @@ function handleExercisesReady(payload) {
   pad.disabled = false;
   pad.value = '';
   pad.focus();
+  startTimer(); // timer tracks time spent on this round's exercises, not the explanation reading time before it
   phase = 'writing'; // shared "collecting a submittable answer" phase, reused across modules —
                       // only set once exercises actually exist, so an early Submit/Ctrl+Enter
                       // can't be read as a (blank) answer before the pad is ready.
@@ -178,6 +179,7 @@ async function submitGrammarAnswers() {
   if (phase !== 'writing' || activeModule !== 'grammar') return;
   const pad = document.getElementById('grammar-pad');
 
+  stopTimer(); // timer tracks time spent answering this round, not the grading that follows
   phase = 'evaluating';
   pad.disabled = true;
   document.getElementById('submit-btn').disabled = true;

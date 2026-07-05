@@ -7,6 +7,7 @@ async function submitWriting() {
   const text  = pad.value.trim();
   if (!text) return;
 
+  stopTimer(); // timer tracks time spent writing, not the evaluation/follow-up that follows
   phase = 'evaluating';
   pad.disabled = true;
   document.getElementById('submit-btn').disabled = true;

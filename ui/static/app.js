@@ -104,6 +104,7 @@ function handleOutput(text) {
       activeModule = 'writing';
       phase = 'writing'; // writing pad is interactive immediately — unlike grammar,
                           // there's no further generation step before it's usable
+      startTimer(); // pad is usable right away, so this is the actual start of working time
       const reqMatch = text.match(/Requirements:\s*(.+)/);
       document.getElementById('writing-pad').style.display = 'block';
       document.getElementById('grammar-pad').style.display = 'none';
@@ -381,9 +382,14 @@ function switchToSession() {
   // since it differs between writing and grammar. Grammar's pad isn't interactive
   // yet at this point (exercises are still generating), so phase stays 'loading'
   // until handleExercisesReady() flips it — see grammar-ui.js.
+  //
+  // The timer itself is NOT started here — it's meant to track active working
+  // time (writing/answering exercises), not time spent reading a prompt or
+  // explanation first, so each module starts it once its pad actually becomes
+  // interactive (writing: right below in handleOutput's header branch; grammar:
+  // handleExercisesReady in grammar-ui.js) and stops it on submit.
   document.getElementById('setup').style.display   = 'none';
   document.getElementById('session').style.display = 'flex';
-  startTimer();
   phase = 'loading';
 }
 
@@ -395,6 +401,7 @@ function updateChip(id, text) {
 
 // ── Timer ─────────────────────────────────────────────────────────────────────
 function startTimer() {
+  clearInterval(timerInterval); // guard against a leaked interval if start/stop calls aren't perfectly paired
   timerStart = Date.now();
   timerInterval = setInterval(() => {
     const s = Math.floor((Date.now() - timerStart) / 1000);
