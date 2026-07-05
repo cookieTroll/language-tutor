@@ -150,11 +150,19 @@ class GrammarModule(ModuleProtocol):
         return slugify_topic(topic_info["topic"])
 
     def _pick_topic(self, ctx: ModuleContext, llm: BaseLLM, io: IOHandler) -> dict:
-        io.output("\nEnter your own grammar topic, or press Enter for a suggestion:")
-        user_input = io.prompt("> ").strip()
+        suggested_focus = ctx.parameters.get("suggested_focus")
 
-        if user_input:
-            return resolve_manual_topic(user_input, level=ctx.level, language=ctx.language)
+        # A suggested_focus here means the user already confirmed this session
+        # (either the initial recommendation screen or a chained next-action
+        # prompt) with this focus attached — asking again for a topic would be
+        # re-litigating a choice they already made. Skip straight to select_grammar,
+        # which does the level-aware pick using suggested_focus as a hint.
+        if suggested_focus is None:
+            io.output("\nEnter your own grammar topic, or press Enter for a suggestion:")
+            user_input = io.prompt("> ").strip()
+
+            if user_input:
+                return resolve_manual_topic(user_input, level=ctx.level, language=ctx.language)
 
         out = self.skills["select_grammar"].run(
             SkillInput(
@@ -164,7 +172,7 @@ class GrammarModule(ModuleProtocol):
                     "language": ctx.language,
                     "error_frequency": ctx.error_frequency,
                     "recent_topics": ctx.recent_topics,
-                    "suggested_focus": ctx.parameters.get("suggested_focus"),
+                    "suggested_focus": suggested_focus,
                 },
             ),
             llm,
@@ -188,7 +196,11 @@ class GrammarModule(ModuleProtocol):
             SkillInput(
                 user_id=ctx.user_id,
                 level=ctx.level,
-                parameters={"topic": topic_info["topic"], "language": ctx.language},
+                parameters={
+                    "topic": topic_info["topic"],
+                    "language": ctx.language,
+                    "explanation_language": ctx.parameters.get("explanation_language"),
+                },
             ),
             llm,
         )

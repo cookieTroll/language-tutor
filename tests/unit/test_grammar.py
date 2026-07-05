@@ -132,12 +132,15 @@ class TestGrammarModuleRun:
     def test_suggested_focus_from_orchestrator_reaches_select_grammar(self):
         """ctx.parameters['suggested_focus'] (set by the orchestrator's
         recommendation) must be threaded into select_grammar's prompt so the
-        module actually honors what the confirm screen suggested."""
+        module actually honors what the confirm screen suggested. It must also
+        skip the manual "enter your own topic" prompt entirely — the user
+        already confirmed this focus at the recommendation/next-action screen,
+        so re-asking would be reconfirming a choice they already made."""
         from modules.grammar.agent import GrammarModule
 
         mock_io = MagicMock(spec=IOHandler)
         mock_io.show_cli_hints = True
-        mock_io.prompt.side_effect = [""]
+        mock_io.prompt.side_effect = []  # no topic prompt expected — see docstring
         mock_io.prompt_block.return_value = ""
 
         resp_select = LLMResponse(text=json.dumps({
@@ -156,6 +159,7 @@ class TestGrammarModuleRun:
         ctx = _make_ctx(parameters={"suggested_focus": "noun_declension"})
         module.run(ctx, llm, mock_io)
 
+        mock_io.prompt.assert_not_called()
         select_grammar_prompt = llm.complete.call_args_list[0].args[0][0].content
         assert "noun_declension" in select_grammar_prompt
 
