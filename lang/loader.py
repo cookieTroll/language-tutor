@@ -115,6 +115,12 @@ class _Registry:
                                 f"Must be one of {sorted(taxonomy_map.tag_set)}"
                             )
 
+    def is_configured(self, language: str) -> bool:
+        """Whether `language` has its own lang/languages/{name}.yaml config file at
+        all — distinct from is_default(), which reports partial defaults for a
+        language that does have one."""
+        return language.lower() in self._languages
+
     def is_default(self, language: str) -> dict[str, bool]:
         """Return which maps are falling back to defaults for the given language."""
         config = self._languages.get(language.lower())
@@ -203,6 +209,11 @@ def get_cefr_descriptors(language: str) -> str:
 def get_writing_min_words(language: str, level: str) -> int:
     """Return the minimum word count for a writing session at the given CEFR level."""
     return _registry.get_writing_min_words(language, level)
+
+
+def is_configured(language: str) -> bool:
+    """Return whether `language` has a lang/languages/{name}.yaml config file at all."""
+    return _registry.is_configured(language)
 
 
 def using_defaults(language: str) -> dict[str, bool]:

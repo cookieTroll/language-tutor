@@ -1,0 +1,7 @@
+name: czech
+cefr_hints: czech_map1
+taxonomy: czech_taxonomy_v1
+cefr_descriptors: default
+writing_word_ranges: default
+grammar_topics: czech_a1_b2
+exercise_types: default

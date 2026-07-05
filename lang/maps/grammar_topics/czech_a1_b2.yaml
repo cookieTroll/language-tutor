@@ -1,0 +1,127 @@
+- topic: Basic Noun Declension (Singular)
+  difficulty: a1
+  scope: major
+  related_error_tags:
+  - inflection
+  - agreement
+  in_scope:
+  - Masculine animate/inanimate, feminine, neuter singular declension for Nominative,
+    Accusative, Locative, and Dative cases.
+  - Basic identification of noun gender and declension pattern.
+  out_of_scope:
+  - Plural declension, Instrumental, Genitive, Vocative cases.
+  - Irregular nouns or advanced declension patterns.
+- topic: Present Tense Conjugation
+  difficulty: a1
+  scope: major
+  related_error_tags:
+  - inflection
+  - tense_aspect
+  in_scope:
+  - Conjugation patterns for common regular verbs in the present tense.
+  - Conjugation of the verb 'být' (to be).
+  out_of_scope:
+  - Irregular verbs beyond 'být'.
+  - Past or future tense formation, verb aspect distinction.
+- topic: Past Tense Formation and Agreement
+  difficulty: a2
+  scope: major
+  related_error_tags:
+  - inflection
+  - tense_aspect
+  - agreement
+  in_scope:
+  - Formation of the past tense using the -l participle and the auxiliary verb 'být'.
+  - Gender and number agreement of the past participle with the subject.
+  out_of_scope:
+  - Future tense formation.
+  - Complex aspectual nuances in past contexts or reported speech.
+- topic: All Noun Cases (Singular) and Basic Prepositions
+  difficulty: a2
+  scope: major
+  related_error_tags:
+  - inflection
+  - preposition
+  in_scope:
+  - Genitive, Instrumental, and Vocative singular for all noun genders.
+  - Basic prepositions governing specific cases (e.g., 'v' + Locative, 's' + Instrumental).
+  out_of_scope:
+  - Plural noun declension.
+  - Advanced prepositional usage or numerical expressions.
+- topic: Adjective Declension (Singular) and Agreement
+  difficulty: a2
+  scope: major
+  related_error_tags:
+  - inflection
+  - agreement
+  in_scope:
+  - Hard and soft adjective declension in all cases for singular nouns.
+  - Agreement of adjectives in gender, number, and case with the noun they modify.
+  out_of_scope:
+  - Plural adjective declension.
+  - Comparative or superlative forms of adjectives.
+- topic: Noun Declension (Plural)
+  difficulty: b1
+  scope: major
+  related_error_tags:
+  - inflection
+  - agreement
+  - preposition
+  in_scope:
+  - Declension of all noun genders in the plural for all seven cases.
+  - Usage of plural nouns with prepositions.
+  out_of_scope:
+  - Irregular plural forms or highly idiomatic plural expressions.
+  - Advanced numerical expressions requiring specific case usage.
+- topic: Verb Aspect (Imperfective vs. Perfective)
+  difficulty: b1
+  scope: major
+  related_error_tags:
+  - tense_aspect
+  - vocabulary
+  in_scope:
+  - Understanding the fundamental difference between imperfective and perfective verbs.
+  - Identifying basic aspectual pairs and their usage in present, past, and future
+    contexts.
+  out_of_scope:
+  - Iterative verbs or complex aspectual nuances with prefixes.
+  - Derived imperfectives or verbs with multiple aspectual partners.
+- topic: Reflexive Pronouns and Verbs
+  difficulty: b1
+  scope: major
+  related_error_tags:
+  - pronoun_reflexive
+  - word_order
+  in_scope:
+  - Basic use of 'se' (accusative reflexive pronoun) and 'si' (dative reflexive pronoun).
+  - Common reflexive verbs and the rules for clitic placement of 'se'/'si'.
+  out_of_scope:
+  - Reciprocal pronouns or complex idiomatic reflexive expressions.
+  - Reflexive possessive pronouns ('svůj').
+- topic: Conditional Mood
+  difficulty: b2
+  scope: major
+  related_error_tags:
+  - tense_aspect
+  - inflection
+  - word_order
+  in_scope:
+  - Formation of present and past conditional sentences using 'bych', 'bys', 'by',
+    etc., and the past participle.
+  - Basic word order rules within conditional clauses.
+  out_of_scope:
+  - Subjunctive mood (not a primary feature of Czech).
+  - Conditional clauses with specific conjunctions like 'pokud' or 'jestliže'.
+- topic: Numerals and Their Case Government
+  difficulty: b2
+  scope: major
+  related_error_tags:
+  - inflection
+  - agreement
+  - word_order
+  in_scope:
+  - Cardinal numerals 1-100 and their declension.
+  - Agreement of nouns and adjectives with numerals (e.g., 'dvě ženy', 'pět mužů').
+  out_of_scope:
+  - Ordinal numerals or fractional numbers.
+  - Complex numerical expressions involving large numbers or specific units of measurement.

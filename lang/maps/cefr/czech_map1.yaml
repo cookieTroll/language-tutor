@@ -1,0 +1,8 @@
+a1: Focus on spelling_diacritics, inflection, and basic vocabulary.
+a2: Focus on inflection, agreement, and preposition.
+b1: Focus on tense_aspect, word_order, and pronoun_reflexive.
+b2: Focus on tense_aspect, word_order, and vocabulary precision.
+c1: Focus on subtle vocabulary choices, register, and idiomatic usage.
+c2: Focus on register, stylistic nuance, and near-native correctness.
+default: Identify all grammatical, lexical, and spelling errors appropriate to the
+  learner's level.

@@ -1,0 +1,15 @@
+tags:
+  inflection: Incorrect form of a word due to wrong case, number, gender, person,
+    or tense marking (e.g., noun declension, verb conjugation).
+  agreement: Mismatch in grammatical features (gender, number, case, person) between
+    words that should agree (e.g., adjective-noun, subject-verb participle).
+  word_order: Incorrect placement of words or phrases within a sentence or clause.
+  tense_aspect: Incorrect use of verb tense or aspect (perfective/imperfective).
+  preposition: Incorrect choice, omission, or case government of a preposition.
+  vocabulary: Incorrect word choice, inappropriate register, or use of a non-existent
+    word.
+  spelling_diacritics: Orthographic error, including incorrect use or omission of
+    diacritics (háček, čárka, kroužek).
+  pronoun_reflexive: Incorrect use, form, or placement of pronouns, including reflexive
+    pronouns and clitics.
+  other: Error does not clearly fit any category above — use as last resort
