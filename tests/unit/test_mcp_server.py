@@ -1,5 +1,3 @@
-import tempfile
-import shutil
 from datetime import datetime, timedelta
 
 import pytest
@@ -10,10 +8,10 @@ from memory.protocols import UserProfile, SessionLog, VocabFlag, WritingSessionC
 
 
 @pytest.fixture
-def seeded(monkeypatch):
+def seeded(tmp_path, monkeypatch):
     """Point the module's module-level _store/_config at an isolated temp store,
     seeded with one writing session, one profile, and one vocab flag for 'alice'."""
-    temp_dir = tempfile.mkdtemp()
+    temp_dir = str(tmp_path)
     store = SQLiteSessionStore(data_root=temp_dir)
     monkeypatch.setattr(srv, "_store", store)
     monkeypatch.setattr(srv._config, "data_root", temp_dir)
@@ -46,7 +44,6 @@ def seeded(monkeypatch):
                   translation="cat", source="manual", first_seen=now, last_seen=now, occurrence_count=1)
     )
     yield store
-    shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def test_list_users_and_languages(seeded):

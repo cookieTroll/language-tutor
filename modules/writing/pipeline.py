@@ -30,36 +30,44 @@ class PipelineResult:
 
 class WritingPipeline:
     """
-    Sequences the 6-skill evaluator pipeline for a writing session.
+    Sequences the 7-skill evaluator pipeline for a writing session.
 
-    Execution order (note: Step 5 runs before Step 1 — it is independent):
+    Execution order (Steps 1 and 2 run in parallel — independent of each other):
 
-        Step 5  estimate_text_level   — CEFR estimate of the submitted text; runs
+        Step 1  estimate_text_level   — CEFR estimate of the submitted text; runs
                                         unconditionally and is carried through even
                                         if the error pipeline short-circuits.
 
-        Step 1  detect_mistakes       — raw mistake detection on the user text;
+        Step 2  detect_mistakes       — raw mistake detection on the user text;
                                         GATE: if this fails (bad JSON / LLM error)
                                         the pipeline returns early with
                                         detector_success=False and no further LLM
                                         calls are made.
 
-        Step 2  classify_mistakes     — maps raw fragments to taxonomy error_tags
+        Step 3  verify_mistakes       — re-checks each raw fragment against its
+                                        original sentence context and drops false
+                                        positives (detect_mistakes judges the whole
+                                        text in one pass and can misjudge a fragment,
+                                        e.g. correct verb-second inversion, in
+                                        isolation) before anything downstream treats
+                                        it as a real error.
+
+        Step 4  classify_mistakes     — maps verified fragments to taxonomy error_tags
                                         (e.g. verb_conjugation, article_gender).
 
-        Step 3  explain_mistakes      — adds a learner-facing pedagogical explanation
+        Step 5  explain_mistakes      — adds a learner-facing pedagogical explanation
                                         to each classified mistake.
 
-        Step 4  write_correction      — rewrites the full user text with all mistakes
+        Step 6  write_correction      — rewrites the full user text with all mistakes
                                         corrected; preserves voice and register.
 
-        Step 6  summarise_writing_session — enriches mistakes with severity labels
+        Step 7  summarise_writing_session — enriches mistakes with severity labels
                                         (critical / expected / minor), generates
                                         session_summary and tips[].
 
     Data flow: each step receives only the output it needs from previous steps —
-    raw_mistakes → classified_mistakes → explained_mistakes flows linearly.
-    Steps 5 and 6 both receive user_text and writing_prompt directly.
+    raw_mistakes → verified_mistakes → classified_mistakes → explained_mistakes
+    flows linearly. Steps 1 and 7 both receive user_text and writing_prompt directly.
     """
 
     def __init__(self, skills: dict):
@@ -101,8 +109,8 @@ class WritingPipeline:
             return result
 
         # Steps 1 + 2 in parallel — both only need user_text/writing_prompt
-        _progress("[1/6] Estimating text level…")
-        _progress("[2/6] Detecting mistakes…")
+        _progress("[1/7] Estimating text level…")
+        _progress("[2/7] Detecting mistakes…")
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
             f1 = ex.submit(_timed, 1, "estimate_text_level", SkillInput(
                 user_id=ctx.user_id, level=ctx.level,
@@ -133,31 +141,41 @@ class WritingPipeline:
             )
         raw_mistakes = detector_output.metadata.get("raw_mistakes", [])
 
-        # Step 3: classify against taxonomy
-        _progress("[3/6] Classifying mistakes…")
-        classify_output = _check(_timed(3, "classify_mistakes", SkillInput(
+        # Step 3: re-check each candidate against its original sentence context
+        # and drop false positives before anything downstream classifies/explains/
+        # corrects them as if they were real errors.
+        _progress("[3/7] Verifying candidate errors…")
+        verify_output = _check(_timed(3, "verify_mistakes", SkillInput(
             user_id=ctx.user_id, level=ctx.level,
-            parameters={"raw_mistakes": raw_mistakes, "language": ctx.language},
+            parameters={"raw_mistakes": raw_mistakes, "user_text": user_text, "language": ctx.language},
+        )), "verify_mistakes")
+        verified_mistakes = verify_output.metadata.get("verified_mistakes", raw_mistakes)
+
+        # Step 4: classify against taxonomy
+        _progress("[4/7] Classifying mistakes…")
+        classify_output = _check(_timed(4, "classify_mistakes", SkillInput(
+            user_id=ctx.user_id, level=ctx.level,
+            parameters={"raw_mistakes": verified_mistakes, "language": ctx.language},
         )), "classify_mistakes")
         classified_mistakes = classify_output.metadata.get("classified_mistakes", [])
 
-        # Step 4: add pedagogical explanations
-        _progress("[4/6] Adding explanations…")
-        explain_output = _check(_timed(4, "explain_mistakes", SkillInput(
+        # Step 5: add pedagogical explanations
+        _progress("[5/7] Adding explanations…")
+        explain_output = _check(_timed(5, "explain_mistakes", SkillInput(
             user_id=ctx.user_id, level=ctx.level,
             parameters={"classified_mistakes": classified_mistakes, "language": ctx.language},
         )), "explain_mistakes")
         explained_mistakes = explain_output.metadata.get("explained_mistakes", [])
 
-        # Steps 5 + 6 in parallel — both only need explained_mistakes from step 4
-        _progress("[5/6] Writing corrected version…")
-        _progress("[6/6] Generating summary and tips…")
+        # Steps 6 + 7 in parallel — both only need explained_mistakes from step 5
+        _progress("[6/7] Writing corrected version…")
+        _progress("[7/7] Generating summary and tips…")
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-            f5 = ex.submit(_timed, 5, "write_correction", SkillInput(
+            f6 = ex.submit(_timed, 6, "write_correction", SkillInput(
                 user_id=ctx.user_id, level=ctx.level,
                 parameters={"user_text": user_text, "explained_mistakes": explained_mistakes, "language": ctx.language},
             ))
-            f6 = ex.submit(_timed, 6, "summarise_writing_session", SkillInput(
+            f7 = ex.submit(_timed, 7, "summarise_writing_session", SkillInput(
                 user_id=ctx.user_id, level=ctx.level,
                 parameters={
                     "user_text": user_text,
@@ -168,8 +186,8 @@ class WritingPipeline:
                     "language": ctx.language,
                 },
             ))
-        correction_output = _check(f5.result(), "write_correction")
-        summary_output    = _check(f6.result(), "summarise_writing_session")
+        correction_output = _check(f6.result(), "write_correction")
+        summary_output    = _check(f7.result(), "summarise_writing_session")
         corrected_text = correction_output.metadata.get("corrected_text", user_text)
         return PipelineResult(
             detector_success=True,

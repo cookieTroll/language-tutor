@@ -139,7 +139,7 @@ function handleOutput(text) {
       document.getElementById('grammar-resizer').style.display = 'block';
       document.getElementById('word-count').style.display = 'none';
       if (topicMatch) document.getElementById('grammar-topic-title').textContent = topicMatch[1].trim();
-      document.getElementById('grammar-explanation').textContent = explMatch ? explMatch[1].trim() : '';
+      document.getElementById('grammar-explanation').innerHTML = explMatch ? renderMarkdown(explMatch[1].trim()) : '';
       updateChip('chip-module', 'Grammar');
       // Exercises are still being generated at this point (phase stays 'loading' —
       // see handleExercisesReady in grammar-ui.js) — show a "preparing" indicator
@@ -169,7 +169,7 @@ function handleOutput(text) {
     appendSetup(text);
   } else {
     // Detect pipeline progress steps (writing evaluation only)
-    const stepMatch = text.match(/^\[(\d+)\/6\]/);
+    const stepMatch = text.match(/^\[(\d+)\/7\]/);
     if (stepMatch) {
       const n = parseInt(stepMatch[1]);
       markEvalStep(n);
@@ -255,6 +255,7 @@ function handlePrompt(text) {
   if (!inSessionPhase) {
     // Setup prompts
     if (pendingTopic && lastOutputText.includes('suggestion')) {
+      appendSetup('> ' + pendingTopic);
       sendInput(pendingTopic);
       sessionStorage.removeItem('retryTopic');
       pendingTopic = null;
@@ -267,6 +268,15 @@ function handlePrompt(text) {
 }
 
 function showChainPrompt(module, focus) {
+  // This prompt always renders into #tutor-output/#right-col — but a grammar
+  // session hides that whole column for its duration (see handleOutput's grammar
+  // branch). Restore it here regardless of which module just finished, or the
+  // Yes/No buttons below render invisible and the session is stuck waiting on
+  // input the user has no way to give.
+  document.getElementById('right-col').style.display = '';
+  document.getElementById('col-resizer').style.display = '';
+  document.getElementById('left-col').classList.remove('solo');
+
   const wrap = document.createElement('div');
   wrap.className = 'invite-msg';
   const focusText = focus ? ` on '${escapeHtml(focus)}'` : '';
@@ -443,7 +453,7 @@ async function sendInput(text) {
 
 // ── Eval progress ─────────────────────────────────────────────────────────────
 function markEvalStep(n) {
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 7; i++) {
     const el = document.getElementById('p' + i);
     if (!el) continue;
     el.classList.remove('active', 'done');

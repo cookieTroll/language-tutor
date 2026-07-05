@@ -59,7 +59,12 @@ def test_writing_module_run():
         text='{"mistakes": [{"fragment": "Ich aufstehen", "error_type_hint": "separable verb position"}]}',
         model="test-model"
     )
-    # 3. Step 2 — classify_mistakes
+    # 3. Step 1.5 — verify_mistakes
+    resp_verify = LLMResponse(
+        text='{"verified": [{"fragment": "Ich aufstehen", "keep": true}]}',
+        model="test-model"
+    )
+    # 4. Step 2 — classify_mistakes
     resp_classify = LLMResponse(
         text='{"classified": [{"fragment": "Ich aufstehen", "error_tag": "verb_conjugation", "correction": "Ich stehe auf"}]}',
         model="test-model"
@@ -84,7 +89,7 @@ def test_writing_module_run():
         }),
         model="test-model"
     )
-    llm.complete.side_effect = [resp_btw_ans, resp_detect, resp_classify, resp_explain, resp_correct, resp_summarise]
+    llm.complete.side_effect = [resp_btw_ans, resp_detect, resp_verify, resp_classify, resp_explain, resp_correct, resp_summarise]
 
     ctx = ModuleContext(
         user_id="user1",
@@ -191,6 +196,64 @@ def test_detect_mistakes_self_correction_retry():
     assert len(output.metadata["raw_mistakes"]) == 1
     assert output.metadata["raw_mistakes"][0]["fragment"] == "Ich aufstehen"
     assert llm.complete.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# _pick_topic — blank-input path calls TopicPickerSkill (Layer 1a)
+# ---------------------------------------------------------------------------
+
+def test_pick_topic_blank_input_uses_topic_picker_skill():
+    """Pressing Enter (blank topic input) must call the real TopicPickerSkill
+    and use its output — not just fall through to the manual-topic branch."""
+    import json
+    module = WritingModule()
+    ctx = _make_ctx()
+    mock_io = MagicMock(spec=IOHandler)
+    mock_io.prompt.return_value = ""  # blank -> defer to TopicPickerSkill
+
+    llm = MagicMock(spec=BaseLLM)
+    llm.config = MagicMock()
+    llm.config.max_skill_retries = 3
+    llm.config.show_incomplete_responses = False
+    llm.config.show_cut_by_limit_tag = True
+    llm.complete.return_value = LLMResponse(
+        text=json.dumps({
+            "topic": "Describe a recent trip.",
+            "requirements": "Minimum 100 words.",
+            "task_label": "recent_trip",
+        }),
+        model="test-model",
+    )
+
+    wp = module._pick_topic(ctx, llm, mock_io)
+
+    assert wp.topic == "Describe a recent trip."
+    assert wp.requirements == "Minimum 100 words."
+    assert wp.task_label == "recent_trip"
+
+
+def test_pick_topic_falls_back_when_topic_picker_skill_fails():
+    """If TopicPickerSkill exhausts retries, _pick_topic must fall back to a
+    default topic (not raise) and log the failure via log_skill_error."""
+    module = WritingModule()
+    ctx = _make_ctx()
+    mock_io = MagicMock(spec=IOHandler)
+    mock_io.prompt.return_value = ""
+
+    llm = MagicMock(spec=BaseLLM)
+    llm.config = MagicMock()
+    llm.config.max_skill_retries = 2
+    llm.config.show_incomplete_responses = False
+    llm.config.show_cut_by_limit_tag = True
+    llm.complete.return_value = LLMResponse(text="not valid json", model="test-model")
+
+    with patch("modules.writing.agent.log_skill_error") as mock_log:
+        wp = module._pick_topic(ctx, llm, mock_io)
+        mock_log.assert_called_once()
+        assert mock_log.call_args.args[0] == "writing"
+        assert mock_log.call_args.args[1] == "topic_picker"
+
+    assert wp.topic == "Describe your day"
 
 
 # ---------------------------------------------------------------------------

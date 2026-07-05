@@ -343,31 +343,62 @@ def _exercise(**overrides) -> dict:
 
 class TestGenerateExercisesSkill:
 
-    def test_interleaved_types_are_filtered_to_first_type_occurrence(self):
-        """The prompt asks for exactly one exercise type per batch, but smaller/
-        local models don't reliably comply (observed live: one exercise per type
-        across several types in a single response) — the skill must enforce this
-        in Python, keeping only exercises matching the first one's type."""
+    def test_wrong_type_triggers_retry(self):
+        """The exercise type is now fixed by the caller (modules/grammar/agent.py
+        picks it in code, not the LLM) — a model that drifts to a different type,
+        or mixes types, is a hard mismatch that triggers a retry instead of being
+        silently filtered down to whatever type happened to come first."""
         from skills.generate_exercises.skill import GenerateExercisesSkill
-        payload = json.dumps({"exercises": [
+        bad = json.dumps({"exercises": [
             _exercise(type="fill_in_the_blank", prompt="p1", correct_answer="a1"),
             _exercise(type="word_order", prompt="p2", correct_answer="a2", error_tag="word_order"),
-            _exercise(type="fill_in_the_blank", prompt="p3", correct_answer="a3"),
-            _exercise(type="error_correction", prompt="p4", correct_answer="a4", error_tag="word_order"),
-            _exercise(type="fill_in_the_blank", prompt="p5", correct_answer="a5"),
         ]})
-        llm = make_llm([payload])
+        good = json.dumps({"exercises": [
+            _exercise(type="fill_in_the_blank", prompt="p1", correct_answer="a1"),
+            _exercise(type="fill_in_the_blank", prompt="p3", correct_answer="a3"),
+        ]})
+        llm = make_llm([bad, good])
 
         skill = GenerateExercisesSkill()
         out = skill.run(
-            make_input(level="a1", topic="Dative case", language="german", exercise_count=5), llm,
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=2,
+            ),
+            llm,
         )
 
         assert out.success is True
         types = [ex["exercise_type"] for ex in out.metadata["exercises"]]
         prompts = [ex["prompt"] for ex in out.metadata["exercises"]]
-        assert types == ["fill_in_the_blank", "fill_in_the_blank", "fill_in_the_blank"]
-        assert prompts == ["p1", "p3", "p5"]
+        assert types == ["fill_in_the_blank", "fill_in_the_blank"]
+        assert prompts == ["p1", "p3"]
+        assert llm.complete.call_count == 2
+
+    def test_count_mismatch_triggers_retry(self):
+        """Requesting N exercises must produce exactly N of the given type — a
+        short batch (all matching type, but too few) is now a hard retry trigger,
+        not a silently-accepted partial batch."""
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        short = json.dumps({"exercises": [_exercise(prompt="p1", correct_answer="a1")]})
+        full = json.dumps({"exercises": [
+            _exercise(prompt="p1", correct_answer="a1"),
+            _exercise(prompt="p2", correct_answer="a2"),
+        ]})
+        llm = make_llm([short, full])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=2,
+            ),
+            llm,
+        )
+
+        assert out.success is True
+        assert len(out.metadata["exercises"]) == 2
+        assert llm.complete.call_count == 2
 
     def test_grading_derived_from_exercise_type_map(self):
         """grading is derived from lang/maps/exercise_types, not trusted from the
@@ -385,7 +416,11 @@ class TestGenerateExercisesSkill:
 
         skill = GenerateExercisesSkill()
         out = skill.run(
-            make_input(level="a1", topic="Dative case", language="german", exercise_count=1), llm,
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="word_order", exercise_count=1,
+            ),
+            llm,
         )
 
         assert out.success is True
@@ -419,6 +454,7 @@ class TestGenerateExercisesSkill:
         skill.run(
             make_input(
                 level="a2", topic="Präteritum — haben, sein, and modal verbs", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=1,
             ),
             llm,
         )
@@ -433,7 +469,13 @@ class TestGenerateExercisesSkill:
         llm = make_llm([payload])
 
         skill = GenerateExercisesSkill()
-        skill.run(make_input(level="b1", topic="sondern vs. aber", language="german"), llm)
+        skill.run(
+            make_input(
+                level="b1", topic="sondern vs. aber", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=1,
+            ),
+            llm,
+        )
 
         prompt_text = llm.complete.call_args_list[0].args[0][0].content
         assert "hard scope boundary" in prompt_text
@@ -447,7 +489,13 @@ class TestGenerateExercisesSkill:
         llm = make_llm([payload])
 
         skill = GenerateExercisesSkill()
-        out = skill.run(make_input(level="a1", topic="Dative case", language="klingon"), llm)
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="klingon",
+                exercise_type="fill_in_the_blank", exercise_count=1,
+            ),
+            llm,
+        )
 
         assert out.success is True
         assert out.metadata["exercises"][0]["error_tag"] == "vocabulary"
@@ -459,7 +507,13 @@ class TestGenerateExercisesSkill:
         llm = make_llm([bad, good])
 
         skill = GenerateExercisesSkill()
-        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=1,
+            ),
+            llm,
+        )
 
         assert out.success is True
         assert out.metadata["exercises"][0]["error_tag"] == "noun_declension"
@@ -474,7 +528,13 @@ class TestGenerateExercisesSkill:
         llm = make_llm([bad, good])
 
         skill = GenerateExercisesSkill()
-        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=1,
+            ),
+            llm,
+        )
 
         assert out.success is True
         assert out.metadata["exercises"][0]["error_tag"] == "noun_declension"
@@ -487,7 +547,13 @@ class TestGenerateExercisesSkill:
         llm = make_llm([bad, good])
 
         skill = GenerateExercisesSkill()
-        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=1,
+            ),
+            llm,
+        )
 
         assert out.success is True
         assert out.metadata["exercises"][0]["exercise_type"] == "fill_in_the_blank"
@@ -500,7 +566,13 @@ class TestGenerateExercisesSkill:
         llm = make_llm([empty, good])
 
         skill = GenerateExercisesSkill()
-        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=1,
+            ),
+            llm,
+        )
 
         assert out.success is True
         assert len(out.metadata["exercises"]) == 1
@@ -514,7 +586,13 @@ class TestGenerateExercisesSkill:
         llm = make_llm([payload])
 
         skill = GenerateExercisesSkill()
-        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=1,
+            ),
+            llm,
+        )
 
         assert out.success is True
         assert out.metadata["exercises"][0]["accepted_answers"] == []
@@ -525,10 +603,36 @@ class TestGenerateExercisesSkill:
         llm = make_llm([bad, bad, bad])
 
         skill = GenerateExercisesSkill()
-        out = skill.run(make_input(level="a1", topic="Dative case", language="german"), llm)
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank",
+            ),
+            llm,
+        )
 
         assert out.success is False
         assert out.metadata["exercises"] == []
+
+    def test_unknown_exercise_type_fails_without_llm_call(self):
+        """exercise_type is validated against the language's exercise-types map
+        before any LLM call — a caller bug (typo'd type) must fail fast, not
+        burn a retry loop on an unwinnable prompt."""
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        llm = make_llm([])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="not_a_real_type",
+            ),
+            llm,
+        )
+
+        assert out.success is False
+        assert out.metadata["exercises"] == []
+        llm.complete.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -707,5 +811,4 @@ class TestGradeExercisesSkill:
 
         assert out.success is False
         assert out.metadata["results"] == []
-        assert "error" in out.metadata
         assert "error" in out.metadata

@@ -103,6 +103,99 @@ class TestClassifyMistakesSkill:
 
 
 # ---------------------------------------------------------------------------
+# VerifyMistakesSkill (Step 1.5)
+# ---------------------------------------------------------------------------
+
+class TestVerifyMistakesSkill:
+
+    def test_drops_false_positive_keeps_genuine(self):
+        from skills.verify_mistakes.skill import VerifyMistakesSkill
+        raw = [
+            {"fragment": "ein wichtige Wissenschaftszentrum", "error_type_hint": "adjective ending"},
+            {"fragment": "deshalb organisierte sie einen Ausflug", "error_type_hint": "word order"},
+        ]
+        payload = json.dumps({"verified": [
+            {"fragment": "ein wichtige Wissenschaftszentrum", "keep": True},
+            {"fragment": "deshalb organisierte sie einen Ausflug", "keep": False},
+        ]})
+        llm = make_llm([payload])
+
+        skill = VerifyMistakesSkill()
+        out = skill.run(
+            make_input(
+                raw_mistakes=raw, language="german",
+                user_text="CERN ist ein wichtige Wissenschaftszentrum. Deshalb organisierte sie einen Ausflug.",
+            ),
+            llm,
+        )
+
+        assert out.success is True
+        kept = out.metadata["verified_mistakes"]
+        assert len(kept) == 1
+        assert kept[0]["fragment"] == "ein wichtige Wissenschaftszentrum"
+
+    def test_keeps_all_when_all_genuine(self):
+        from skills.verify_mistakes.skill import VerifyMistakesSkill
+        raw = [{"fragment": "habe gegangen", "error_type_hint": "wrong auxiliary"}]
+        payload = json.dumps({"verified": [{"fragment": "habe gegangen", "keep": True}]})
+        llm = make_llm([payload])
+
+        skill = VerifyMistakesSkill()
+        out = skill.run(
+            make_input(raw_mistakes=raw, language="german", user_text="Ich habe ins Büro gegangen."), llm,
+        )
+
+        assert out.success is True
+        assert out.metadata["verified_mistakes"] == raw
+
+    def test_short_circuits_on_empty_input(self):
+        """Empty raw_mistakes list must not call the LLM at all."""
+        from skills.verify_mistakes.skill import VerifyMistakesSkill
+        llm = make_llm([])
+
+        skill = VerifyMistakesSkill()
+        out = skill.run(make_input(raw_mistakes=[], language="german", user_text="Alles korrekt."), llm)
+
+        assert out.success is True
+        assert out.metadata["verified_mistakes"] == []
+        llm.complete.assert_not_called()
+
+    def test_missing_verdict_triggers_retry(self):
+        """A verdict must cover every candidate — a fragment the model never
+        addressed is a structural failure that retries, not a silent drop/keep."""
+        from skills.verify_mistakes.skill import VerifyMistakesSkill
+        raw = [
+            {"fragment": "foo", "error_type_hint": "a"},
+            {"fragment": "bar", "error_type_hint": "b"},
+        ]
+        incomplete = json.dumps({"verified": [{"fragment": "foo", "keep": True}]})
+        complete = json.dumps({"verified": [
+            {"fragment": "foo", "keep": True}, {"fragment": "bar", "keep": False},
+        ]})
+        llm = make_llm([incomplete, complete])
+
+        skill = VerifyMistakesSkill()
+        out = skill.run(make_input(raw_mistakes=raw, language="german", user_text="foo bar"), llm)
+
+        assert out.success is True
+        assert [m["fragment"] for m in out.metadata["verified_mistakes"]] == ["foo"]
+        assert llm.complete.call_count == 2
+
+    def test_failure_falls_back_to_original_raw_mistakes(self):
+        """Fail open: if verification itself breaks after retries, don't silently
+        wipe out every detect_mistakes candidate — trust the original list."""
+        from skills.verify_mistakes.skill import VerifyMistakesSkill
+        raw = [{"fragment": "foo", "error_type_hint": "a"}]
+        llm = make_llm(["not json", "still not json", "nope"])
+
+        skill = VerifyMistakesSkill()
+        out = skill.run(make_input(raw_mistakes=raw, language="german", user_text="foo"), llm)
+
+        assert out.success is False
+        assert out.metadata["verified_mistakes"] == raw
+
+
+# ---------------------------------------------------------------------------
 # ExplainMistakesSkill
 # ---------------------------------------------------------------------------
 
@@ -297,6 +390,102 @@ class TestEstimateTextLevelSkill:
 
 
 # ---------------------------------------------------------------------------
+# TopicPickerSkill
+# ---------------------------------------------------------------------------
+
+class TestTopicPickerSkill:
+
+    def test_generates_topic_from_valid_response(self):
+        from skills.topic_picker.skill import TopicPickerSkill
+        payload = json.dumps({
+            "topic": "Describe a recent trip.",
+            "requirements": "Minimum 100 words. Use past tense.",
+            "task_label": "recent_trip",
+        })
+        llm = make_llm([payload])
+
+        skill = TopicPickerSkill()
+        out = skill.run(
+            make_input(
+                level="a2", language="german", recent_topics=["Mein Morgen"],
+                error_tags=["dative_case"], suggested_focus="dative prepositions",
+                min_words=100,
+            ),
+            llm,
+        )
+
+        assert out.success is True
+        assert out.metadata["topic"] == "Describe a recent trip."
+        assert out.metadata["requirements"] == "Minimum 100 words. Use past tense."
+        assert out.metadata["task_label"] == "recent_trip"
+        assert out.metadata["min_words"] == 100
+        assert out.metadata["suggested_focus"] == "dative prepositions"
+
+    def test_prompt_includes_recent_topics_and_error_tags(self):
+        """The prompt must steer away from recent topics and toward recurring
+        error tags — verify the actual values reach the LLM, not just that
+        some prompt was sent."""
+        from skills.topic_picker.skill import TopicPickerSkill
+        payload = json.dumps({
+            "topic": "t", "requirements": "r", "task_label": "x",
+        })
+        llm = make_llm([payload])
+
+        skill = TopicPickerSkill()
+        skill.run(
+            make_input(
+                level="b1", language="german", recent_topics=["Mein Morgen", "Das Wetter"],
+                error_tags=["dative_case", "word_order"], suggested_focus="dative prepositions",
+                min_words=120,
+            ),
+            llm,
+        )
+
+        prompt_text = llm.complete.call_args_list[0].args[0][0].content
+        assert "Mein Morgen, Das Wetter" in prompt_text
+        assert "dative_case, word_order" in prompt_text
+        assert "dative prepositions" in prompt_text
+        assert "120" in prompt_text
+
+    def test_markdown_fenced_response_is_stripped(self):
+        from skills.topic_picker.skill import TopicPickerSkill
+        payload = "```json\n" + json.dumps({
+            "topic": "t", "requirements": "r", "task_label": "x",
+        }) + "\n```"
+        llm = make_llm([payload])
+
+        skill = TopicPickerSkill()
+        out = skill.run(make_input(level="a1", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["topic"] == "t"
+
+    def test_missing_key_retries_then_succeeds(self):
+        from skills.topic_picker.skill import TopicPickerSkill
+        bad = json.dumps({"topic": "t", "requirements": "r"})  # missing task_label
+        good = json.dumps({"topic": "t", "requirements": "r", "task_label": "x"})
+        llm = make_llm([bad, good])
+
+        skill = TopicPickerSkill()
+        out = skill.run(make_input(level="a1", language="german"), llm)
+
+        assert out.success is True
+        assert out.metadata["task_label"] == "x"
+        assert llm.complete.call_count == 2
+
+    def test_missing_key_fails_after_retries_exhausted(self):
+        from skills.topic_picker.skill import TopicPickerSkill
+        bad = json.dumps({"topic": "t", "requirements": "r"})  # missing task_label
+        llm = make_llm([bad, bad, bad])
+
+        skill = TopicPickerSkill()
+        out = skill.run(make_input(level="a1", language="german"), llm)
+
+        assert out.success is False
+        assert "error" in out.metadata
+
+
+# ---------------------------------------------------------------------------
 # Full pipeline integration (all skills mocked)
 # ---------------------------------------------------------------------------
 
@@ -329,6 +518,11 @@ class TestFullPipeline:
         # Step 1: detect_mistakes
         resp_detect = LLMResponse(
             text='{"mistakes": [{"fragment": "Ich aufstehen", "error_type_hint": "separable verb"}]}',
+            model="test-model",
+        )
+        # Step 1.5: verify_mistakes
+        resp_verify = LLMResponse(
+            text=json.dumps({"verified": [{"fragment": "Ich aufstehen", "keep": True}]}),
             model="test-model",
         )
         # Step 2: classify_mistakes
@@ -369,7 +563,7 @@ class TestFullPipeline:
             model="test-model",
         )
 
-        llm.complete.side_effect = [resp_detect, resp_classify, resp_explain, resp_correct, resp_summarise]
+        llm.complete.side_effect = [resp_detect, resp_verify, resp_classify, resp_explain, resp_correct, resp_summarise]
 
         ctx = ModuleContext(
             user_id="user1",
@@ -590,6 +784,7 @@ class TestWritingPipeline:
 
         resp_estimate = json.dumps({"text_level_estimate": "a2"})
         resp_detect = json.dumps({"mistakes": [{"fragment": "foo", "error_type_hint": "bar"}]})
+        resp_verify = json.dumps({"verified": [{"fragment": "foo", "keep": True}]})
         resp_classify = json.dumps({"classified": [{"fragment": "foo", "error_tag": "verb_conjugation", "correction": "baz"}]})
         resp_explain = json.dumps({"explained": [{"fragment": "foo", "error_tag": "verb_conjugation", "correction": "baz", "explanation": "reason"}]})
         resp_correct = json.dumps({"corrected_text": "Corrected.", "recommendations": [], "comment": ""})
@@ -599,7 +794,7 @@ class TestWritingPipeline:
             "tips": ["Keep going."],
         })
 
-        llm = _make_pipeline_llm([resp_estimate, resp_detect, resp_classify, resp_explain, resp_correct, resp_summarise])
+        llm = _make_pipeline_llm([resp_estimate, resp_detect, resp_verify, resp_classify, resp_explain, resp_correct, resp_summarise])
         pipeline = WritingPipeline(get_writing_skills())
         ctx = _make_ctx()
         result = pipeline.run(ctx, user_text, "Write something.", min_words=20, llm=llm)

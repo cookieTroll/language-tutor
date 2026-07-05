@@ -125,6 +125,7 @@ def test_generate_exercises(executor_llm, judge_llm, results_collector, case):
             parameters={
                 "topic": case["topic"],
                 "language": case["language"],
+                "exercise_type": case["exercise_type"],
                 "exercise_count": case["exercise_count"],
             },
         ),

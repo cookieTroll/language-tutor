@@ -37,9 +37,9 @@ def context_request(self) -> ContextRequest:
 
 ### Pipeline (`modules/writing/pipeline.py`)
 
-`WritingPipeline` sequences all six evaluator skills. `WritingModule.run()` delegates to it — the module handles I/O (prompts, display), the pipeline handles LLM calls.
+`WritingPipeline` sequences all seven evaluator skills. `WritingModule.run()` delegates to it — the module handles I/O (prompts, display), the pipeline handles LLM calls.
 
-Execution order: **Step 5 → 1 → 2 → 3 → 4 → 6**. Step 5 (`estimate_text_level`) runs first because it only needs the raw user text; Step 1 (`detect_mistakes`) acts as a gate — if no mistakes are found, Steps 2–4 are skipped.
+Execution order: **Step 5 → 1 → 1.5 → 2 → 3 → 4 → 6**. Step 5 (`estimate_text_level`) runs first because it only needs the raw user text; Step 1 (`detect_mistakes`) acts as a gate — if no mistakes are found, Step 1.5 and Steps 2–4 are skipped. Step 1.5 (`verify_mistakes`) re-checks each raw fragment against its original sentence context and drops false positives before classification — `detect_mistakes` judges the whole text in one pass and can misjudge an isolated fragment (e.g. correct verb-second word order after a fronted connector).
 
 Returns `PipelineResult` dataclass carrying all per-step outputs.
 
@@ -49,6 +49,7 @@ Returns `PipelineResult` dataclass carrying all per-step outputs.
 |-------|-------|------|
 | PoC | `btw_handler` | utility — inline /btw questions during writing |
 | 1a | `detect_mistakes` | Step 1 — raw mistake detection (gate) |
+| 1a | `verify_mistakes` | Step 1.5 — re-checks each candidate against context, drops false positives |
 | 1a | `classify_mistakes` | Step 2 — taxonomy classification |
 | 1a | `explain_mistakes` | Step 3 — explanations pitched to level |
 | 1a | `write_correction` | Step 4 — corrected text + tips + session summary |
@@ -153,8 +154,47 @@ Return empty list if no errors found.
 - Returns raw hints, not classified tags — classification happens in Step 2
 - `recurring_errors` injected as a soft prime, not exclusive
 - Empty text or no errors both handled gracefully
+- Judging the whole text in one pass can anchor on a couple of salient errors (e.g.
+  two verb-conjugation mistakes) and miss a subtler one nearby (e.g. an adjective
+  ending) — `verify_mistakes` (Step 1.5) is a second, narrower pass over each
+  candidate, not a fix for this at the source
 
 **Test criteria (judge):** Detection accuracy (real errors caught), false positive rate (non-errors flagged).
+
+---
+
+### `skills/verify_mistakes/` — Candidate Error Verifier
+
+**Layer:** 1a
+**Type:** session
+
+**Input:**
+```python
+raw_mistakes: list[dict]  # from detect_mistakes: [{fragment, error_type_hint}]
+user_text: str            # full text, so each fragment is judged in its real sentence context
+level: str
+```
+
+**Output:**
+```python
+verified_mistakes: list[dict]  # same shape as raw_mistakes, filtered — false positives dropped
+```
+
+**Notes:**
+- `detect_mistakes` judges the whole text in one pass; a fragment that looks wrong in
+  isolation (e.g. inverted word order) can actually be a correct grammar rule (verb-second
+  after a fronted adverb/connector) once checked against its real sentence — this step's
+  only job is that second check, one candidate at a time
+- Does not classify, correct, or add new candidates — purely a keep/reject filter
+- Fails open: if the LLM call itself fails after retries (`SelfCorrectionError`), falls
+  back to the original unfiltered `raw_mistakes` rather than silently dropping every
+  candidate — a broken verification pass shouldn't cost real errors
+- A verdict must cover every candidate fragment; a response that omits one is treated as
+  a structural failure and retried, not silently resolved either way
+
+**Test criteria (judge):** Deterministic — each fixture case has a known keep/reject split
+(`tests/fixtures/verify_mistakes_cases.json`), checked directly against the executor's
+output rather than through a second judge LLM call.
 
 ---
 
@@ -165,7 +205,7 @@ Return empty list if no errors found.
 
 **Input:**
 ```python
-raw_mistakes: list[dict]   # from detect_mistakes
+raw_mistakes: list[dict]   # verified_mistakes from verify_mistakes (Step 1.5), not detect_mistakes' raw output directly
 user_text: str
 ```
 

@@ -102,12 +102,34 @@ def _run_skill(executor_llm, case: dict) -> dict:
 
 
 def _derive_recommendation(skill_out: dict, case: dict) -> dict:
-    """Replicates recommend_exercise() logic — deterministic, no LLM."""
-    recurring = case["aggregate"]["recurring_errors"]
+    """Builds a real ProgressSummary from the skill output + fixture aggregate,
+    then calls the actual Orchestrator.recommend_exercise() — not a reimplementation
+    of its logic — so a regression in that method would actually be caught here."""
+    from unittest.mock import MagicMock
+    from orchestrator.orchestrator import Orchestrator
+    from orchestrator.protocols import ProgressSummary
+
+    agg = case["aggregate"]
+    summary = ProgressSummary(
+        language="german",
+        sessions_by_module=agg["sessions_by_module"],
+        days_since_module={k: int(v) for k, v in agg["days_since_module"].items()},
+        total_time_by_module=agg["total_time_by_module"],
+        recurring_errors=agg["recurring_errors"],
+        vocab_flag_count=agg["vocab_flag_count"],
+        recent_topics=agg["recent_topics"],
+        weakest_module=skill_out["weakest_module"],
+        recommendation_reason=skill_out["recommendation_reason"],
+    )
+
+    # recommend_exercise() doesn't touch store/llm/config/io — only summary — so
+    # these stand-ins are never exercised.
+    orchestrator = Orchestrator(store=MagicMock(), llm=MagicMock(), config=MagicMock(), io=MagicMock())
+    rec = orchestrator.recommend_exercise(summary)
     return {
-        "recommended_module": skill_out["weakest_module"],
-        "recommendation_reason": skill_out["recommendation_reason"],
-        "suggested_focus": recurring[0] if recurring else None,
+        "recommended_module": rec.module,
+        "recommendation_reason": rec.reason,
+        "suggested_focus": rec.suggested_focus,
     }
 
 

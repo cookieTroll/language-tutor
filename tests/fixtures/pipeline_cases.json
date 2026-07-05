@@ -199,5 +199,32 @@
       }
     ],
     "expected_corrected_text": "Ich bin ins Büro gegangen und hatte ein langes Meeting."
+  },
+  {
+    "id": "multi_004",
+    "description": "Two verb-conjugation errors in the opening sentence overshadowing an adjacent adjective-ending error — regression case for anchoring/satisficing on salient errors in a longer text",
+    "user_text": "Als ich in der Schule waren, hatten ich eine verrückte Idee, dass meine Mitschüler und ich nach CERN fahren sollten. \nCERN ist ein wichtige Wissenschaftszentrum für Physik. \nIm Grunde genommen ist es ein großer Ring unter der Erde, wo Partikel sehr schnell fliegen und interessante Dinge passieren.\nIch sprach mit meiner Physiklehrerin und sie mochte das, deshalb organisierte sie einen Ausflug.\nWir fuhren mit dem Bus durch Deutschland und die Schweiz. \nAuf dem Weg besuchten wir auch Bern und eine kleine Stadt, in der eine Statue von Freddie Mercury stand. \nDann hatten wir Zeit, Genf zu erkunden. \nAm nächsten Tag besuchten wir CERN. \nEs war sehr interessant, weil es eine Ausstellung über die Experimente, die die Leute dort machen, gab.\nIch denke, dass der Ausflug insgesamt ein Erfolg war.",
+    "level": "b1",
+    "language": "german",
+    "writing_prompt": "Describe a memorable school trip.",
+    "expected_mistake_count": 3,
+    "expected_mistakes": [
+      {
+        "fragment": "ich in der Schule waren",
+        "error_tag": "verb_conjugation",
+        "correction": "ich in der Schule war"
+      },
+      {
+        "fragment": "hatten ich",
+        "error_tag": "verb_conjugation",
+        "correction": "hatte ich"
+      },
+      {
+        "fragment": "ein wichtige Wissenschaftszentrum",
+        "error_tag": "adjective_declension",
+        "correction": "ein wichtiges Wissenschaftszentrum"
+      }
+    ],
+    "expected_corrected_text": "Als ich in der Schule war, hatte ich eine verrückte Idee, dass meine Mitschüler und ich nach CERN fahren sollten. \nCERN ist ein wichtiges Wissenschaftszentrum für Physik. \nIm Grunde genommen ist es ein großer Ring unter der Erde, wo Partikel sehr schnell fliegen und interessante Dinge passieren.\nIch sprach mit meiner Physiklehrerin und sie mochte das, deshalb organisierte sie einen Ausflug.\nWir fuhren mit dem Bus durch Deutschland und die Schweiz. \nAuf dem Weg besuchten wir auch Bern und eine kleine Stadt, in der eine Statue von Freddie Mercury stand. \nDann hatten wir Zeit, Genf zu erkunden. \nAm nächsten Tag besuchten wir CERN. \nEs war sehr interessant, weil es eine Ausstellung über die Experimente, die die Leute dort machen, gab.\nIch denke, dass der Ausflug insgesamt ein Erfolg war."
   }
 ]

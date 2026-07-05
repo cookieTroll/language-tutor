@@ -1,0 +1,53 @@
+[
+  {
+    "id": "vm_genuine_only",
+    "description": "Both candidates are genuine errors — nothing should be rejected",
+    "language": "german",
+    "level": "b1",
+    "user_text": "Ich habe ins Büro gegangen und einen langes Meeting gehabt.",
+    "candidates": [
+      {"fragment": "habe ins Büro gegangen", "error_type_hint": "wrong Perfekt auxiliary"},
+      {"fragment": "einen langes Meeting", "error_type_hint": "adjective ending"}
+    ],
+    "expected_keep": ["habe ins Büro gegangen", "einen langes Meeting"],
+    "expected_reject": []
+  },
+  {
+    "id": "vm_false_positive_only",
+    "description": "Candidate is correct verb-second word order after a fronted connector — must be rejected",
+    "language": "german",
+    "level": "b1",
+    "user_text": "Ich sprach mit meiner Physiklehrerin und sie mochte das, deshalb organisierte sie einen Ausflug.",
+    "candidates": [
+      {"fragment": "deshalb organisierte sie einen Ausflug", "error_type_hint": "word order"}
+    ],
+    "expected_keep": [],
+    "expected_reject": ["deshalb organisierte sie einen Ausflug"]
+  },
+  {
+    "id": "vm_mixed",
+    "description": "One genuine adjective-ending error alongside one correct dative-preposition construction",
+    "language": "german",
+    "level": "b1",
+    "user_text": "CERN ist ein wichtige Wissenschaftszentrum für Physik. Wir fuhren mit dem Bus durch Deutschland.",
+    "candidates": [
+      {"fragment": "ein wichtige Wissenschaftszentrum", "error_type_hint": "adjective ending"},
+      {"fragment": "fuhren mit dem Bus", "error_type_hint": "preposition case"}
+    ],
+    "expected_keep": ["ein wichtige Wissenschaftszentrum"],
+    "expected_reject": ["fuhren mit dem Bus"]
+  },
+  {
+    "id": "vm_all_false_positives_multi",
+    "description": "Two candidates, both actually correct German (separable verb properly split; verb-second after fronted adverb)",
+    "language": "german",
+    "level": "a2",
+    "user_text": "Ich stehe um 7 Uhr auf. Dann dusche ich mich.",
+    "candidates": [
+      {"fragment": "Ich stehe um 7 Uhr auf", "error_type_hint": "separable verb not split"},
+      {"fragment": "Dann dusche ich mich", "error_type_hint": "word order"}
+    ],
+    "expected_keep": [],
+    "expected_reject": ["Ich stehe um 7 Uhr auf", "Dann dusche ich mich"]
+  }
+]

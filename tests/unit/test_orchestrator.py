@@ -1,4 +1,5 @@
 import os
+import json
 import yaml
 import pytest
 from unittest.mock import patch, MagicMock
@@ -107,11 +108,59 @@ def test_cold_start_threshold(store_and_llm):
         duration_minutes=5.0
     )
     store.write_session(s3)
-    
+
+    llm.complete.return_value = LLMResponse(
+        text=json.dumps({
+            "weakest_module": "grammar",
+            "recommendation_reason": "You've written a lot lately but haven't practiced grammar.",
+        }),
+        model="test-model",
+    )
+
     summary = orchestrator.summarize_progress("user1", "german")
     assert summary is not None
     assert summary.sessions_by_module["writing"] == 3
-    assert orchestrator.recommend_exercise(summary).module == "writing"
+    # weakest_module/recommendation_reason must come from the real LLM response
+    # (SummarizeProgressSkill), not an unconfigured-mock fallback default.
+    assert summary.weakest_module == "grammar"
+    assert summary.recommendation_reason == "You've written a lot lately but haven't practiced grammar."
+    recommendation = orchestrator.recommend_exercise(summary)
+    assert recommendation.module == "grammar"
+    assert recommendation.reason == summary.recommendation_reason
+
+def test_summarize_progress_falls_back_to_writing_on_unregistered_module(store_and_llm):
+    # If the LLM names a module that isn't in MODULE_REGISTRY (hallucination, typo,
+    # future-module drift), summarize_progress must correct it to "writing" rather
+    # than propagate an invalid module downstream.
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    date_now = datetime.now()
+    store.write_user_profile(
+        UserProfile(
+            user_id="user1", language="german", level="a1", level_source="stated",
+            active=True, created_at=date_now, updated_at=date_now,
+        )
+    )
+    for i in range(3):
+        store.write_session(SessionLog(
+            user_id="user1", session_id=f"s{i}", language="german", module="writing",
+            task_label=f"t{i}", task_description="desc", comment="", errors=[],
+            level="a1", date=date_now, file_path=f"path{i}", status="completed",
+            started_at=date_now, completed_at=date_now, duration_minutes=5.0,
+        ))
+
+    llm.complete.return_value = LLMResponse(
+        text=json.dumps({
+            "weakest_module": "vocab",  # not yet registered
+            "recommendation_reason": "Focus on vocabulary.",
+        }),
+        model="test-model",
+    )
+
+    summary = orchestrator.summarize_progress("user1", "german")
+    assert summary is not None
+    assert summary.weakest_module == "writing"
 
 def test_interrupted_session_discard(store_and_llm):
     store, llm, config, io = store_and_llm

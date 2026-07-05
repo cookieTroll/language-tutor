@@ -2,6 +2,73 @@
 // app.js (phase, activeModule, escapeHtml, appendTutor, sendInput, etc.) — load after it.
 // Also depends on diff.js's tokenise()/lcs() (word-level LCS diff), loaded before this file.
 
+// dump_grammar's prompt explicitly asks the model for markdown (headings, bold,
+// bullet/numbered lists, tables for declension/conjugation) — this renders that
+// into the #grammar-explanation panel instead of dumping it as escaped plain text.
+// Deliberately minimal (no nested lists/blockquotes/links): covers exactly what
+// the prompt asks the model to produce, not general-purpose markdown.
+function renderMarkdown(md) {
+  const lines = escapeHtml(md).split('\n');
+  let html = '';
+  let listTag = null;   // 'ul' | 'ol' | null
+  let tableRows = [];
+
+  function inline(s) {
+    return s
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+  }
+  function closeList() {
+    if (listTag) { html += `</${listTag}>`; listTag = null; }
+  }
+  function flushTable() {
+    if (!tableRows.length) return;
+    // Drop the "|---|---|" alignment row if present (2nd row of dashes/colons only).
+    const rows = tableRows.filter(r => !/^[\s|:-]+$/.test(r));
+    html += '<table class="md-table">' + rows.map((r, i) => {
+      const cells = r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+      const tag = i === 0 ? 'th' : 'td';
+      return '<tr>' + cells.map(c => `<${tag}>${inline(c)}</${tag}>`).join('') + '</tr>';
+    }).join('') + '</table>';
+    tableRows = [];
+  }
+
+  for (const line of lines) {
+    if (/^\s*\|.*\|\s*$/.test(line)) { tableRows.push(line); continue; }
+    if (tableRows.length) flushTable();
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      closeList();
+      const level = Math.min(h[1].length + 3, 6);
+      html += `<h${level}>${inline(h[2])}</h${level}>`;
+      continue;
+    }
+
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);
+    if (ul) {
+      if (listTag !== 'ul') { closeList(); html += '<ul>'; listTag = 'ul'; }
+      html += `<li>${inline(ul[1])}</li>`;
+      continue;
+    }
+
+    const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (ol) {
+      if (listTag !== 'ol') { closeList(); html += '<ol>'; listTag = 'ol'; }
+      html += `<li>${inline(ol[1])}</li>`;
+      continue;
+    }
+
+    closeList();
+    if (!line.trim()) continue;
+    html += `<p>${inline(line)}</p>`;
+  }
+  closeList();
+  flushTable();
+  return html;
+}
+
 // Word-level diff between a wrong free-text answer and the reference answer —
 // only meaningful for llm-graded types (whole-sentence answers); exact-match
 // types (fill-in-the-blank etc.) are single tokens where a diff adds nothing

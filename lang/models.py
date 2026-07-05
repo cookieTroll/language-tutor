@@ -214,6 +214,14 @@ class ExerciseTypesMap(BaseModel):
         """Format types with grading mode and description for the generator prompt."""
         return "\n".join(f"  - {t.type} ({t.grading}): {t.description.strip()}" for t in self.types)
 
+    def describe_one(self, exercise_type: str) -> str | None:
+        """Same one-line format as format_for_prompt, for a single pre-chosen type —
+        used when the caller (not the LLM) has already picked the exercise type."""
+        for t in self.types:
+            if t.type == exercise_type:
+                return f"  - {t.type} ({t.grading}): {t.description.strip()}"
+        return None
+
 
 class LanguageConfig(BaseModel):
     """Top-level language config — maps learning concepts to versioned content maps.

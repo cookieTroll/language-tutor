@@ -18,7 +18,7 @@ TIMEOUT = 180  # seconds — LLM pipeline has 6 steps
 
 
 @pytest.mark.e2e
-def test_full_writing_session():
+def test_full_writing_session(isolated_e2e_config):
     """New user → German A2 → writing session → session saved."""
     user_id = f"smoke_{int(time.time())}"
 
@@ -44,7 +44,7 @@ def test_full_writing_session():
         "n",
     ]) + "\n"
 
-    env = {**os.environ, "LTUT_CONFIG": "config.test.yaml", "PYTHONIOENCODING": "utf-8"}
+    env = {**os.environ, "LTUT_CONFIG": isolated_e2e_config, "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         [sys.executable, "-m", "ui.cli"],
         input=inputs,

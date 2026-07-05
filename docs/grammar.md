@@ -209,7 +209,9 @@ Generates targeted exercises for a grammar topic. Validates user answers. Logs e
 ```python
 topic: str
 level: str
-exercise_count: int = 7
+exercise_type: str  # chosen by the caller (modules/grammar/agent.py), not the LLM —
+                     # see "Exercise type selection" below
+exercise_count: int = 10
 ```
 
 **Output:**
@@ -247,13 +249,25 @@ have multiple valid phrasings in German (word order flexibility, synonym
 choice), so string equality would produce false negatives — those are graded
 by the LLM instead.
 
+**Exercise type selection:** picked in code by `GrammarModule._pick_exercise_type`
+(`modules/grammar/agent.py`), not left to the LLM. Older versions asked the model
+to choose one type from the full list and stick to it for the batch, but weaker
+local models drifted across types mid-response; that was silently filtered down
+to the first type seen, which could shrink a requested batch of N to just a few.
+Since the type vocabulary is pedagogically generic rather than topic-specific, a
+random pick that avoids repeating the immediately previous round's type is just
+as good and costs no extra LLM call. `generate_exercises` now hard-validates that
+every returned exercise matches the given type and that the count matches
+`exercise_count`, retrying (`call_with_self_correction`) on either mismatch
+instead of silently truncating.
+
 **Prompt template:**
 ```
 Generate {exercise_count} German grammar exercises on:
 "{topic}"
 
 Level: {level}
-Exercise types to use: {exercise_types}
+Use exactly this exercise type for every exercise: {exercise_type_line}
 
 Return JSON only:
 {
