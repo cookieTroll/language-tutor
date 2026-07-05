@@ -120,6 +120,31 @@ class TestWebIOHandler:
             io.prompt_block("Answers?")
 
 
+# ── on_language_warning callback ────────────────────────────────────────────────
+
+class TestLangWarning:
+    # Same 3-arg contract as ui.cli._language_config_warning: this broke once
+    # already when orchestrator.py started passing 'configured' before this
+    # callback's signature accepted it. Exercise both branches for real, not just
+    # callable(on_language_warning).
+
+    def test_unconfigured_language(self):
+        io = WebIOHandler()
+        threading.Thread(target=lambda: io.send_input(""), daemon=True).start()
+        _ui_mod._lang_warning(io, "klingon", missing=[], configured=False)
+        ev = io.get_event(timeout=1.0)
+        assert "not yet supported" in ev["text"]
+        assert "scripts.generate_language klingon" in ev["text"]
+
+    def test_partial_defaults(self):
+        io = WebIOHandler()
+        threading.Thread(target=lambda: io.send_input(""), daemon=True).start()
+        _ui_mod._lang_warning(io, "german", missing=["cefr hints"], configured=True)
+        ev = io.get_event(timeout=1.0)
+        assert "Falling back to defaults for: cefr hints" in ev["text"]
+        assert "not yet supported" not in ev["text"]
+
+
 # ── TerminalIOHandler ───────────────────────────────────────────────────────────
 
 class TestTerminalIOHandler:

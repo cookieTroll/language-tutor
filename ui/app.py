@@ -212,6 +212,9 @@ def sessions_list():
 def session_view(rel_path: str):
     data_root_abs  = os.path.abspath(_config.data_root)
     abs_path       = os.path.abspath(os.path.join(_config.data_root, rel_path))
+    # rel_path comes straight from the URL; resolve '..' segments and confirm the
+    # result is still inside data_root before opening it, or a crafted path could
+    # read arbitrary files on the host.
     if not abs_path.startswith(data_root_abs + os.sep):
         return "Forbidden", 403
     if not os.path.isfile(abs_path):
@@ -222,4 +225,6 @@ def session_view(rel_path: str):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, threaded=True, port=5000)
+    # Werkzeug's interactive debugger executes arbitrary code on exception pages —
+    # only enable it via an explicit opt-in, never by default.
+    app.run(debug=os.environ.get("LTUT_DEBUG") == "1", threaded=True, port=5000)

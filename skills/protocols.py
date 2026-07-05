@@ -22,6 +22,9 @@ def call_with_self_correction(
         
     for attempt in range(1, max_attempts + 1):
         try:
+            # parse_fn does both JSON parsing and schema/business-rule validation, so
+            # a raise here can mean "not valid JSON" or "valid JSON, wrong shape" —
+            # either way the model gets the same chance to self-correct below.
             response = llm.complete(current_messages, temperature=temperature)
             text = response.text.strip()
             return parse_fn(text)

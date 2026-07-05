@@ -1,7 +1,7 @@
 import sys
 import pytest
 from unittest.mock import patch, MagicMock
-from ui.cli import main
+from ui.cli import main, _language_config_warning
 from orchestrator.protocols import ExerciseRecommendation
 from shared.io import TerminalIOHandler
 
@@ -127,3 +127,26 @@ def test_cli_chains_forced_recommendation_without_reprompting(
         (("\nStart another learning session? [Y/n]: ",), {})
     ) == 1
     mock_print.assert_any_call("Goodbye!")
+
+
+@patch("ui.cli.input", return_value="")
+def test_language_config_warning_unconfigured(mock_input, capsys):
+    # configured=False: no lang/languages/ file exists at all — orchestrator started
+    # passing this arg after _language_config_warning already existed, once breaking
+    # with a TypeError until the callback's signature caught up. Exercise the real
+    # branch instead of just asserting callable().
+    _language_config_warning("klingon", missing=[], configured=False)
+    out = capsys.readouterr().out
+    assert "not yet supported" in out
+    assert "scripts.generate_language klingon" in out
+    assert "Falling back" not in out
+
+
+@patch("ui.cli.input", return_value="")
+def test_language_config_warning_partial_defaults(mock_input, capsys):
+    # configured=True (default): a lang/languages/ file exists but some maps fall
+    # back to generic defaults — the other branch of the same callback.
+    _language_config_warning("german", missing=["cefr hints"], configured=True)
+    out = capsys.readouterr().out
+    assert "Falling back to generic defaults for: cefr hints" in out
+    assert "not yet supported" not in out

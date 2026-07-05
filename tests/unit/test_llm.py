@@ -7,7 +7,7 @@ from llm.base import LLMMessage, LLMResponse, LLMError
 from llm.openai_compat import OpenAICompatibleLLM
 
 # The 'vertexai' SDK is an optional dependency not installed in this environment
-# (not in requirements.txt). Stub it in sys.modules so `llm.vertex` can be imported
+# (not in pyproject.toml). Stub it in sys.modules so `llm.vertex` can be imported
 # and its provider branch exercised like the others.
 try:
     import vertexai  # noqa: F401
