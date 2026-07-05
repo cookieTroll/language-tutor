@@ -13,7 +13,7 @@ from skills.protocols import SkillInput
 from modules.registry import MODULE_REGISTRY
 from shared.io import IOHandler
 from shared.error_log import log_skill_error
-from lang.loader import using_defaults
+from lang.loader import using_defaults, is_configured
 from orchestrator.mastery import get_module_mastery, get_level_trend
 
 DEFAULT_RECOMMENDATION = ExerciseRecommendation(
@@ -134,7 +134,10 @@ class Orchestrator(OrchestratorProtocol):
         forced_recommendation: ExerciseRecommendation | None = None,
     ) -> ExerciseRecommendation | None:
         """Executes a full interactive session lifecycle.
-        on_language_warning: optional callable(language, missing_maps) for UI to display config warnings.
+        on_language_warning: optional callable(language, missing_maps, configured) for UI to
+        display config warnings — configured=False means the language has no lang/languages/
+        config file at all (needs scripts/generate_language.py), True means it has one but
+        some maps still fall back to generic defaults.
         forced_recommendation: when set, skips summarize/recommend/confirm and runs this
         module directly — used to chain straight into a session accepted from the
         previous session's next_actions prompt.
@@ -220,7 +223,7 @@ class Orchestrator(OrchestratorProtocol):
         defaults = using_defaults(language)
         missing = [k.replace("_", " ") for k, v in defaults.items() if v]
         if missing and on_warn:
-            on_warn(language, missing)
+            on_warn(language, missing, is_configured(language))
 
     def _confirm_or_update_level(self, user_id: str, profile: UserProfile) -> None:
         self.io.output(f"\nYour current CEFR level: {profile.level.upper()}")
@@ -301,6 +304,8 @@ class Orchestrator(OrchestratorProtocol):
             " /history <n>d e.g. /history 7d for last n days,"
             " add lang:<language> e.g. /history 5 lang:german to change the"
             " report's language (default: your explanation-language setting),"
+            " /language <language> e.g. /language german to change your"
+            " explanation-language setting itself,"
             " /progress for mastery + level progress)"
         ) if self.io.show_cli_hints else ""
         available = ", ".join(MODULE_REGISTRY.keys())
@@ -317,6 +322,11 @@ class Orchestrator(OrchestratorProtocol):
                 self._handle_history_command(user_id, language, choice, default_report_language)
                 continue
 
+            if choice.startswith("/language"):
+                self._handle_language_command(profile, choice)
+                default_report_language = profile.explanation_language if profile else default_report_language
+                continue
+
             if choice == "/progress":
                 self._handle_progress_command(user_id, language)
                 continue
@@ -331,6 +341,23 @@ class Orchestrator(OrchestratorProtocol):
                 f"[!] Invalid module. Falling back to suggested module '{recommendation.module}'."
             )
             return recommendation.module
+
+    def _handle_language_command(self, profile: UserProfile | None, raw_command: str) -> None:
+        """On-demand change of explanation_language (dump_grammar, /history's default) —
+        the same setting asked once at session start, adjustable here too without
+        waiting for the next session."""
+        new_language = raw_command[len("/language"):].strip().lower()
+        if not new_language:
+            current = profile.explanation_language if profile else "english"
+            self.io.output(f"[*] Current explanation language: {current.capitalize()}. Usage: /language <language>")
+            return
+        if profile is None:
+            self.io.output("[!] No active profile to update.")
+            return
+        profile.explanation_language = new_language
+        profile.updated_at = datetime.now()
+        self.store.write_user_profile(profile)
+        self.io.output(f"[*] Explanation language set to {new_language.capitalize()}.")
 
     def _parse_history_scope(self, arg: str) -> tuple[str, int] | None:
         """Returns (kind, n) where kind is 'sessions' or 'days'. None if arg is malformed."""

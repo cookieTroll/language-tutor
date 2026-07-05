@@ -33,6 +33,12 @@ For each exercise, provide:
 Every exercise must be genuinely about "{topic}" — do not reuse or adapt any
 example from these instructions, they are format illustrations only.
 
+Do not restate or prefix the instruction/type name in each prompt (e.g.
+"Find and fix the error:", "Finish:") — the instruction is shown once for the
+whole batch, above all the exercises. Each prompt should contain only the
+exercise content itself (the sentence, fragment, or cue), not a repeated
+instruction.
+
 Return JSON only. No markdown.
 {{
   "exercises": [

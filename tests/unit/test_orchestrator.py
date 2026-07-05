@@ -931,3 +931,84 @@ def test_get_confirmed_module_loops_on_history_then_confirms_normally(store_and_
     mock_handle.assert_called_once_with("user1", "german", "/history", "english")
     assert module_key == "writing"
     assert io.prompt.call_count == 2
+
+
+def test_get_confirmed_module_language_command_updates_profile(store_and_llm):
+    """/language <lang> persists the new explanation_language on the profile and
+    re-prompts instead of starting a module."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    io.prompt.side_effect = ["/language german", "y"]
+
+    date_now = datetime.now()
+    profile = UserProfile(
+        user_id="user1", language="german", level="a1", level_source="stated",
+        active=True, created_at=date_now, updated_at=date_now,
+    )
+
+    module_key = orchestrator._get_confirmed_module(DEFAULT_RECOMMENDATION, "user1", "german", profile)
+
+    assert module_key == "writing"
+    assert profile.explanation_language == "german"
+    stored = store.get_user_profile("user1", "german")
+    assert stored.explanation_language == "german"
+
+
+def test_get_confirmed_module_language_command_no_arg_reports_current(store_and_llm):
+    """/language with no argument just reports the current setting, doesn't change it."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    io.prompt.side_effect = ["/language", "y"]
+
+    date_now = datetime.now()
+    profile = UserProfile(
+        user_id="user1", language="german", level="a1", level_source="stated",
+        active=True, created_at=date_now, updated_at=date_now, explanation_language="french",
+    )
+
+    orchestrator._get_confirmed_module(DEFAULT_RECOMMENDATION, "user1", "german", profile)
+
+    assert profile.explanation_language == "french"
+    assert any("French" in call.args[0] for call in io.output.call_args_list)
+
+
+def test_check_language_config_no_warning_when_fully_configured(store_and_llm):
+    """No maps defaulted -> on_warn is never called, regardless of configured status."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    on_warn = MagicMock()
+
+    with patch("orchestrator.orchestrator.using_defaults", return_value={"cefr_hints": False, "taxonomy": False}), \
+         patch("orchestrator.orchestrator.is_configured", return_value=True):
+        orchestrator._check_language_config("german", on_warn=on_warn)
+
+    on_warn.assert_not_called()
+
+
+def test_check_language_config_warns_configured_true_when_partially_defaulted(store_and_llm):
+    """A language with its own config file, but some maps still generic-defaulted,
+    is reported as configured=True — 'has content, just incomplete'."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    on_warn = MagicMock()
+
+    with patch("orchestrator.orchestrator.using_defaults", return_value={"cefr_hints": False, "taxonomy": True}), \
+         patch("orchestrator.orchestrator.is_configured", return_value=True):
+        orchestrator._check_language_config("spanish", on_warn=on_warn)
+
+    on_warn.assert_called_once_with("spanish", ["taxonomy"], True)
+
+
+def test_check_language_config_warns_configured_false_when_unconfigured(store_and_llm):
+    """A language with no lang/languages/{name}.yaml at all is reported as
+    configured=False -- distinct signal telling the caller to generate it,
+    not just accept the generic-default fallback."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    on_warn = MagicMock()
+
+    with patch("orchestrator.orchestrator.using_defaults", return_value={"cefr_hints": True, "taxonomy": True}), \
+         patch("orchestrator.orchestrator.is_configured", return_value=False):
+        orchestrator._check_language_config("klingon", on_warn=on_warn)
+
+    on_warn.assert_called_once_with("klingon", ["cefr hints", "taxonomy"], False)

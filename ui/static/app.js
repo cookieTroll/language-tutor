@@ -43,6 +43,8 @@ const CMD_HINTS = {
     { cmd: '/history', desc: 'Last 10 writing sessions' },
     { cmd: '/history &lt;n&gt;', desc: 'e.g. /history 5 — last n sessions' },
     { cmd: '/history &lt;n&gt;d', desc: 'e.g. /history 7d — last n days' },
+    { cmd: '/history ... lang:&lt;language&gt;', desc: 'e.g. /history 5 lang:german — one-off report language' },
+    { cmd: '/language &lt;language&gt;', desc: 'Change your explanation-language setting (dump_grammar, /history default)' },
     { cmd: '/progress', desc: 'Mastery dials + level trend, with option to level up' },
   ],
   writing: [

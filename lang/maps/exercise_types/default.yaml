@@ -29,8 +29,10 @@
 - type: error_correction
   grading: llm
   description: >
-    A sentence containing an error to find and fix.
-    Example: "Find and fix the error: Ich habe gestern ins Kino gegangen."
+    A sentence containing an error to find and fix. The prompt is just the
+    sentence itself — no instruction prefix; that's shown once for the whole
+    batch via student_instruction.
+    Example: "Ich habe gestern ins Kino gegangen."
   student_instruction: "Find and rewrite the sentence with the error fixed."
 
 - type: transformation
@@ -51,8 +53,10 @@
 - type: sentence_completion
   grading: llm
   description: >
-    An incomplete sentence for the student to finish naturally.
-    Example: "Finish: Obwohl es regnet, ___"
+    An incomplete sentence for the student to finish naturally. The prompt is
+    just the sentence fragment — no instruction prefix; that's shown once for
+    the whole batch via student_instruction.
+    Example: "Obwohl es regnet, ___"
   student_instruction: "Complete the sentence naturally."
 
 - type: sentence_combining
