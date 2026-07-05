@@ -41,6 +41,8 @@ class OpenAICompatibleLLM(BaseLLM):
                 extra = {}
                 if self.config.num_ctx is not None:
                     extra["extra_body"] = {"options": {"num_ctx": self.config.num_ctx}}
+                if self.config.request_timeout is not None:
+                    extra["timeout"] = self.config.request_timeout
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=formatted_messages,

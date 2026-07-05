@@ -46,11 +46,11 @@ def test_factory_build_gemini(mock_genai):
         provider="gemini",
         base_url=None,
         api_key="test-key",
-        model="gemini-2.0-flash"
+        model="gemini-2.5-flash"
     )
     llm = build_llm(config)
     assert isinstance(llm, GeminiLLM)
-    mock_genai.configure.assert_called_once_with(api_key="test-key")
+    mock_genai.Client.assert_called_once_with(api_key="test-key")
 
 @patch("llm.vertex.vertexai")
 def test_factory_build_vertex(mock_vertexai):
@@ -220,22 +220,22 @@ def test_openai_compat_check_health_failure(mock_urlopen):
 def test_gemini_completion(mock_genai, mock_types):
     from llm.gemini import GeminiLLM
 
-    mock_model = MagicMock()
-    mock_genai.GenerativeModel.return_value = mock_model
+    mock_client = MagicMock()
+    mock_genai.Client.return_value = mock_client
 
     mock_candidate = MagicMock()
     mock_candidate.finish_reason.name = "STOP"
     mock_response = MagicMock()
     mock_response.text = "Hallo Welt!"
     mock_response.candidates = [mock_candidate]
-    mock_model.generate_content.return_value = mock_response
+    mock_client.models.generate_content.return_value = mock_response
 
-    config = LLMConfig(provider="gemini", base_url=None, api_key="key", model="gemini-2.0-flash")
+    config = LLMConfig(provider="gemini", base_url=None, api_key="key", model="gemini-2.5-flash")
     llm = GeminiLLM(config)
     response = llm.complete([LLMMessage(role="user", content="Hello")])
 
     assert response.text == "Hallo Welt!"
-    assert response.model == "gemini-2.0-flash"
+    assert response.model == "gemini-2.5-flash"
     assert response.truncated is False
 
 @patch("llm.gemini.types")
@@ -243,17 +243,17 @@ def test_gemini_completion(mock_genai, mock_types):
 def test_gemini_truncation_detection(mock_genai, mock_types):
     from llm.gemini import GeminiLLM
 
-    mock_model = MagicMock()
-    mock_genai.GenerativeModel.return_value = mock_model
+    mock_client = MagicMock()
+    mock_genai.Client.return_value = mock_client
 
     mock_candidate = MagicMock()
     mock_candidate.finish_reason.name = "MAX_TOKENS"
     mock_response = MagicMock()
     mock_response.text = "Hallo..."
     mock_response.candidates = [mock_candidate]
-    mock_model.generate_content.return_value = mock_response
+    mock_client.models.generate_content.return_value = mock_response
 
-    config = LLMConfig(provider="gemini", base_url=None, api_key="key", model="gemini-2.0-flash")
+    config = LLMConfig(provider="gemini", base_url=None, api_key="key", model="gemini-2.5-flash")
     llm = GeminiLLM(config)
     response = llm.complete([LLMMessage(role="user", content="Hello")])
 
@@ -264,24 +264,26 @@ def test_gemini_truncation_detection(mock_genai, mock_types):
 def test_gemini_completion_failure_after_retries(mock_genai, mock_types):
     from llm.gemini import GeminiLLM
 
-    mock_model = MagicMock()
-    mock_genai.GenerativeModel.return_value = mock_model
-    mock_model.generate_content.side_effect = Exception("API error")
+    mock_client = MagicMock()
+    mock_genai.Client.return_value = mock_client
+    mock_client.models.generate_content.side_effect = Exception("API error")
 
     config = LLMConfig(
-        provider="gemini", base_url=None, api_key="key", model="gemini-2.0-flash",
+        provider="gemini", base_url=None, api_key="key", model="gemini-2.5-flash",
         max_retries=1, initial_retry_delay=0.01
     )
     llm = GeminiLLM(config)
 
     with pytest.raises(LLMError, match="Gemini completion failed"):
         llm.complete([LLMMessage(role="user", content="Hello")])
-    assert mock_model.generate_content.call_count == 2
+    assert mock_client.models.generate_content.call_count == 2
 
 @patch("llm.gemini.genai")
 def test_gemini_check_health_success(mock_genai):
     from llm.gemini import GeminiLLM
-    mock_genai.list_models.return_value = [MagicMock()]
+    mock_client = MagicMock()
+    mock_genai.Client.return_value = mock_client
+    mock_client.models.list.return_value = [MagicMock()]
 
     config = LLMConfig(provider="gemini", base_url=None, api_key="key", model="model")
     llm = GeminiLLM(config)
@@ -290,7 +292,9 @@ def test_gemini_check_health_success(mock_genai):
 @patch("llm.gemini.genai")
 def test_gemini_check_health_failure(mock_genai):
     from llm.gemini import GeminiLLM
-    mock_genai.list_models.side_effect = Exception("Connection refused")
+    mock_client = MagicMock()
+    mock_genai.Client.return_value = mock_client
+    mock_client.models.list.side_effect = Exception("Connection refused")
 
     config = LLMConfig(provider="gemini", base_url=None, api_key="key", model="model")
     llm = GeminiLLM(config)

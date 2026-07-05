@@ -1,7 +1,7 @@
 # Gemini configuration — executor and judge both use Gemini.
 # Requires GEMINI_API_KEY env var to be set before running.
 
-data_root: "data/test"
+data_root: "data"
 default_level: "a2"
 cold_start_threshold: 3
 interruption_timeout_minutes: 15
@@ -10,8 +10,9 @@ storage_backend: "sqlite"
 llm:
   provider: "gemini"
   api_key: "${GEMINI_API_KEY}"
-  model: "gemini-2.0-flash"
-  max_tokens: 1000
+  model: "gemini-2.5-flash"
+  max_tokens: 4000
   max_retries: 3
   initial_retry_delay: 1.0
   max_skill_retries: 3
+  request_timeout: 30  # seconds; hosted API should fail fast into the retry loop rather than hang the session

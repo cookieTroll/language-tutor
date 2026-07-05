@@ -33,6 +33,10 @@ class LLMConfig:
     initial_retry_delay: float = 1.0   # Starting backoff delay (in seconds) for connection retries
     max_skill_retries: int = 3         # Max agentic self-correction iterations for skills when output validation fails
     num_ctx: int | None = None         # Context window size (Ollama only); None uses the model default
+    request_timeout: float | None = None  # Per-request timeout (seconds) before treating a call as failed;
+                                           # None disables the timeout. Local models need this longer (or unset)
+                                           # than hosted APIs, which should fail fast into the retry loop instead
+                                           # of hanging the session.
 
 @dataclass
 class AppConfig:
@@ -97,6 +101,7 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         initial_retry_delay=float(llm_data.get("initial_retry_delay", 1.0)),
         max_skill_retries=int(llm_data.get("max_skill_retries", 3)),
         num_ctx=int(llm_data["num_ctx"]) if llm_data.get("num_ctx") is not None else None,
+        request_timeout=float(llm_data["request_timeout"]) if llm_data.get("request_timeout") is not None else None,
     )
     
     # Resolve relative data_root against project root

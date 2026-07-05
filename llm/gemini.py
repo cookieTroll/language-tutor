@@ -1,6 +1,6 @@
 import time
-import google.generativeai as genai
-from google.generativeai import types
+from google import genai
+from google.genai import types
 from llm.base import BaseLLM, LLMMessage, LLMResponse, LLMError
 from config import LLMConfig
 
@@ -8,7 +8,7 @@ from config import LLMConfig
 class GeminiLLM(BaseLLM):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
-        genai.configure(api_key=config.api_key)
+        self._client = genai.Client(api_key=config.api_key)
         self._model_name = config.model
 
     def complete(
@@ -25,17 +25,19 @@ class GeminiLLM(BaseLLM):
             if m.role == "system":
                 continue
             gemini_role = "model" if m.role == "assistant" else "user"
-            contents.append({"role": gemini_role, "parts": [m.content]})
-
-        model = genai.GenerativeModel(
-            model_name=self._model_name,
-            system_instruction=system_instruction,
-        )
+            contents.append(types.Content(role=gemini_role, parts=[types.Part.from_text(text=m.content)]))
 
         tokens_limit = max_tokens if max_tokens is not None else self.config.max_tokens
-        generation_config = types.GenerationConfig(
+        http_options = (
+            types.HttpOptions(timeout=int(self.config.request_timeout * 1000))
+            if self.config.request_timeout is not None
+            else None
+        )
+        generation_config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
             temperature=temperature,
             max_output_tokens=tokens_limit,
+            http_options=http_options,
         )
 
         max_attempts = self.config.max_retries + 1
@@ -43,9 +45,10 @@ class GeminiLLM(BaseLLM):
 
         for attempt in range(1, max_attempts + 1):
             try:
-                response = model.generate_content(
+                response = self._client.models.generate_content(
+                    model=self._model_name,
                     contents=contents,
-                    generation_config=generation_config,
+                    config=generation_config,
                 )
                 text = response.text or ""
                 finish_reason = (
@@ -63,7 +66,7 @@ class GeminiLLM(BaseLLM):
 
     def check_health(self) -> bool:
         try:
-            list(genai.list_models())
+            list(self._client.models.list())
             return True
         except Exception:
             return False
