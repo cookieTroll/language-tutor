@@ -79,9 +79,5 @@ class SummariseWritingSessionSkill(BaseSummariseSkill):
 
         return data
 
-    def _defaults(self, input: SkillInput) -> dict:
-        return {
-            "session_summary": "",
-            "mistakes": input.parameters.get("explained_mistakes", []),
-            "tips": [],
-        }
+    def _extra_defaults(self, input: SkillInput) -> dict:
+        return {"mistakes": input.parameters.get("explained_mistakes", [])}

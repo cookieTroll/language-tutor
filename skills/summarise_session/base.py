@@ -16,6 +16,8 @@ class BaseSummariseSkill(ABC):
 
     skill_type = "session"
 
+    _FALLBACK_SUMMARY = "(Session summary unavailable — an error occurred while generating it.)"
+
     @abstractmethod
     def _build_messages(self, input: SkillInput, language: str) -> list[LLMMessage]:
         """Build LLM messages for this module's summary prompt."""
@@ -24,10 +26,19 @@ class BaseSummariseSkill(ABC):
     def _validate(self, data: dict, input: SkillInput) -> dict:
         """Validate and enrich the parsed JSON. Raise ValueError to trigger retry."""
 
-    @abstractmethod
+    def _extra_defaults(self, input: SkillInput) -> dict:
+        """Module-specific fields to merge into the fallback metadata (e.g. a
+        module's own mistakes/items list). Override if a subclass needs more
+        than session_summary/tips on the failure path."""
+        return {}
+
     def _defaults(self, input: SkillInput) -> dict:
-        """Safe fallback metadata when all retries fail.
-        Must include session_summary and tips keys."""
+        """Safe fallback metadata when all retries fail."""
+        return {
+            "session_summary": self._FALLBACK_SUMMARY,
+            "tips": [],
+            **self._extra_defaults(input),
+        }
 
     def run(self, input: SkillInput, llm: BaseLLM) -> SkillOutput:
         language = input.parameters.get("language", "").capitalize()
