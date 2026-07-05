@@ -311,6 +311,14 @@ class SessionManager:
         self._cleanup_checkpoint(session.session_id, user_id)
         self.io.output(f"Discarded session {session.session_id}.")
 
+    def abandon_session(self, session_id: str, user_id: str) -> None:
+        """Called when the web UI's Return-to-Menu/Switch-User buttons interrupt a
+        session that's actively running (as opposed to discard_interrupted_session,
+        which handles a stale WAL entry found at the *start* of a later session)."""
+        self.store.update_session_status(session_id, "abandoned")
+        self._cleanup_checkpoint(session_id, user_id)
+        self.io.output(f"\n[*] Session {session_id} abandoned.")
+
     def _cleanup_checkpoint(self, session_id: str, user_id: str) -> None:
         checkpoint_path = os.path.join(
             self.config.data_root, "checkpoints", user_id, f"{session_id}.json"

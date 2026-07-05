@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GermanTutor</title>
+<title>Wharf the Language Tutor</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
 /* ── Background themes ── */
@@ -178,6 +178,13 @@ mark.mistake-hl {
   transition: border-color .2s;
 }
 .field input:focus { outline: none; border-color: var(--accent); }
+.field select {
+  width: 100%; padding: 10px 12px; background: var(--bg);
+  border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; font-family: inherit; font-size: 0.9rem;
+  margin-bottom: 8px; transition: border-color .2s;
+}
+.field select:focus { outline: none; border-color: var(--accent); }
 .btn-primary {
   padding: 11px; background: var(--accent); border: none;
   color: #111; border-radius: 5px; font-size: 0.9rem; font-weight: bold;
@@ -508,16 +515,20 @@ mark.mistake-hl {
 <div id="idle">
   <div class="idle-card">
     <div>
-      <h1>GERMANTUTOR</h1>
-      <p class="sub">AI-powered language coaching</p>
+      <h1>WHARF</h1>
+      <p class="sub">the language tutor</p>
     </div>
     <div class="field">
-      <label>User ID</label>
-      <input id="user-id" type="text" placeholder="student" autocomplete="off" />
+      <label>User</label>
+      <select id="user-picker" onchange="pickUser()">
+        <option value="">— select existing user —</option>
+      </select>
+      <input id="user-id" type="text" placeholder="or type a new username" autocomplete="off" />
     </div>
     <button class="btn-primary" onclick="startSession()">START SESSION</button>
     <div class="idle-footer">
       <a href="/sessions">View past sessions &rarr;</a>
+      <button class="btn-link" onclick="switchUserOnIdle()" title="Forget remembered user">Switch user</button>
       <button class="btn-link" onclick="cycleTheme()" title="Switch background">🎲 theme</button>
     </div>
   </div>
@@ -531,7 +542,7 @@ mark.mistake-hl {
 <!-- ── Main (after start) ── -->
 <div id="main">
   <header id="app-header">
-    <h1>GERMANTUTOR</h1>
+    <h1>WHARF</h1>
     <div class="meta-chips">
       <span class="chip" id="chip-module">—</span>
       <span class="chip" id="chip-lang">—</span>
@@ -540,7 +551,8 @@ mark.mistake-hl {
     </div>
     <div class="header-links">
       <a href="/sessions">Sessions</a>
-      <a href="/" onclick="return confirmLeave()">New</a>
+      <button class="btn-link" onclick="returnToMenu()">Return to Menu</button>
+      <button class="btn-link" onclick="switchUser()">Switch User</button>
       <button class="btn-link" onclick="cycleTheme()" title="Switch background">🎲</button>
     </div>
   </header>

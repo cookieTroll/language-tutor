@@ -11,7 +11,7 @@ from skills.summarize_writing_history.skill import SummarizeWritingHistorySkill
 from skills.cefr_estimator.skill import CefrEstimatorSkill
 from skills.protocols import SkillInput
 from modules.registry import MODULE_REGISTRY
-from shared.io import IOHandler
+from shared.io import IOHandler, SessionAbortRequested
 from shared.error_log import log_skill_error
 from lang.loader import using_defaults, is_configured
 from orchestrator.mastery import get_module_mastery, get_level_trend
@@ -186,6 +186,12 @@ class Orchestrator(OrchestratorProtocol):
         except KeyboardInterrupt:
             self.io.output("\n[!] Session interrupted. You can resume or log it next time.")
             return None
+        except SessionAbortRequested:
+            # Whether this ends the whole browser session (action="end") or loops back
+            # to the module chooser for the same user (action="restart") is the caller's
+            # call, not ours — re-raise once the in-progress session is marked abandoned.
+            self._session_manager.abandon_session(session_id, user_id)
+            raise
 
         # 8-13. Finalize session
         self._session_manager.finalize_session(

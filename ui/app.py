@@ -15,7 +15,7 @@ from config import load_config
 from memory.factory import build_storage
 from llm.factory import build_llm
 from orchestrator.orchestrator import Orchestrator
-from shared.io import WebIOHandler
+from shared.io import WebIOHandler, SessionAbortRequested
 from shared.humanize import humanize_tag
 
 app = Flask(__name__)
@@ -69,14 +69,24 @@ def api_start():
             orch = _make_orchestrator(io)
             forced_recommendation = None
             while True:
-                forced_recommendation = orch.run_session(
-                    user_id,
-                    language=None,
-                    on_language_warning=lambda lang, missing, configured=True: _lang_warning(io, lang, missing, configured),
-                    forced_recommendation=forced_recommendation,
-                )
+                try:
+                    forced_recommendation = orch.run_session(
+                        user_id,
+                        language=None,
+                        on_language_warning=lambda lang, missing, configured=True: _lang_warning(io, lang, missing, configured),
+                        forced_recommendation=forced_recommendation,
+                    )
+                except SessionAbortRequested as abort:
+                    if abort.action == "end":
+                        break
+                    io.reset_for_new_activity()
+                    forced_recommendation = None
+                    continue
                 if forced_recommendation is None:
-                    break
+                    # No chaining accepted (or nothing was offered) — stay logged in and
+                    # go back to the module chooser instead of ending the whole session.
+                    io.reset_for_new_activity()
+                    continue
         except Exception as e:
             io.output(f"[!] Session error: {e}")
         finally:
@@ -114,6 +124,11 @@ def api_stream(sid: str):
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.route("/api/users")
+def api_users():
+    return jsonify({"users": _store.list_users()})
 
 
 @app.route("/api/input/<sid>", methods=["POST"])

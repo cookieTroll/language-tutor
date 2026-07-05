@@ -12,15 +12,52 @@ let phase = 'idle';           // idle | setup | loading | writing | evaluating |
                               // shared across modules as "collecting a submittable answer".
 let inSessionPhase = false;   // true once any module (writing/grammar) has started its interactive phase
 let activeModule = null;      // 'writing' | 'grammar' | null — which panel is showing
+let atChooser = true;         // true while sitting at the module-chooser (#setup) screen, not mid-exercise —
+                              // `phase` doesn't reliably distinguish this (never set to a 'setup' value),
+                              // so Return-to-Menu/Switch-User use this instead. Set false in switchToSession(),
+                              // true in goBackToSetupForChaining().
 let lastOutputText = '';
 let timerStart = null;
 let timerInterval = null;
 let pendingTopic = sessionStorage.getItem('retryTopic');
 let evalStep = 0;
 
+// ── User persistence (idle screen) ─────────────────────────────────────────────
+const LAST_USER_KEY = 'ltut_last_user';
+
+async function initIdleScreen() {
+  const lastUser = localStorage.getItem(LAST_USER_KEY);
+  if (lastUser) document.getElementById('user-id').value = lastUser;
+
+  try {
+    const res = await fetch('/api/users');
+    const data = await res.json();
+    const picker = document.getElementById('user-picker');
+    (data.users || []).forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u; opt.textContent = u;
+      picker.appendChild(opt);
+    });
+    if (lastUser && (data.users || []).includes(lastUser)) picker.value = lastUser;
+  } catch (e) { /* dropdown is optional — free-text input still works */ }
+}
+
+function pickUser() {
+  const picker = document.getElementById('user-picker');
+  if (picker.value) document.getElementById('user-id').value = picker.value;
+}
+
+function switchUserOnIdle() {
+  localStorage.removeItem(LAST_USER_KEY);
+  document.getElementById('user-id').value = '';
+  document.getElementById('user-picker').value = '';
+  document.getElementById('user-id').focus();
+}
+
 // ── Session ──────────────────────────────────────────────────────────────────
 async function startSession() {
   const userId = document.getElementById('user-id').value.trim() || 'student';
+  localStorage.setItem(LAST_USER_KEY, userId);
   document.getElementById('idle').style.display = 'none';
   document.getElementById('main').style.display = 'flex';
   showCmdSidebar('setup');
@@ -36,6 +73,30 @@ async function startSession() {
   es.onmessage = e => handleEvent(JSON.parse(e.data));
   es.onerror   = () => appendTutor('Connection lost.', 'system');
 }
+
+// ── Return to menu / switch user (header) ──────────────────────────────────────
+async function returnToMenu() {
+  if (!sid || atChooser) return;
+  if (!confirm('Return to your activity menu? This session will be logged as abandoned.')) return;
+  await sendInput('__abandon_session__');
+}
+
+async function switchUser() {
+  if (sid) {
+    // Whether or not an exercise is actively in progress, tell the backend thread to
+    // end (it'll only mark a session abandoned if one was actually running) rather
+    // than just navigating away and leaking it blocked on the next prompt forever.
+    const msg = atChooser
+      ? 'Switch users and end this session?'
+      : 'Switch users? This session will be logged as abandoned and you will be logged out.';
+    if (!confirm(msg)) return;
+    await sendInput('__switch_user__');
+  }
+  localStorage.removeItem(LAST_USER_KEY);
+  window.location.href = '/';
+}
+
+initIdleScreen();
 
 // ── Command hints sidebar ────────────────────────────────────────────────────
 const CMD_HINTS = {
@@ -66,10 +127,6 @@ function showCmdSidebar(phaseKey) {
 
 function hideCmdSidebar() {
   document.getElementById('cmd-sidebar').style.display = 'none';
-}
-
-function confirmLeave() {
-  return phase === 'idle' || phase === 'done' || confirm('Leave current session?');
 }
 
 // ── Event handling ────────────────────────────────────────────────────────────
@@ -300,7 +357,15 @@ function showChainPrompt(module, focus) {
     goBackToSetupForChaining();
     sendInput('y');
   };
-  document.getElementById('chain-no').onclick  = () => { wrap.remove(); sendInput('n'); };
+  document.getElementById('chain-no').onclick  = () => {
+    wrap.remove();
+    // Same reasoning as chain-yes: declining still re-enters run_session's setup
+    // prompts (or a second, alternate next_actions signal) before anything else
+    // shows up — go back to the #setup panel so those aren't swallowed by the
+    // "no input box during a session" rule.
+    goBackToSetupForChaining();
+    sendInput('n');
+  };
   const out = document.getElementById('tutor-output');
   out.scrollTop = out.scrollHeight;
 }
@@ -308,6 +373,7 @@ function showChainPrompt(module, focus) {
 function goBackToSetupForChaining() {
   resetForNewModuleSession();
   inSessionPhase = false;
+  atChooser = true;
   document.getElementById('session').style.display = 'none';
   document.getElementById('setup').style.display = 'flex';
   document.getElementById('setup-output').innerHTML = '';
@@ -341,6 +407,7 @@ function handleData(payload) {
   if (payload.event === 'exercises_ready')          return handleExercisesReady(payload);
   if (payload.event === 'grammar_results_complete') return handleGrammarResultsComplete(payload);
   if (payload.event === 'progress_ready')           return handleProgressReady(payload);
+  if (payload.event === 'return_to_chooser')        return goBackToSetupForChaining();
 }
 
 function escapeHtml(str) {
@@ -393,6 +460,7 @@ function switchToSession() {
   document.getElementById('setup').style.display   = 'none';
   document.getElementById('session').style.display = 'flex';
   phase = 'loading';
+  atChooser = false;
 }
 
 function updateChip(id, text) {

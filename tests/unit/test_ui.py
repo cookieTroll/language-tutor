@@ -1,13 +1,14 @@
 import os
 import subprocess
 import threading
+from queue import Empty
 from unittest.mock import patch, MagicMock
 
 import pytest
 import yaml
 
 import ui.app as _ui_mod
-from shared.io import TerminalIOHandler, WebIOHandler
+from shared.io import TerminalIOHandler, WebIOHandler, SessionAbortRequested
 from orchestrator.protocols import ExerciseRecommendation
 
 _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -90,6 +91,34 @@ class TestWebIOHandler:
             "payload": {"event": "progress_ready", "current_level": "a1", "modules": modules, "trend": []},
         }
 
+    def test_reset_for_new_activity_enqueues_event(self):
+        io = WebIOHandler()
+        io.reset_for_new_activity()
+        ev = io.get_event(timeout=1.0)
+        assert ev == {"type": "data", "payload": {"event": "return_to_chooser"}}
+
+    def test_prompt_raises_on_abandon_sentinel(self):
+        io = WebIOHandler()
+        threading.Thread(target=lambda: io.send_input("__abandon_session__"), daemon=True).start()
+        with pytest.raises(SessionAbortRequested) as exc_info:
+            io.prompt("Q?")
+        assert exc_info.value.action == "restart"
+
+    def test_prompt_raises_on_switch_user_sentinel(self):
+        io = WebIOHandler()
+        threading.Thread(target=lambda: io.send_input("__switch_user__"), daemon=True).start()
+        with pytest.raises(SessionAbortRequested) as exc_info:
+            io.prompt("Q?")
+        assert exc_info.value.action == "end"
+
+    def test_prompt_block_also_raises_on_sentinel(self):
+        """prompt_block delegates to prompt(), so the same interception applies to
+        multi-line answers (e.g. a grammar exercise block or a writing draft)."""
+        io = WebIOHandler()
+        threading.Thread(target=lambda: io.send_input("__abandon_session__"), daemon=True).start()
+        with pytest.raises(SessionAbortRequested):
+            io.prompt_block("Answers?")
+
 
 # ── TerminalIOHandler ───────────────────────────────────────────────────────────
 
@@ -106,6 +135,9 @@ class TestTerminalIOHandler:
         io = TerminalIOHandler()
         monkeypatch.setattr("builtins.input", lambda: "")
         assert io.prompt_block() == ""
+
+    def test_reset_for_new_activity_is_a_noop(self):
+        assert TerminalIOHandler().reset_for_new_activity() is None
 
     def test_render_exercises_matches_prior_grammar_module_format(self, capsys):
         io = TerminalIOHandler()
@@ -283,7 +315,11 @@ class TestRoutes:
 
     def test_api_start_chains_forced_recommendation(self, client):
         """/api/start's background run() must loop with forced_recommendation, mirroring
-        the ui/cli.py chaining loop from 2a-vii — mocks Orchestrator entirely."""
+        the ui/cli.py chaining loop from 2a-vii — mocks Orchestrator entirely. A third
+        call happens because a None return no longer ends the loop (see
+        test_api_start_returns_to_chooser_instead_of_ending_on_none) — it keeps going
+        with forced_recommendation=None, and the (unmocked) third call exhausts the
+        side_effect list, raising StopIteration and letting the thread end."""
         recommendation = ExerciseRecommendation(module="grammar", reason="recurring error", suggested_focus="verb_tense")
         mock_orch = MagicMock()
         mock_orch.run_session.side_effect = [recommendation, None]
@@ -295,10 +331,100 @@ class TestRoutes:
                 thread = _ui_mod._sessions[sid]["thread"]
             thread.join(timeout=5)
 
-        assert mock_orch.run_session.call_count == 2
-        first_call, second_call = mock_orch.run_session.call_args_list
+        assert mock_orch.run_session.call_count == 3
+        first_call, second_call, third_call = mock_orch.run_session.call_args_list
         assert first_call.kwargs["forced_recommendation"] is None
         assert second_call.kwargs["forced_recommendation"] is recommendation
+        assert third_call.kwargs["forced_recommendation"] is None
+
+    def test_api_start_returns_to_chooser_instead_of_ending_on_none(self, client):
+        """A declined/no-op end of session (run_session returns None) must loop back
+        into a fresh chooser cycle for the same user rather than ending the thread.
+        Bounded side_effect list (not an unconditional return_value) so the thread
+        terminates on its own via the mock's StopIteration once exhausted, instead of
+        spinning a tight busy-loop forever in the background — the 3rd (unmocked) call
+        is where that StopIteration fires."""
+        mock_orch = MagicMock()
+        mock_orch.run_session.side_effect = [None, None]
+
+        with patch("ui.app.Orchestrator", return_value=mock_orch):
+            r = client.post("/api/start", json={"user_id": "test"})
+            sid = r.get_json()["session_id"]
+            with _ui_mod._sessions_lock:
+                sess = _ui_mod._sessions[sid]
+            sess["thread"].join(timeout=5)
+
+        assert not sess["thread"].is_alive()
+        # Under the old "break on None" behavior this would be 1 — it kept going instead.
+        assert mock_orch.run_session.call_count == 3
+
+        events = []
+        while True:
+            try:
+                events.append(sess["io"]._out_q.get_nowait())
+            except Empty:
+                break
+        reset_events = [e for e in events if e == {"type": "data", "payload": {"event": "return_to_chooser"}}]
+        assert len(reset_events) == 2  # after the 1st and 2nd None, before the 3rd exhausts the mock
+
+    def test_api_start_ends_on_switch_user_abort(self, client):
+        """A SessionAbortRequested(action="end") — the Switch User button — must break
+        the loop for real, ending the thread and emitting a "done" event."""
+        mock_orch = MagicMock()
+        mock_orch.run_session.side_effect = SessionAbortRequested(action="end")
+
+        with patch("ui.app.Orchestrator", return_value=mock_orch):
+            r = client.post("/api/start", json={"user_id": "test"})
+            sid = r.get_json()["session_id"]
+            with _ui_mod._sessions_lock:
+                sess = _ui_mod._sessions[sid]
+            sess["thread"].join(timeout=5)
+
+        assert not sess["thread"].is_alive()
+        events = []
+        while True:
+            try:
+                events.append(sess["io"]._out_q.get_nowait())
+            except Empty:
+                break
+        assert events[-1]["type"] == "done"
+
+    def test_api_start_restarts_on_abandon_abort(self, client):
+        """A SessionAbortRequested(action="restart") — the Return to Menu button — must
+        reset and loop back into the chooser for the same user, not end the thread. The
+        second call raises action="end" purely so the thread terminates on its own for
+        the test, rather than spinning forever."""
+        mock_orch = MagicMock()
+        mock_orch.run_session.side_effect = [
+            SessionAbortRequested(action="restart"),
+            SessionAbortRequested(action="end"),
+        ]
+
+        with patch("ui.app.Orchestrator", return_value=mock_orch):
+            r = client.post("/api/start", json={"user_id": "test"})
+            sid = r.get_json()["session_id"]
+            with _ui_mod._sessions_lock:
+                sess = _ui_mod._sessions[sid]
+            sess["thread"].join(timeout=5)
+
+        assert not sess["thread"].is_alive()
+        assert mock_orch.run_session.call_count == 2
+        last_call = mock_orch.run_session.call_args_list[-1]
+        assert last_call.kwargs["forced_recommendation"] is None  # restart reset it back to None
+
+        events = []
+        while True:
+            try:
+                events.append(sess["io"]._out_q.get_nowait())
+            except Empty:
+                break
+        assert {"type": "data", "payload": {"event": "return_to_chooser"}} in events
+        assert events[-1]["type"] == "done"
+
+    def test_api_users_lists_store_users(self, client):
+        with patch.object(_ui_mod._store, "list_users", return_value=["alice", "bob"]):
+            r = client.get("/api/users")
+        assert r.get_json() == {"users": ["alice", "bob"]}
 
 
 # ── Static assets ─────────────────────────────────────────────────────────────

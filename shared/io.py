@@ -1,7 +1,24 @@
-from typing import Protocol
+from typing import Literal, Protocol
 from queue import Queue, Empty
 from shared.timer import SessionTimer
 from shared.humanize import humanize_tag
+
+# Reserved WebIOHandler.prompt()/prompt_block() inputs — never valid answers to any real
+# prompt — used by the web UI's "Return to Menu"/"Switch User" buttons to interrupt
+# whatever the session thread is currently blocked on. See SessionAbortRequested.
+ABANDON_SESSION_SENTINEL = "__abandon_session__"
+SWITCH_USER_SENTINEL = "__switch_user__"
+
+
+class SessionAbortRequested(Exception):
+    """Raised by WebIOHandler when a reserved sentinel input is received instead of a
+    real answer. action="restart" (Return to Menu) means: abandon the in-progress
+    session if any, then go back to the module chooser for the same user. action="end"
+    (Switch User) means: abandon the in-progress session if any, then end the whole
+    session thread so the browser can log in as someone else."""
+    def __init__(self, action: Literal["restart", "end"]):
+        self.action = action
+        super().__init__(f"Session abort requested: {action}")
 
 
 class IOHandler(Protocol):
@@ -11,6 +28,11 @@ class IOHandler(Protocol):
     def prompt(self, text: str = "") -> str: ...
     def prompt_block(self, text: str = "") -> str:
         """Collect a multi-line answer as one opaque string (e.g. a block of grammar exercise answers)."""
+        ...
+    def reset_for_new_activity(self) -> None:
+        """Signal that the session is returning to the module chooser for a fresh
+        activity — a no-op everywhere except WebIOHandler, which needs to tell the
+        browser to switch panels back to the setup/chooser view."""
         ...
     def render_evaluation(self, data: dict) -> None: ...
     def render_exercises(self, data: dict) -> None:
@@ -63,6 +85,9 @@ class TerminalIOHandler:
         if self._timer:
             self._timer.stop()
             self._timer = None
+
+    def reset_for_new_activity(self) -> None:
+        pass  # no separate "screen" to reset in the CLI
 
     def render_evaluation(self, data: dict) -> None:
         self.output(
@@ -213,7 +238,12 @@ class WebIOHandler:
 
     def prompt(self, text: str = "") -> str:
         self._out_q.put({"type": "prompt", "text": text})
-        return self._in_q.get()  # blocks until send_input() is called
+        value = self._in_q.get()  # blocks until send_input() is called
+        if value == ABANDON_SESSION_SENTINEL:
+            raise SessionAbortRequested(action="restart")
+        if value == SWITCH_USER_SENTINEL:
+            raise SessionAbortRequested(action="end")
+        return value
 
     def prompt_block(self, text: str = "") -> str:
         """Web client already posts a full multi-line textarea value in one send_input() call."""
@@ -251,6 +281,9 @@ class WebIOHandler:
 
     def stop_timer(self) -> None:
         pass
+
+    def reset_for_new_activity(self) -> None:
+        self._out_q.put({"type": "data", "payload": {"event": "return_to_chooser"}})
 
     def end(self) -> None:
         self._out_q.put({"type": "done", "text": ""})
