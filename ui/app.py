@@ -16,8 +16,10 @@ from memory.factory import build_storage
 from llm.factory import build_llm
 from orchestrator.orchestrator import Orchestrator
 from shared.io import WebIOHandler
+from shared.humanize import humanize_tag
 
 app = Flask(__name__)
+app.jinja_env.filters["humanize_tag"] = humanize_tag
 
 # ── Bootstrap ──────────────────────────────────────────────────────────────────
 config_path = os.environ.get("LTUT_CONFIG", os.path.join(project_root, "config.yaml"))
@@ -34,11 +36,17 @@ def _make_orchestrator(io: WebIOHandler) -> Orchestrator:
     return Orchestrator(_store, _llm, _config, io=io)
 
 
-def _lang_warning(io: WebIOHandler, language: str, missing: list) -> None:
-    io.output(
-        f"\n[!] No language config for '{language.upper()}'."
-        f"\n    Falling back to defaults for: {', '.join(missing)}."
-    )
+def _lang_warning(io: WebIOHandler, language: str, missing: list, configured: bool = True) -> None:
+    if not configured:
+        io.output(
+            f"\n[!] '{language.upper()}' is not yet supported — no language configuration exists for it."
+            f"\n    Generate it with: python -m scripts.generate_language {language.lower()}"
+        )
+    else:
+        io.output(
+            f"\n[!] No language config for '{language.upper()}'."
+            f"\n    Falling back to defaults for: {', '.join(missing)}."
+        )
     io.prompt("Press Enter to continue: ")
 
 
@@ -64,7 +72,7 @@ def api_start():
                 forced_recommendation = orch.run_session(
                     user_id,
                     language=None,
-                    on_language_warning=lambda lang, missing: _lang_warning(io, lang, missing),
+                    on_language_warning=lambda lang, missing, configured=True: _lang_warning(io, lang, missing, configured),
                     forced_recommendation=forced_recommendation,
                 )
                 if forced_recommendation is None:

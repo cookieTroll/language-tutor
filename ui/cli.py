@@ -16,11 +16,16 @@ from llm.factory import build_llm
 from orchestrator.orchestrator import Orchestrator
 from shared.io import TerminalIOHandler
 
-def _language_config_warning(language: str, missing: list) -> None:
-    print(f"\n[!] No language-specific configuration found for '{language.upper()}'.")
-    print(f"    Falling back to generic defaults for: {', '.join(missing)}.")
-    print(f"    To configure: add lang/languages/{language.lower()}.yaml and the referenced maps.")
-    print( "    Feedback quality may be lower than with a language-specific setup.")
+def _language_config_warning(language: str, missing: list, configured: bool = True) -> None:
+    if not configured:
+        print(f"\n[!] '{language.upper()}' is not yet supported — no language configuration exists for it.")
+        print(f"    Generate it with: python -m scripts.generate_language {language.lower()}")
+        print( "    Feedback quality may be lower than with a language-specific setup until then.")
+    else:
+        print(f"\n[!] No language-specific configuration found for '{language.upper()}'.")
+        print(f"    Falling back to generic defaults for: {', '.join(missing)}.")
+        print(f"    To configure: add lang/languages/{language.lower()}.yaml and the referenced maps.")
+        print( "    Feedback quality may be lower than with a language-specific setup.")
     try:
         input("\n    Press Enter to continue with defaults, or Ctrl+C to exit: ")
     except KeyboardInterrupt:
