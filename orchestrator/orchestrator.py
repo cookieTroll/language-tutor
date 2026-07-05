@@ -157,7 +157,7 @@ class Orchestrator(OrchestratorProtocol):
             recommendation = self.recommend_exercise(summary)
 
             # 4. Present recommendation, confirm or override
-            module_key = self._get_confirmed_module(recommendation, user_id, selected_lang)
+            module_key = self._get_confirmed_module(recommendation, user_id, selected_lang, profile)
         module = MODULE_REGISTRY[module_key]
 
         # 5. Write-ahead log + checkpoint creation
@@ -223,6 +223,16 @@ class Orchestrator(OrchestratorProtocol):
             self.store.write_level(user_id, choice, "stated")
             profile.level = choice
 
+    def _confirm_or_update_explanation_language(self, profile: UserProfile) -> None:
+        """Explanations/summaries (dump_grammar, /history) are written in this
+        language, not necessarily the target study language — e.g. a German
+        learner may still want grammar explained in English. Reconfirmed each
+        session like level, so it's easy to change without a dedicated command."""
+        self.io.output(f"Explanations/summaries language: {profile.explanation_language.capitalize()}")
+        choice = self.io.prompt("Press Enter to keep, or type a new language: ").strip().lower()
+        if choice and choice != profile.explanation_language:
+            profile.explanation_language = choice
+
     def _select_language_and_profile(self, user_id: str, language: str) -> tuple[str, UserProfile]:
         active_lang = self.store.get_active_language(user_id)
         selected_lang = language
@@ -245,6 +255,9 @@ class Orchestrator(OrchestratorProtocol):
                 f"Enter your CEFR level for {selected_lang.upper()} [default: {default.upper()}]: "
             ).strip().lower()
             level = level_input if level_input else default
+            explanation_language = self.io.prompt(
+                "Which language should explanations/summaries be written in? [default: English]: "
+            ).strip().lower() or "english"
             profile = UserProfile(
                 user_id=user_id,
                 language=selected_lang,
@@ -252,18 +265,23 @@ class Orchestrator(OrchestratorProtocol):
                 level_source="stated",
                 active=True,
                 created_at=datetime.now(),
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
+                explanation_language=explanation_language,
             )
             self.store.write_user_profile(profile)
         else:
             self._confirm_or_update_level(user_id, profile)
+            self._confirm_or_update_explanation_language(profile)
             profile.active = True
             profile.updated_at = datetime.now()
             self.store.write_user_profile(profile)
 
         return selected_lang, profile
 
-    def _get_confirmed_module(self, recommendation: ExerciseRecommendation, user_id: str, language: str) -> str:
+    def _get_confirmed_module(
+        self, recommendation: ExerciseRecommendation, user_id: str, language: str,
+        profile: UserProfile | None = None,
+    ) -> str:
         focus_line = f"\nSuggested focus: {recommendation.suggested_focus}" if recommendation.suggested_focus else ""
         self.io.output(
             f"\n[Recommendation]: We suggest using the '{recommendation.module.upper()}' module."
@@ -275,32 +293,38 @@ class Orchestrator(OrchestratorProtocol):
             " (writing-history report: /history for last 10 sessions,"
             " /history <n> e.g. /history 5 for last n sessions,"
             " /history <n>d e.g. /history 7d for last n days,"
+            " add lang:<language> e.g. /history 5 lang:german to change the"
+            " report's language (default: your explanation-language setting),"
             " /progress for mastery + level progress)"
         ) if self.io.show_cli_hints else ""
+        available = ", ".join(MODULE_REGISTRY.keys())
+        default_report_language = profile.explanation_language if profile else "english"
 
         while True:
-            confirm = self.io.prompt(
-                f"\nStart this module? [Y/n]{history_hint}: "
+            choice = self.io.prompt(
+                f"\nAccept suggestion? [Y/Enter to accept, or type a module name to switch]"
+                f"\nAvailable modules: {available}{history_hint}"
+                f"\n> "
             ).strip().lower()
 
-            if confirm.startswith("/history"):
-                self._handle_history_command(user_id, language, confirm)
+            if choice.startswith("/history"):
+                self._handle_history_command(user_id, language, choice, default_report_language)
                 continue
 
-            if confirm == "/progress":
+            if choice == "/progress":
                 self._handle_progress_command(user_id, language)
                 continue
 
-            module_key = recommendation.module
-            if confirm == "n":
-                self.io.output(f"Available modules: {list(MODULE_REGISTRY.keys())}")
-                override = self.io.prompt("Enter module name to run instead: ").strip().lower()
-                if override in MODULE_REGISTRY:
-                    module_key = override
-                else:
-                    self.io.output(f"[!] Invalid module. Falling back to suggested module '{module_key}'.")
+            if choice in ("", "y"):
+                return recommendation.module
 
-            return module_key
+            if choice in MODULE_REGISTRY:
+                return choice
+
+            self.io.output(
+                f"[!] Invalid module. Falling back to suggested module '{recommendation.module}'."
+            )
+            return recommendation.module
 
     def _parse_history_scope(self, arg: str) -> tuple[str, int] | None:
         """Returns (kind, n) where kind is 'sessions' or 'days'. None if arg is malformed."""
@@ -312,7 +336,30 @@ class Orchestrator(OrchestratorProtocol):
             return "sessions", int(arg)
         return None
 
-    def _handle_history_command(self, user_id: str, language: str, raw_command: str) -> None:
+    def _split_history_args(self, arg: str, default_report_language: str = "english") -> tuple[str, str]:
+        """Splits raw /history args into (scope_arg, report_language).
+
+        A token prefixed 'lang:' (e.g. 'lang:german') overrides the report's
+        output language for this one call; every other token is passed through
+        unchanged to _parse_history_scope. Explicit prefix rather than "any
+        non-numeric token is a language" so a genuinely malformed scope arg
+        (e.g. 'abc') still fails validation instead of being silently
+        reinterpreted. Absent an override, report_language falls back to the
+        caller-supplied default (the user's profile explanation_language) —
+        recurring_mistakes/topics are about {language} content, but the report
+        itself is meta-commentary the learner reads."""
+        report_language = default_report_language
+        scope_tokens = []
+        for token in arg.split():
+            if token.lower().startswith("lang:"):
+                report_language = token.split(":", 1)[1] or report_language
+            else:
+                scope_tokens.append(token)
+        return " ".join(scope_tokens), report_language
+
+    def _handle_history_command(
+        self, user_id: str, language: str, raw_command: str, default_report_language: str = "english",
+    ) -> None:
         """On-demand writing-history report (Layer 2b). Not tied to any specific session;
         nothing here is written back to storage — regenerated fresh on every request.
 
@@ -321,8 +368,9 @@ class Orchestrator(OrchestratorProtocol):
         but if /history grows more scope (more aggregations, other modules, etc.) split
         the window-filtering and aggregation-building into their own helpers first.
         """
-        arg = raw_command[len("/history"):].strip()
-        scope = self._parse_history_scope(arg)
+        raw_arg = raw_command[len("/history"):].strip()
+        scope_arg, report_language = self._split_history_args(raw_arg, default_report_language)
+        scope = self._parse_history_scope(scope_arg)
         if scope is None:
             self.io.output(
                 "[!] Invalid /history argument. Use '/history', '/history <n>' (sessions), "
@@ -374,6 +422,7 @@ class Orchestrator(OrchestratorProtocol):
                 level=self.store.get_current_level(user_id),
                 parameters={
                     "language": language,
+                    "report_language": report_language,
                     "scope_label": scope_label,
                     "topics": topics,
                     "recurring_mistakes": recurring_mistakes,

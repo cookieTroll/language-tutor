@@ -303,8 +303,9 @@ def test_new_user_stated_level_overrides_config_default(store_and_llm):
     store, llm, config, io = store_and_llm
     orchestrator = Orchestrator(store, llm, config, io=io)
 
-    # Simulate: no active language → type "german", then level "b1" (config default is "a1")
-    io.prompt.side_effect = ["german", "b1"]
+    # Simulate: no active language → type "german", then level "b1" (config default is "a1"),
+    # then Enter for explanation_language (default: english)
+    io.prompt.side_effect = ["german", "b1", ""]
 
     _, profile = orchestrator._select_language_and_profile("user1", language=None)
 
@@ -317,8 +318,9 @@ def test_new_user_enter_uses_config_default(store_and_llm):
     store, llm, config, io = store_and_llm
     orchestrator = Orchestrator(store, llm, config, io=io)
 
-    # Simulate: no active language → type "german", then Enter (empty) for level
-    io.prompt.side_effect = ["german", ""]
+    # Simulate: no active language → type "german", then Enter (empty) for level,
+    # then Enter for explanation_language (default: english)
+    io.prompt.side_effect = ["german", "", ""]
 
     _, profile = orchestrator._select_language_and_profile("user1", language=None)
 
@@ -337,8 +339,9 @@ def test_existing_user_level_override(store_and_llm):
         created_at=date_now, updated_at=date_now,
     ))
 
-    # Simulate: continue german, then override level to "b1"
-    io.prompt.side_effect = ["", "b1"]
+    # Simulate: continue german, then override level to "b1", then Enter to keep
+    # explanation_language default
+    io.prompt.side_effect = ["", "b1", ""]
 
     _, profile = orchestrator._select_language_and_profile("user1", language=None)
 
@@ -358,8 +361,9 @@ def test_existing_user_level_kept_on_enter(store_and_llm):
         created_at=date_now, updated_at=date_now,
     ))
 
-    # Simulate: continue german, then Enter (keep level)
-    io.prompt.side_effect = ["", ""]
+    # Simulate: continue german, then Enter (keep level), then Enter (keep
+    # explanation_language default)
+    io.prompt.side_effect = ["", "", ""]
 
     _, profile = orchestrator._select_language_and_profile("user1", language=None)
 
@@ -831,6 +835,6 @@ def test_get_confirmed_module_loops_on_history_then_confirms_normally(store_and_
     with patch.object(orchestrator, "_handle_history_command") as mock_handle:
         module_key = orchestrator._get_confirmed_module(DEFAULT_RECOMMENDATION, "user1", "german")
 
-    mock_handle.assert_called_once_with("user1", "german", "/history")
+    mock_handle.assert_called_once_with("user1", "german", "/history", "english")
     assert module_key == "writing"
     assert io.prompt.call_count == 2
