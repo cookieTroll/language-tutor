@@ -256,10 +256,15 @@ local models drifted across types mid-response; that was silently filtered down
 to the first type seen, which could shrink a requested batch of N to just a few.
 Since the type vocabulary is pedagogically generic rather than topic-specific, a
 random pick that avoids repeating the immediately previous round's type is just
-as good and costs no extra LLM call. `generate_exercises` now hard-validates that
-every returned exercise matches the given type and that the count matches
-`exercise_count`, retrying (`call_with_self_correction`) on either mismatch
-instead of silently truncating.
+as good and costs no extra LLM call. `generate_exercises` validates every
+returned exercise against the given type and taxonomy; a wrong-type or invalid-tag
+exercise is dropped (not the whole batch), and the shortfall is topped up with a
+fresh, cheaper follow-up request (`MAX_TOPUP_ROUNDS = 3`) that asks only for the
+missing count and lists the already-accepted prompts so the model doesn't repeat
+itself — not a full regenerate of all `exercise_count` exercises from scratch.
+Structural problems (missing keys, non-JSON) still retry the same request via
+`call_with_self_correction`, since those indicate the model botched the format
+itself rather than just missing the mark on one exercise.
 
 **Prompt template:**
 ```

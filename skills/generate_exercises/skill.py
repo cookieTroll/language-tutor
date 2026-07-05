@@ -7,6 +7,8 @@ from lang.models import TaxonomyError
 from skills.protocols import SkillProtocol, SkillInput, SkillOutput, call_with_self_correction, SelfCorrectionError
 from skills.generate_exercises.prompts import GENERATE_EXERCISES_PROMPT, GENERIC_SCOPE_FALLBACK
 
+MAX_TOPUP_ROUNDS = 3  # top up the shortfall this many times before giving up
+
 
 class GenerateExercisesSkill(SkillProtocol):
     name = "generate_exercises"
@@ -69,19 +71,11 @@ class GenerateExercisesSkill(SkillProtocol):
         matched = topics_map.scope_for(topic) if topics_map else None
         scope_block = (matched.format_scope_for_prompt() if matched else "") or GENERIC_SCOPE_FALLBACK
 
-        prompt = GENERATE_EXERCISES_PROMPT.format(
-            language=language,
-            exercise_count=exercise_count,
-            topic=topic,
-            level=input.level.upper(),
-            exercise_type=exercise_type,
-            exercise_type_line=exercise_type_line,
-            taxonomy=taxonomy.format_for_prompt(),
-            scope_block=scope_block,
-        )
-        messages = [LLMMessage(role="user", content=prompt)]
-
-        def parse(text: str) -> list[dict]:
+        def parse_batch(text: str) -> list[dict]:
+            """Validates each item, silently dropping ones that don't match the
+            requested type or taxonomy — the caller tops up the shortfall with a
+            fresh, cheaper request instead of the whole batch being discarded and
+            regenerated from scratch over a single bad item."""
             if text.startswith("```"):
                 text = re.sub(r"^```(?:json)?\n?", "", text)
                 text = re.sub(r"\n?```$", "", text)
@@ -93,36 +87,29 @@ class GenerateExercisesSkill(SkillProtocol):
 
             parsed = []
             for item in raw_exercises:
+                # Structural problems (not an object, missing a required key) mean the
+                # model botched the JSON itself — raise so call_with_self_correction
+                # retries with corrective feedback, same as before.
                 if not isinstance(item, dict):
                     raise ValueError(f"Exercise item is not an object: {item!r}")
                 for key in ("prompt", "type", "correct_answer", "error_tag"):
                     if key not in item:
                         raise ValueError(f"Missing key '{key}' in exercise: {item!r}")
 
+                # Semantic mismatches (wrong type, invalid/null tag) mean this specific
+                # exercise doesn't fit the ask — drop it and let the caller top up the
+                # shortfall with a fresh request, rather than failing the whole batch.
                 item_type = str(item["type"]).strip()
-                # exercise_type is fixed by the caller, not chosen by the model — a
-                # mismatch means the model drifted off the requested type. That used
-                # to be silently filtered out after the fact; now it's a hard retry.
                 if item_type != exercise_type:
-                    raise ValueError(
-                        f"Exercise type '{item_type}' does not match the requested "
-                        f"type '{exercise_type}' for exercise {item.get('prompt')!r}"
-                    )
+                    continue
                 grading = exercise_types_map.grading_for(item_type)
 
-                # Taxonomy is the single contract for valid error_tag values — an
-                # unvalidated hallucinated tag here would silently corrupt
-                # error_frequency / select_grammar's downstream lookups, so this
-                # retries the whole batch rather than falling back to "other".
                 if item["error_tag"] is None:
-                    raise ValueError(
-                        f"error_tag is null for exercise {item.get('prompt')!r} — "
-                        f"must be one of {sorted(taxonomy.tag_set)}"
-                    )
+                    continue
                 try:
                     error_tag = taxonomy.validate_tag(str(item["error_tag"]))
-                except TaxonomyError as e:
-                    raise ValueError(str(e)) from e
+                except TaxonomyError:
+                    continue
 
                 accepted_answers = item.get("accepted_answers") or []
                 if not isinstance(accepted_answers, list):
@@ -137,21 +124,64 @@ class GenerateExercisesSkill(SkillProtocol):
                     "error_tag": error_tag,
                     "distractor_hint": str(item.get("distractor_hint", "")),
                 })
-
-            if len(parsed) != exercise_count:
-                raise ValueError(
-                    f"Expected exactly {exercise_count} exercises of type "
-                    f"'{exercise_type}', got {len(parsed)}"
-                )
-
             return parsed
 
+        accumulated: list[dict] = []
         try:
-            exercises = call_with_self_correction(llm, messages, parse, temperature=0.6)
-            return SkillOutput(skill_name=self.name, success=True, metadata={"exercises": exercises})
+            for _ in range(MAX_TOPUP_ROUNDS):
+                remaining = exercise_count - len(accumulated)
+                if remaining <= 0:
+                    break
+
+                avoid_block = ""
+                if accumulated:
+                    already = "\n".join(f"- {ex['prompt']}" for ex in accumulated)
+                    avoid_block = (
+                        "\nAlready written earlier in this batch — write DIFFERENT new "
+                        f"exercises, do not repeat or rephrase any of these:\n{already}"
+                    )
+                prompt = GENERATE_EXERCISES_PROMPT.format(
+                    language=language,
+                    exercise_count=remaining,
+                    topic=topic,
+                    level=input.level.upper(),
+                    exercise_type=exercise_type,
+                    exercise_type_line=exercise_type_line,
+                    taxonomy=taxonomy.format_for_prompt(),
+                    scope_block=scope_block,
+                    avoid_block=avoid_block,
+                )
+                messages = [LLMMessage(role="user", content=prompt)]
+                batch = call_with_self_correction(llm, messages, parse_batch, temperature=0.6)
+
+                # Dedup against what's already accumulated — the "avoid_block" prompt
+                # instruction is a soft ask, not a guarantee the model won't repeat itself.
+                existing_prompts = {ex["prompt"] for ex in accumulated}
+                for ex in batch:
+                    if len(accumulated) >= exercise_count:
+                        break
+                    if ex["prompt"] in existing_prompts:
+                        continue
+                    accumulated.append(ex)
+                    existing_prompts.add(ex["prompt"])
         except SelfCorrectionError as exc:
             return SkillOutput(
                 skill_name=self.name,
                 success=False,
                 metadata={"exercises": [], "error": str(exc)},
             )
+
+        if len(accumulated) < exercise_count:
+            return SkillOutput(
+                skill_name=self.name,
+                success=False,
+                metadata={
+                    "exercises": [],
+                    "error": (
+                        f"Only produced {len(accumulated)}/{exercise_count} valid "
+                        f"'{exercise_type}' exercises after {MAX_TOPUP_ROUNDS} rounds."
+                    ),
+                },
+            )
+
+        return SkillOutput(skill_name=self.name, success=True, metadata={"exercises": accumulated})

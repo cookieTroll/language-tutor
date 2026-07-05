@@ -345,9 +345,9 @@ class TestGenerateExercisesSkill:
 
     def test_wrong_type_triggers_retry(self):
         """The exercise type is now fixed by the caller (modules/grammar/agent.py
-        picks it in code, not the LLM) — a model that drifts to a different type,
-        or mixes types, is a hard mismatch that triggers a retry instead of being
-        silently filtered down to whatever type happened to come first."""
+        picks it in code, not the LLM) — a model that drifts to a different type
+        mid-batch has just that exercise dropped, and the shortfall is topped up
+        with a fresh, cheaper request (not a full regenerate of the whole batch)."""
         from skills.generate_exercises.skill import GenerateExercisesSkill
         bad = json.dumps({"exercises": [
             _exercise(type="fill_in_the_blank", prompt="p1", correct_answer="a1"),
@@ -377,12 +377,12 @@ class TestGenerateExercisesSkill:
 
     def test_count_mismatch_triggers_retry(self):
         """Requesting N exercises must produce exactly N of the given type — a
-        short batch (all matching type, but too few) is now a hard retry trigger,
-        not a silently-accepted partial batch."""
+        short first batch is topped up with a second request for just the
+        shortfall, deduping against anything the model repeats from round 1."""
         from skills.generate_exercises.skill import GenerateExercisesSkill
         short = json.dumps({"exercises": [_exercise(prompt="p1", correct_answer="a1")]})
         full = json.dumps({"exercises": [
-            _exercise(prompt="p1", correct_answer="a1"),
+            _exercise(prompt="p1", correct_answer="a1"),  # model repeats itself — must be deduped
             _exercise(prompt="p2", correct_answer="a2"),
         ]})
         llm = make_llm([short, full])
@@ -398,6 +398,38 @@ class TestGenerateExercisesSkill:
 
         assert out.success is True
         assert len(out.metadata["exercises"]) == 2
+        assert [ex["prompt"] for ex in out.metadata["exercises"]] == ["p1", "p2"]
+        assert llm.complete.call_count == 2
+
+    def test_topup_requests_only_the_shortfall_not_a_full_batch(self):
+        """If 6 of 10 requested exercises come back valid, the follow-up request
+        must ask for the remaining 4 only — not regenerate all 10 from scratch."""
+        from skills.generate_exercises.skill import GenerateExercisesSkill
+        first_batch = json.dumps({"exercises": [
+            _exercise(prompt=f"p{i}", correct_answer=f"a{i}") for i in range(1, 7)
+        ]})
+        second_batch = json.dumps({"exercises": [
+            _exercise(prompt=f"p{i}", correct_answer=f"a{i}") for i in range(7, 11)
+        ]})
+        llm = make_llm([first_batch, second_batch])
+
+        skill = GenerateExercisesSkill()
+        out = skill.run(
+            make_input(
+                level="a1", topic="Dative case", language="german",
+                exercise_type="fill_in_the_blank", exercise_count=10,
+            ),
+            llm,
+        )
+
+        assert out.success is True
+        assert len(out.metadata["exercises"]) == 10
+        assert llm.complete.call_count == 2
+
+        second_prompt = llm.complete.call_args_list[1].args[0][0].content
+        assert "Generate 4 " in second_prompt
+        assert "Already written earlier in this batch" in second_prompt
+        assert "p1" in second_prompt  # the already-written prompts are listed so the model avoids repeating them
         assert llm.complete.call_count == 2
 
     def test_grading_derived_from_exercise_type_map(self):

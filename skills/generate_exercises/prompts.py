@@ -20,6 +20,7 @@ to practice a different angle on the same topic:
 
 Allowed error_tag values (use EXACTLY one of these strings for each exercise):
 {taxonomy}
+{avoid_block}
 
 For each exercise, provide:
 - prompt: the exercise text exactly as shown to the student
