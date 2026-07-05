@@ -317,6 +317,88 @@ class TestFormatEvaluationContext:
         assert _format_evaluation_context({}) == ""
         assert _format_evaluation_context({"explained_mistakes": []}) == ""
 
+
+# ---------------------------------------------------------------------------
+# _follow_up_phase — /btw practice-request detection (routes to grammar via
+# next_actions rather than being answered as a normal Q&A question)
+# ---------------------------------------------------------------------------
+
+class TestFollowUpPracticeRequest:
+
+    def _pipeline_with_mistakes(self, tags: list[str]) -> PipelineResult:
+        return PipelineResult(
+            detector_success=True,
+            detector_error="",
+            explained_mistakes=[
+                {"fragment": f"frag{i}", "error_tag": tag, "correction": "", "explanation": ""}
+                for i, tag in enumerate(tags)
+            ],
+            corrected_text="",
+            tips=[],
+            session_summary="",
+        )
+
+    def test_practice_request_returns_most_common_tag_without_calling_btw_handler(self):
+        """'help me practice' must not be answered as a normal question — it should
+        be recognized, acknowledged, and its topic returned for the next_actions
+        bridge instead of an LLM call to btw_handler."""
+        module = WritingModule()
+        ctx = _make_ctx()
+        mock_io = MagicMock(spec=IOHandler)
+        mock_io.prompt.side_effect = ["help me practice this", ""]
+        llm = _make_btw_llm()
+        pipeline = self._pipeline_with_mistakes(["verb_conjugation", "verb_conjugation", "article_gender"])
+
+        result = module._follow_up_phase(ctx, "My morning", ["line1"], pipeline, llm, mock_io)
+
+        assert result == "verb_conjugation"
+        llm.complete.assert_not_called()
+
+    def test_no_practice_request_falls_through_to_btw_handler(self):
+        """A normal question (no practice-request phrasing) is unaffected —
+        still answered via btw_handler, and no topic is returned."""
+        module = WritingModule()
+        ctx = _make_ctx()
+        mock_io = MagicMock(spec=IOHandler)
+        mock_io.prompt.side_effect = ["why is this wrong?", ""]
+        llm = _make_btw_llm()
+        pipeline = self._pipeline_with_mistakes(["verb_conjugation"])
+
+        result = module._follow_up_phase(ctx, "My morning", ["line1"], pipeline, llm, mock_io)
+
+        assert result is None
+        llm.complete.assert_called()  # btw_handler runs (answer + word-extraction fallback calls)
+
+    def test_practice_request_with_no_mistakes_returns_none(self):
+        """No mistakes this session to focus on -> acknowledged but no topic,
+        so the automatic (non-explicit) next_actions path is used instead."""
+        module = WritingModule()
+        ctx = _make_ctx()
+        mock_io = MagicMock(spec=IOHandler)
+        mock_io.prompt.side_effect = ["can we do some exercises?", ""]
+        llm = _make_btw_llm()
+        pipeline = self._pipeline_with_mistakes([])
+
+        result = module._follow_up_phase(ctx, "My morning", ["line1"], pipeline, llm, mock_io)
+
+        assert result is None
+        llm.complete.assert_not_called()
+
+    def test_repeated_practice_request_only_computed_once(self):
+        """Asking twice in the same follow-up doesn't recompute/re-announce —
+        the first answer stands."""
+        module = WritingModule()
+        ctx = _make_ctx()
+        mock_io = MagicMock(spec=IOHandler)
+        mock_io.prompt.side_effect = ["let's practice", "more practice please", ""]
+        llm = _make_btw_llm()
+        pipeline = self._pipeline_with_mistakes(["dative_case"])
+
+        result = module._follow_up_phase(ctx, "My morning", ["line1"], pipeline, llm, mock_io)
+
+        assert result == "dative_case"
+        llm.complete.assert_not_called()
+
     def test_includes_mistake_correction_and_explanation(self):
         from skills.btw_handler.skill import _format_evaluation_context
         text = _format_evaluation_context({

@@ -93,6 +93,7 @@ class SessionManager:
                 for f in self.store.get_vocab_flags(user_id, language)
             ]
 
+        merged_parameters = {"explanation_language": profile.explanation_language, **(parameters or {})}
         return ModuleContext(
             user_id=user_id,
             language=language,
@@ -101,7 +102,7 @@ class SessionManager:
             error_frequency=error_frequency,
             recent_topics=recent_topics,
             vocab_flags=vocab_flags,
-            parameters=parameters or {},
+            parameters=merged_parameters,
         )
 
     # ------------------------------------------------------------------
@@ -173,17 +174,20 @@ class SessionManager:
 
         self.io.output("\n[*] Session successfully saved!")
 
-    def record_next_action_decision(self, file_content, accepted: bool) -> None:
+    def record_next_action_decision(self, file_content, accepted: bool, index: int = 0) -> None:
         """Persist whether the user accepted the end-of-session next_actions suggestion.
 
         finalize_session() already wrote the session file before the orchestrator asks
         this question (the prompt is interactive and lives in orchestrator.py, not here
         — SessionManager only ever informs via io.output, never prompts). This is a
-        small follow-up rewrite of the same file, not a new write path.
+        small follow-up rewrite of the same file, not a new write path. index picks
+        which signal was answered — normally 0, but a declined explicit /btw practice
+        request can offer a second, alternative signal (see
+        _writing_error_recurrence_signal's requested_topic branch).
         """
-        if not file_content.next_actions:
+        if not file_content.next_actions or index >= len(file_content.next_actions):
             return
-        file_content.next_actions[0].accepted = accepted
+        file_content.next_actions[index].accepted = accepted
         self.store.write_file(file_content, self.config.data_root)
 
     def _compute_next_actions(
@@ -193,13 +197,17 @@ class SessionManager:
         Each direction uses a different signal shape, so it isn't one shared check —
         see the two helpers below."""
         if module_key == "writing":
-            return self._writing_error_recurrence_signal(language, result.errors, error_frequency)
+            return self._writing_error_recurrence_signal(
+                language, result.errors, error_frequency,
+                requested_topic=result.metadata.get("practice_requested_topic"),
+            )
         if module_key == "grammar":
             return self._grammar_mastery_signal(file_content)
         return []
 
     def _writing_error_recurrence_signal(
-        self, language: str, errors: list[dict], error_frequency: dict[str, int]
+        self, language: str, errors: list[dict], error_frequency: dict[str, int],
+        requested_topic: str | None = None,
     ) -> list[NextActionSignal]:
         """Suggest a grammar session when a mistake from *this* session both maps to a
         curated grammar topic (existence check via errors) and is already recurring
@@ -210,16 +218,43 @@ class SessionManager:
         no way to pick the right one for the user's level. Naming a specific topic
         here would risk promising something select_grammar (which does the real,
         level-aware pick when the grammar module actually runs) doesn't deliver.
+
+        requested_topic (from an explicit /btw "help me practice" ask during this
+        session's follow-up phase) bypasses the recurring-threshold gate entirely —
+        the user already asked, so recency/frequency judgment isn't needed — and,
+        unlike the automatic path, returns a second alternative signal too, so the
+        orchestrator can offer a different topic if the first is declined.
         """
         topics_map = get_grammar_topics(language.capitalize())
         if topics_map is None:
             return []
 
+        def maps_to_curated_topic(tag: str) -> bool:
+            return any(tag in topic.related_error_tags for topic in topics_map.topics)
+
+        if requested_topic is not None:
+            ranked = [requested_topic] + sorted(error_frequency, key=lambda t: -error_frequency[t])
+            candidates = [t for t in dict.fromkeys(ranked) if maps_to_curated_topic(t)]
+            if not candidates:
+                return []
+            signals = [NextActionSignal(
+                module="grammar",
+                reason=f"You asked to practice after this session — let's work on '{candidates[0]}'.",
+                suggested_focus=candidates[0],
+            )]
+            if len(candidates) > 1:
+                signals.append(NextActionSignal(
+                    module="grammar",
+                    reason=f"Or how about focusing on '{candidates[1]}' instead?",
+                    suggested_focus=candidates[1],
+                ))
+            return signals
+
         session_tags = {e.get("error_tag") for e in errors if e.get("error_tag")}
         for tag in session_tags:
             if error_frequency.get(tag, 0) < RECURRING_ERROR_THRESHOLD:
                 continue
-            if any(tag in topic.related_error_tags for topic in topics_map.topics):
+            if maps_to_curated_topic(tag):
                 reason = f"You've repeatedly made '{tag}' mistakes ({error_frequency[tag]}x)."
                 return [NextActionSignal(module="grammar", reason=reason, suggested_focus=tag)]
         return []

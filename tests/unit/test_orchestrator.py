@@ -512,6 +512,65 @@ def test_next_actions_signal_when_both_present(mock_topics, store_and_llm):
     assert signals[0].suggested_focus == "verb_conjugation"
 
 
+_GRAMMAR_TOPICS_TWO_TAGS = GrammarTopicsMap(topics=[
+    GrammarTopic(
+        topic="Present tense — regular verbs", difficulty="a1", scope="major",
+        related_error_tags=["verb_conjugation"],
+    ),
+    GrammarTopic(
+        topic="Dative case — prepositions", difficulty="a1", scope="major",
+        related_error_tags=["dative_case"],
+    ),
+])
+
+
+@patch("orchestrator.session_manager.get_grammar_topics", return_value=_GRAMMAR_TOPICS)
+def test_requested_topic_bypasses_recurring_threshold(mock_topics, store_and_llm):
+    """An explicit /btw practice request (requested_topic) skips the recurring-count
+    gate entirely — freq=1 would normally fail RECURRING_ERROR_THRESHOLD (2)."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    signals = orchestrator._session_manager._writing_error_recurrence_signal(
+        language="german", errors=[], error_frequency={"verb_conjugation": 1},
+        requested_topic="verb_conjugation",
+    )
+    assert len(signals) == 1
+    assert signals[0].suggested_focus == "verb_conjugation"
+    assert "asked to practice" in signals[0].reason
+
+
+@patch("orchestrator.session_manager.get_grammar_topics", return_value=_GRAMMAR_TOPICS)
+def test_requested_topic_not_curated_returns_empty(mock_topics, store_and_llm):
+    """requested_topic that maps to no curated topic at all, with no other recurring
+    mapped tag available either -> no signal (nothing sensible to promise)."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    signals = orchestrator._session_manager._writing_error_recurrence_signal(
+        language="german", errors=[], error_frequency={},
+        requested_topic="word_order",  # not in any curated topic's related_error_tags
+    )
+    assert signals == []
+
+
+@patch("orchestrator.session_manager.get_grammar_topics", return_value=_GRAMMAR_TOPICS_TWO_TAGS)
+def test_requested_topic_offers_alternative_when_available(mock_topics, store_and_llm):
+    """A second, different curated-mapped tag in error_frequency becomes an
+    alternative signal — used by orchestrator.run_session to offer a fallback
+    if the first suggestion is declined."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    signals = orchestrator._session_manager._writing_error_recurrence_signal(
+        language="german", errors=[], error_frequency={"dative_case": 5},
+        requested_topic="verb_conjugation",
+    )
+    assert len(signals) == 2
+    assert signals[0].suggested_focus == "verb_conjugation"
+    assert signals[1].suggested_focus == "dative_case"
+
+
 def _grammar_session_content(score: float, topic: str = "Present tense — regular verbs"):
     return GrammarSessionContent(
         session_id="s1", user_id="user1", language="german", module="grammar",
@@ -603,6 +662,40 @@ def test_record_next_action_decision_noop_without_next_actions(store_and_llm):
 
     file_content = _grammar_session_content(score=0.0)  # next_actions defaults to []
     orchestrator._session_manager.record_next_action_decision(file_content, accepted=True)
+
+
+def test_record_next_action_decision_by_index(store_and_llm):
+    """A declined first (explicit-request) signal followed by an accepted second/
+    alternative signal — the index picks which entry gets the accepted flag,
+    leaving the other untouched."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    file_content = _grammar_session_content(score=1.0)
+    file_content.next_actions = [
+        NextActionSignal(module="grammar", reason="first", suggested_focus="verb_conjugation"),
+        NextActionSignal(module="grammar", reason="alternative", suggested_focus="dative_case"),
+    ]
+    orchestrator._session_manager.store.write_file(file_content, config.data_root)
+
+    orchestrator._session_manager.record_next_action_decision(file_content, accepted=False, index=0)
+    orchestrator._session_manager.record_next_action_decision(file_content, accepted=True, index=1)
+
+    assert file_content.next_actions[0].accepted is False
+    assert file_content.next_actions[1].accepted is True
+
+
+def test_record_next_action_decision_index_out_of_range_is_noop(store_and_llm):
+    """Index beyond the list (e.g. no alternative existed) doesn't raise or write."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+
+    file_content = _grammar_session_content(score=1.0)
+    file_content.next_actions = [
+        NextActionSignal(module="grammar", reason="first", suggested_focus="verb_conjugation"),
+    ]
+    orchestrator._session_manager.record_next_action_decision(file_content, accepted=True, index=1)
+    assert file_content.next_actions[0].accepted is None
 
     written_path = os.path.join(
         config.data_root, "sessions", file_content.user_id, file_content.language, f"{file_content.session_id}.yaml"

@@ -190,16 +190,22 @@ class Orchestrator(OrchestratorProtocol):
             error_frequency=ctx.error_frequency,
         )
 
-        # 14. Offer to chain straight into a suggested next action, if any
-        if file_content.next_actions:
-            signal = file_content.next_actions[0]
+        # 14. Offer to chain straight into a suggested next action, if any — usually
+        # just one signal (accept or decline ends it here), but an explicit /btw
+        # practice request during this session can produce a second, alternative
+        # signal, offered in turn if the first is declined (see
+        # session_manager._writing_error_recurrence_signal's requested_topic branch).
+        for idx, signal in enumerate(file_content.next_actions):
             focus_label = f" on '{signal.suggested_focus}'" if signal.suggested_focus else ""
-            choice = self.io.prompt(
+            prompt_text = (
                 f"\nSession complete. Start {signal.module} practice{focus_label} now? "
                 f"This will begin a new session. [Y/n]: "
-            ).strip().lower()
+                if idx == 0 else
+                f"\nHow about {signal.module} practice{focus_label} instead? [Y/n]: "
+            )
+            choice = self.io.prompt(prompt_text).strip().lower()
             accepted = choice != "n"
-            self._session_manager.record_next_action_decision(file_content, accepted)
+            self._session_manager.record_next_action_decision(file_content, accepted, index=idx)
             if accepted:
                 return ExerciseRecommendation(
                     module=signal.module, reason=signal.reason, suggested_focus=signal.suggested_focus

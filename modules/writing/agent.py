@@ -1,6 +1,8 @@
 import json
 import os
+import re
 import uuid
+from collections import Counter
 from datetime import datetime
 from modules.protocols import ModuleProtocol, ContextRequest, ModuleContext, ModuleResult, WritingPrompt
 from memory.protocols import WritingSessionContent, BtwEntry
@@ -12,6 +14,8 @@ from skills.protocols import SkillInput
 from skills.topic_picker.skill import TopicPickerSkill
 from modules.writing.skills import get_writing_skills
 from modules.writing.pipeline import WritingPipeline, PipelineResult
+
+_PRACTICE_REQUEST_RE = re.compile(r"practi[cs]e|exercise|drill", re.IGNORECASE)
 
 
 class WritingModule(ModuleProtocol):
@@ -88,12 +92,13 @@ class WritingModule(ModuleProtocol):
             ],
         })
 
-        self._follow_up_phase(ctx, topic, user_lines, pipeline, llm, io)
+        practice_requested_topic = self._follow_up_phase(ctx, topic, user_lines, pipeline, llm, io)
 
         return self._build_results(
             ctx, session_id, wp, writing_prompt,
             user_lines, btw_entries, vocab_signals,
             pipeline, started_at, completed_at, duration_minutes,
+            practice_requested_topic,
         )
 
     # ------------------------------------------------------------------
@@ -274,8 +279,14 @@ class WritingModule(ModuleProtocol):
         pipeline: PipelineResult,
         llm: BaseLLM,
         io: IOHandler,
-    ) -> None:
+    ) -> str | None:
+        """Returns an error_tag to prioritize for a grammar next_action, if the user
+        asked (via /btw) to practice — None otherwise. The actual "Start grammar
+        practice now?" offer still happens at the orchestrator's normal end-of-session
+        chaining point (session_manager._writing_error_recurrence_signal), not here —
+        this only records the intent + a same-session mistake to focus it on."""
         io.output("\n💬 Unsure about a mistake? Ask me here — or press Enter to finish.")
+        practice_requested_topic: str | None = None
         while True:
             try:
                 line = io.prompt("> ").strip()
@@ -283,7 +294,26 @@ class WritingModule(ModuleProtocol):
                 break
             if not line:
                 break
+            if _PRACTICE_REQUEST_RE.search(line):
+                if practice_requested_topic is None:
+                    practice_requested_topic = self._offer_practice_topic(pipeline, io)
+                else:
+                    io.output("[*] Already noted — I'll suggest grammar practice once you finish here.")
+                continue
             self._handle_btw(ctx, topic, user_lines, line, llm, io, pipeline=pipeline)
+        return practice_requested_topic
+
+    def _offer_practice_topic(self, pipeline: PipelineResult, io: IOHandler) -> str | None:
+        tags = [m.get("error_tag") for m in pipeline.explained_mistakes if m.get("error_tag")]
+        if not tags:
+            io.output(
+                "[*] No specific mistakes from this session to focus on — "
+                "I'll pass along a general grammar suggestion instead."
+            )
+            return None
+        top_tag, _ = Counter(tags).most_common(1)[0]
+        io.output(f"[*] Got it — I'll suggest a grammar session focused on '{top_tag}' once you're done here.")
+        return top_tag
 
     def _write_latency_log(self, pipeline, ctx: ModuleContext, session_id: str) -> None:
         if not pipeline.step_timings:
@@ -323,6 +353,7 @@ class WritingModule(ModuleProtocol):
         started_at: datetime,
         completed_at: datetime,
         duration_minutes: float,
+        practice_requested_topic: str | None = None,
     ) -> tuple[ModuleResult, WritingSessionContent]:
         topic, requirements = wp.topic, wp.requirements
         user_text = "\n".join(user_lines)
@@ -375,7 +406,11 @@ class WritingModule(ModuleProtocol):
             started_at=started_at,
             completed_at=completed_at,
             duration_minutes=duration_minutes,
-            metadata={"btw_entries": btw_entries, "vocab_signals": vocab_signals},
+            metadata={
+                "btw_entries": btw_entries,
+                "vocab_signals": vocab_signals,
+                "practice_requested_topic": practice_requested_topic,
+            },
         )
 
         return result, session_content
