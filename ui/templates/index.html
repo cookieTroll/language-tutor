@@ -270,6 +270,7 @@ mark.mistake-hl {
 #topic-box {
   display: none; padding: 14px 20px; background: var(--panel);
   border-bottom: 1px solid var(--border); flex-shrink: 0;
+  min-height: 60px; max-height: 80%; overflow-y: auto;
 }
 #topic-box .topic-title { color: var(--bright); font-size: 0.92rem; margin-bottom: 4px; }
 #topic-box .topic-req   { color: var(--muted);  font-size: 0.78rem; }
@@ -281,11 +282,18 @@ mark.mistake-hl {
 #writing-pad::placeholder { color: #444d56; }
 #writing-pad:disabled { opacity: 0.55; }
 
+/* Topic panel resizer (writing) — same pattern as #grammar-resizer below */
+#topic-resizer {
+  display: none; height: 6px; flex-shrink: 0; cursor: row-resize;
+  background: var(--border); transition: background 0.15s;
+}
+#topic-resizer:hover, #topic-resizer.dragging { background: var(--accent); }
+
 /* Grammar panel */
 #grammar-box {
   display: none; padding: 14px 20px; background: var(--panel);
   border-bottom: 1px solid var(--border); flex-shrink: 0;
-  height: 45vh; min-height: 120px; overflow-y: auto;
+  height: 45vh; min-height: 120px; max-height: 80%; overflow-y: auto;
 }
 #grammar-box .topic-title { color: var(--bright); font-size: 0.92rem; margin-bottom: 8px; }
 #grammar-box .grammar-explanation { color: var(--sub); font-size: 0.86rem; line-height: 1.6; }
@@ -321,6 +329,15 @@ mark.mistake-hl {
   background: var(--border); transition: background 0.15s;
 }
 #grammar-resizer:hover, #grammar-resizer.dragging { background: var(--accent); }
+
+/* Wraps everything between the top panel (topic-box/grammar-box) and the
+   pinned footer/done-banner below. This is the ONE region that scrolls/shrinks
+   under space pressure — the footer and done-banner sit outside it as
+   flex-shrink:0 siblings, so they stay visible regardless of how much content
+   (or how tall a dragged top panel) is above them. */
+#left-scroll {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto;
+}
 #grammar-exercises {
   display: none; padding: 14px 20px; overflow-y: auto; flex-shrink: 0;
   max-height: 220px; border-bottom: 1px solid var(--border);
@@ -547,36 +564,39 @@ mark.mistake-hl {
           <div class="topic-title" id="topic-title"></div>
           <div class="topic-req"   id="topic-req"></div>
         </div>
+        <div id="topic-resizer"></div>
         <div id="grammar-box">
           <div class="topic-title" id="grammar-topic-title"></div>
           <div class="grammar-explanation" id="grammar-explanation"></div>
         </div>
         <div id="grammar-resizer"></div>
-        <div id="grammar-loading" class="loading-row">
-          <span>Preparing exercises</span>
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        </div>
-        <div id="grammar-exercises"></div>
-        <textarea id="writing-pad" placeholder="Begin writing here…&#10;&#10;Type line by line. Submit when ready."></textarea>
-        <textarea id="grammar-pad" placeholder=""></textarea>
-        <div id="grammar-grading" class="loading-row">
-          <span>Evaluating</span>
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        </div>
-        <div id="grammar-results"></div>
-        <div id="eval-overlay">
-          <div class="loading-row" style="display: flex;">
-            <span>Working</span>
+        <div id="left-scroll">
+          <div id="grammar-loading" class="loading-row">
+            <span>Preparing exercises</span>
             <span class="dot"></span><span class="dot"></span><span class="dot"></span>
           </div>
-          <div class="prog-item eval-heading">Evaluating…</div>
-          <div class="prog-item" id="p1">[1/7] Estimating text level</div>
-          <div class="prog-item" id="p2">[2/7] Detecting mistakes</div>
-          <div class="prog-item" id="p3">[3/7] Verifying candidate errors</div>
-          <div class="prog-item" id="p4">[4/7] Classifying mistakes</div>
-          <div class="prog-item" id="p5">[5/7] Adding explanations</div>
-          <div class="prog-item" id="p6">[6/7] Writing corrected version</div>
-          <div class="prog-item" id="p7">[7/7] Generating summary and tips</div>
+          <div id="grammar-exercises"></div>
+          <textarea id="writing-pad" placeholder="Begin writing here…&#10;&#10;Type line by line. Submit when ready."></textarea>
+          <textarea id="grammar-pad" placeholder=""></textarea>
+          <div id="grammar-grading" class="loading-row">
+            <span>Evaluating</span>
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+          <div id="grammar-results"></div>
+          <div id="eval-overlay">
+            <div class="loading-row" style="display: flex;">
+              <span>Working</span>
+              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            </div>
+            <div class="prog-item eval-heading">Evaluating…</div>
+            <div class="prog-item" id="p1">[1/7] Estimating text level</div>
+            <div class="prog-item" id="p2">[2/7] Detecting mistakes</div>
+            <div class="prog-item" id="p3">[3/7] Verifying candidate errors</div>
+            <div class="prog-item" id="p4">[4/7] Classifying mistakes</div>
+            <div class="prog-item" id="p5">[5/7] Adding explanations</div>
+            <div class="prog-item" id="p6">[6/7] Writing corrected version</div>
+            <div class="prog-item" id="p7">[7/7] Generating summary and tips</div>
+          </div>
         </div>
         <div id="left-footer">
           <span id="word-count">0 words</span>

@@ -233,14 +233,19 @@ applyTheme(THEMES[themeIdx]);
   });
 })();
 
-// ── Grammar explanation panel resizer (vertical) ───────────────────────────────
-(function () {
-  const resizer = document.getElementById('grammar-resizer');
-  const box     = document.getElementById('grammar-box');
+// ── Vertical panel resizer (explanation/topic panel vs. the content below it) ──
+// Shared by the grammar explanation panel and the writing topic panel — same
+// drag mechanics, just a different box/resizer pair and localStorage key.
+// The box's own CSS max-height:80% is the hard safety net (so a stale saved
+// pixel height from a different viewport can never push the footer off
+// screen); this 15%-80% clamp just keeps the *drag* itself feeling right.
+function initVerticalResizer(resizerId, boxId, storageKey) {
+  const resizer = document.getElementById(resizerId);
+  const box     = document.getElementById(boxId);
   const leftCol = document.getElementById('left-col');
   let dragging = false, startY = 0, startH = 0;
 
-  const saved = localStorage.getItem('grammarBoxHeight');
+  const saved = localStorage.getItem(storageKey);
   if (saved) box.style.height = saved + 'px';
 
   resizer.addEventListener('mousedown', e => {
@@ -268,9 +273,12 @@ applyTheme(THEMES[themeIdx]);
     resizer.classList.remove('dragging');
     document.body.style.cursor    = '';
     document.body.style.userSelect = '';
-    localStorage.setItem('grammarBoxHeight', Math.round(box.getBoundingClientRect().height));
+    localStorage.setItem(storageKey, Math.round(box.getBoundingClientRect().height));
   });
-})();
+}
+
+initVerticalResizer('grammar-resizer', 'grammar-box', 'grammarBoxHeight');
+initVerticalResizer('topic-resizer', 'topic-box', 'topicBoxHeight');
 
 // ── Confetti ──────────────────────────────────────────────────────────────────
 function fireConfetti() {

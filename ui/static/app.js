@@ -113,6 +113,7 @@ function handleOutput(text) {
       document.getElementById('btw-inp').placeholder = 'Ask the tutor… (during writing)';
       if (topicMatch) {
         document.getElementById('topic-box').style.display = 'block';
+        document.getElementById('topic-resizer').style.display = 'block';
         document.getElementById('topic-title').textContent = topicMatch[1].trim();
         document.getElementById('topic-req').textContent   = reqMatch ? reqMatch[1].trim() : '';
       }
@@ -198,6 +199,7 @@ function resetForNewModuleSession() {
   document.getElementById('grammar-grading').style.display = 'none';
 
   document.getElementById('topic-box').style.display = 'none';
+  document.getElementById('topic-resizer').style.display = 'none';
   document.getElementById('topic-title').textContent = '';
   document.getElementById('topic-req').textContent = '';
   document.getElementById('writing-pad').value = '';
