@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from memory.json_store import JSONSessionStore
 from memory.protocols import UserProfile, SessionLog
-from orchestrator.mastery import get_module_mastery, get_level_trend, MIN_SESSIONS_FOR_ESTIMATE
+from orchestrator.mastery import get_module_mastery, get_level_trend, TEXTS_PER_LEVEL_FOR_MASTERY
 from lang.models import GrammarTopicsMap, GrammarTopic, TaxonomyMap
 from shared.slugify import slugify_topic
 
@@ -108,17 +108,17 @@ def test_writing_mastery_word_counts_and_ratio(mock_topics, mock_tax, store):
 
     mastery = get_module_mastery(store, "user1", "german", "writing")
 
-    assert mastery.texts_written == 3
+    assert mastery.texts_written == 3  # all-time total, unlike the ratio below
     assert mastery.total_words == 320
     assert mastery.words_at_current_level == 120  # only the two a1 sessions (current level)
-    assert mastery.mastery_ratio == 3 / MIN_SESSIONS_FOR_ESTIMATE
+    assert mastery.mastery_ratio == 2 / TEXTS_PER_LEVEL_FOR_MASTERY  # only the two a1 sessions count
 
 
 @patch("orchestrator.mastery.get_taxonomy", return_value=_TAXONOMY)
 @patch("orchestrator.mastery.get_grammar_topics", return_value=_GRAMMAR_TOPICS)
 def test_writing_mastery_ratio_caps_at_one(mock_topics, mock_tax, store):
-    for i in range(MIN_SESSIONS_FOR_ESTIMATE + 3):
-        store.write_session(_writing_log(f"w{i}", word_count=10))
+    for i in range(TEXTS_PER_LEVEL_FOR_MASTERY + 3):
+        store.write_session(_writing_log(f"w{i}", word_count=10))  # default level="a1" == current level
 
     mastery = get_module_mastery(store, "user1", "german", "writing")
     assert mastery.mastery_ratio == 1.0

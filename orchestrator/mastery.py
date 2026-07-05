@@ -12,7 +12,7 @@ from orchestrator.session_manager import GRAMMAR_MASTERY_THRESHOLD
 from lang.loader import get_taxonomy, get_grammar_topics
 from shared.slugify import slugify_topic
 
-MIN_SESSIONS_FOR_ESTIMATE = 5  # writing sessions before mastery_ratio is meaningful
+TEXTS_PER_LEVEL_FOR_MASTERY = 25  # completed writing sessions at the current level for a full bar
 WEAK_TAG_THRESHOLD = 2  # matches SessionAggregate.recurring_errors' own threshold
 TOP_TAG_COUNT = 3
 
@@ -36,8 +36,10 @@ def get_module_mastery(store: StorageProtocol, user_id: str, language: str, modu
     Grammar's ratio is topics_mastered / topics_total *for the current level* (from
     the curated map), not topics attempted — this is the same number that gates the
     level-up decision in skills/cefr_estimator, and what the progress bar renders.
-    Writing has no discrete topic unit, so its ratio is session count against a
-    fixed minimum-sessions baseline, capped at 1.0.
+    Writing has no discrete topic unit, so its ratio instead mirrors that per-level
+    scoping via session count: completed writing sessions *at the current level*
+    against TEXTS_PER_LEVEL_FOR_MASTERY, capped at 1.0. texts_written itself stays
+    an all-time total (it's just a display stat), unlike the ratio.
     """
     current_level = store.get_current_level(user_id)
     sessions = [s for s in store.get_sessions_by_module(user_id, language, module) if s.status == "completed"]
@@ -72,10 +74,11 @@ def get_module_mastery(store: StorageProtocol, user_id: str, language: str, modu
     if module == "writing":
         mastery.texts_written = len(sessions)
         mastery.total_words = sum(s.word_count or 0 for s in sessions)
+        texts_at_current_level = sum(1 for s in sessions if s.level == current_level)
         mastery.words_at_current_level = sum(
             s.word_count or 0 for s in sessions if s.level == current_level
         )
-        mastery.mastery_ratio = min(mastery.texts_written / MIN_SESSIONS_FOR_ESTIMATE, 1.0)
+        mastery.mastery_ratio = min(texts_at_current_level / TEXTS_PER_LEVEL_FOR_MASTERY, 1.0)
 
     error_freq = store.get_error_frequency(user_id, language, module)
     taxonomy = get_taxonomy(language)

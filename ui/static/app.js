@@ -247,10 +247,17 @@ function resetForNewModuleSession() {
   // A new module session is starting within the same SSE stream (chained via the
   // accept/decline next_actions prompt) — reset per-session UI, keep the stream alive.
   stopTimer();
-  const divider = document.createElement('div');
-  divider.className = 'tmsg section';
-  divider.textContent = '── New session ──';
-  document.getElementById('tutor-output').appendChild(divider);
+  document.getElementById('timer').textContent = '—'; // stopTimer() alone leaves the
+  // last elapsed time frozen on screen (writing/grammar submit intentionally keep it
+  // visible through evaluation) — but returning to the chooser has no "last session"
+  // to show, so clear it back to its idle placeholder.
+
+  // Clear the previous module's transcript instead of just marking a divider — grammar
+  // hides #right-col for its whole run, so its "[*] Session successfully saved!" output
+  // gets queued into #tutor-output invisibly and then reappears at the top once a chain
+  // prompt (or the next chained module, which reuses this same column) makes it visible
+  // again, making the new session look like it "starts" with the old one's save message.
+  document.getElementById('tutor-output').innerHTML = '';
 
   document.getElementById('eval-overlay').style.display = 'none';
   markEvalStep(0);
@@ -383,6 +390,7 @@ function goBackToSetupForChaining() {
 function handleDone() {
   phase = 'done';
   stopTimer();
+  document.getElementById('timer').textContent = '—';
   document.getElementById('done-banner').style.display = 'block';
   document.getElementById('submit-btn').disabled = true;
   document.getElementById('btw-btn').disabled   = true;
