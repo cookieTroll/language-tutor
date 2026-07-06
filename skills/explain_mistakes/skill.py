@@ -16,6 +16,7 @@ class ExplainMistakesSkill(SkillProtocol):
     def run(self, input: SkillInput, llm: BaseLLM) -> SkillOutput:
         classified_mistakes = input.parameters.get("classified_mistakes", [])
         language = input.parameters.get("language", "German").capitalize()
+        explanation_language = (input.parameters.get("explanation_language") or "english").capitalize()
 
         # Short-circuit: nothing to explain
         if not classified_mistakes:
@@ -28,6 +29,7 @@ class ExplainMistakesSkill(SkillProtocol):
         prompt = EXPLAIN_MISTAKES_PROMPT.format(
             level=input.level,
             language=language,
+            explanation_language=explanation_language,
             classified_mistakes=json.dumps(classified_mistakes, ensure_ascii=False, indent=2),
         )
 
@@ -36,7 +38,7 @@ class ExplainMistakesSkill(SkillProtocol):
                 role="system",
                 content=(
                     f"You are a supportive {language} language teacher writing explanations "
-                    f"for a {input.level} learner."
+                    f"for a {input.level} learner, in {explanation_language}."
                 ),
             ),
             LLMMessage(role="user", content=prompt),

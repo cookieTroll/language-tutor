@@ -129,3 +129,39 @@ Two paths, same destination (a `LanguageConfig` plus whatever maps it needs):
 
 Either way, nothing in `lang/loader.py` or `lang/models.py` changes — that's the entire
 point of the versioned-map architecture.
+
+---
+
+## Message catalog (`lang/messages/`) — a second, orthogonal axis
+
+Everything above resolves by the **target study language** (`profile.language`) —
+the six map types feed LLM-facing content (classifier prompts, exercise generation,
+grammar syllabi). `lang/messages/{language}.yaml` is a separate catalog for
+**backend UI text** — `orchestrator.py`'s menus, confirmations, and status lines —
+resolved instead by `profile.explanation_language`, since that's the language the
+user actually reads the app's own text in, independent of what they're studying (a
+German learner explaining in Spanish still wants Spanish menus).
+
+`MessageCatalog` (`lang/models.py`) is a flat `language: str` + `messages: dict[str, str]`
+map, id → `str.format()` template. Its own `model_validator` enforces every id in
+`REQUIRED_MESSAGE_IDS` is present (same shape as `TaxonomyMap`'s "other must be
+present" check, generalized to a full required set) — a catalog missing a message id
+fails at load, the same "fail at startup, not at the first session that hits it"
+philosophy as `LanguageConfig`'s cross-reference checks. `lang/messages/default.yaml`
+is the universal English fallback every unconfigured `explanation_language` resolves
+to via `lang.loader.get_messages()`.
+
+`Orchestrator` holds a `self._messages: MessageCatalog` instance attribute, re-resolved
+via `_check_message_catalog()` every time `explanation_language` is established or
+changed (initial profile confirm, and the mid-session `/language` command) — the same
+"resolve once, dedupe repeat warnings" shape `_check_language_config()` already used for
+the target-language maps. An `explanation_language` with no catalog of its own falls
+back to `default.yaml` and warns once via the `on_message_catalog_warning` callback
+(wired in `ui/cli.py`/`ui/app.py`, alongside the existing `on_language_warning`),
+pointing at `python -m scripts.generate_messages <language>` — see
+`docs/lang_generation.md`.
+
+This is deliberately a separate loader path from the six map types, not folded into
+`LanguageConfig`: there's nothing to cross-reference (no taxonomy/grammar-topic tags to
+validate against), and the two axes (target language vs. explanation language) can
+differ per user, so coupling them to one config file would be wrong.

@@ -148,12 +148,54 @@ distinguishes the two cases via `lang.loader.is_configured()`:
 
 ---
 
+## Message catalog generation (`scripts/generate_messages.py`)
+
+A separate, smaller generator for `lang/messages/{language}.yaml` (see `docs/lang.md`'s
+"Message catalog" section for the loader/model side) — resolved by
+`explanation_language`, not the target study language, so it's a distinct script
+rather than another step chained into `generate_language`.
+
+```bash
+python -m scripts.generate_messages spanish
+python -m scripts.generate_messages spanish --force
+```
+
+`lang/generate_messages.py::generate_message_catalog` sends the LLM the full
+`lang/messages/default.yaml` id→template mapping and asks for a translation, then
+(inside the `call_with_self_correction` `parse_fn`, same retry helper
+`lang/generate.py` uses) checks two things before accepting the response:
+
+1. **Id completeness** — `MessageCatalog`'s own validator, same `REQUIRED_MESSAGE_IDS`
+   check the app applies to every catalog at load time.
+2. **Placeholder preservation** — every `{placeholder}` token in each id's default
+   template must appear, verbatim, in the translated template (checked via regex-extracted
+   placeholder sets, exact match required). This is the load-bearing check: a translation
+   that drops or mistranslates a `{level}`/`{module}`/etc. token would `KeyError` at
+   runtime the next time the app calls `.format()` on it, not at generation time,
+   without this — the same class of bug the taxonomy tag cross-check in
+   `generate_grammar_topics` exists to catch early instead of late.
+
+`write_message_catalog()` writes `lang/messages/{language}.yaml` and re-validates by
+re-parsing the written file through `MessageCatalog.model_validate` — no cross-file
+references to check here (unlike `write_language_assets`), so a reparse is sufficient.
+
+**Review the output before relying on it**, same as the language-content generator —
+tone and idiom accuracy for backend UI copy is not something id-completeness or
+placeholder checks can verify.
+
+---
+
 ## Non-goals
 
-This utility only generates the LLM-facing content maps above. It does **not** localize
-the app's own backend-generated text (orchestrator menus, confirmations, status lines —
-see the "Backlog — Message Catalog" and "Backlog — Fully Configurable Origin / Target /
-Communication Languages" entries in `docs/_CHECKLIST.md`), and it makes no web UI changes.
+This utility (`generate_language`) only generates the LLM-facing content maps —
+taxonomy, CEFR hints, grammar topics, language config. Localizing the app's own
+backend-generated text (orchestrator menus, confirmations, status lines) is a
+**separate** generator, `generate_messages` (above) — the two are deliberately not
+chained together since they resolve by different axes (target language vs.
+explanation language). Neither generator makes web UI changes; the "Fully Configurable
+Origin / Target / Communication Languages" entry in `docs/_CHECKLIST.md` (modeling a
+distinct origin/native-language concept, exposing the languages catalog to the
+selection flow) remains open.
 
 ---
 
@@ -165,6 +207,12 @@ unknown taxonomy tag or a CEFR level comes back empty, and a `write_language_ass
 round-trip through a fresh `_Registry` at `tmp_path` (both the success case and a
 deliberately-broken cross-reference that must raise).
 
+`tests/unit/lang/test_generate_messages.py` — same shape for the message-catalog
+generator: happy-path translation preserving placeholders, self-correction retry when a
+placeholder is dropped, gives up after `max_skill_retries` on a persistent mismatch, and
+a `write_message_catalog` round-trip through a reparse.
+
 No judge/live-LLM test exists for output *quality* (curriculum accuracy, tag
-appropriateness) — that's what the manual review step above is for, the same way the
-hand-authored German curriculum was manually reviewed before use.
+appropriateness, or — for the message catalog — translation tone) — that's what the
+manual review step above is for, the same way the hand-authored German curriculum was
+manually reviewed before use.

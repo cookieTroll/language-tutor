@@ -338,7 +338,10 @@ class GrammarModule(ModuleProtocol):
                 SkillInput(
                     user_id=ctx.user_id,
                     level=ctx.level,
-                    parameters={"items": grading_items, "language": ctx.language},
+                    parameters={
+                        "items": grading_items, "language": ctx.language,
+                        "explanation_language": ctx.parameters.get("explanation_language"),
+                    },
                 ),
                 llm,
             )

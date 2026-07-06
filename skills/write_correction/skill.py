@@ -17,6 +17,7 @@ class WriteCorrectionSkill(SkillProtocol):
         user_text = input.parameters.get("user_text", "")
         explained_mistakes = input.parameters.get("explained_mistakes", [])
         language = input.parameters.get("language", "German").capitalize()
+        explanation_language = (input.parameters.get("explanation_language") or "english").capitalize()
 
         # Short-circuit: no mistakes means the original text is the corrected text
         if not explained_mistakes:
@@ -33,6 +34,7 @@ class WriteCorrectionSkill(SkillProtocol):
         prompt = WRITE_CORRECTION_PROMPT.format(
             level=input.level,
             language=language,
+            explanation_language=explanation_language,
             user_text=user_text,
             explained_mistakes=json.dumps(explained_mistakes, ensure_ascii=False, indent=2),
         )
@@ -42,7 +44,8 @@ class WriteCorrectionSkill(SkillProtocol):
                 role="system",
                 content=(
                     f"You are a precise {language} language teacher. "
-                    "You apply corrections exactly as instructed and do not improvise."
+                    "You apply corrections exactly as instructed and do not improvise. "
+                    f"You write recommendations and comments in {explanation_language}."
                 ),
             ),
             LLMMessage(role="user", content=prompt),

@@ -312,6 +312,18 @@ Not its own layer, but lives right next to `/history` in the same command loop: 
 prompt (`_confirm_or_update_explanation_language`) to change which language `/history`
 and `dump_grammar` write their output in.
 
+Every point `explanation_language` is established or changed (initial profile confirm in
+`_select_language_and_profile`, and `/language` here) also re-resolves
+`self._messages` — the `MessageCatalog` (`lang/messages/{language}.yaml`) every
+`io.output`/`io.prompt` call in `orchestrator.py` reads its text from — via
+`_check_message_catalog`. That method mirrors `_check_language_config`'s shape
+(dedupes repeat warnings per language, checked once per `run_session`/`/language`
+call): an `explanation_language` with no generated catalog falls back to
+`lang/messages/default.yaml` (English) and fires the `on_message_catalog_warning`
+callback once, wired in `ui/cli.py`/`ui/app.py` next to the existing
+`on_language_warning`. See `docs/lang.md`'s "Message catalog" section for the
+loader/model side.
+
 ---
 
 ## `/progress` — Mastery & Level Progress (Layer 2c)

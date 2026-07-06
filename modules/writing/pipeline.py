@@ -163,7 +163,10 @@ class WritingPipeline:
         _progress("[5/7] Adding explanations…")
         explain_output = _check(_timed(5, "explain_mistakes", SkillInput(
             user_id=ctx.user_id, level=ctx.level,
-            parameters={"classified_mistakes": classified_mistakes, "language": ctx.language},
+            parameters={
+                "classified_mistakes": classified_mistakes, "language": ctx.language,
+                "explanation_language": ctx.parameters.get("explanation_language"),
+            },
         )), "explain_mistakes")
         explained_mistakes = explain_output.metadata.get("explained_mistakes", [])
 
@@ -173,7 +176,10 @@ class WritingPipeline:
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
             f6 = ex.submit(_timed, 6, "write_correction", SkillInput(
                 user_id=ctx.user_id, level=ctx.level,
-                parameters={"user_text": user_text, "explained_mistakes": explained_mistakes, "language": ctx.language},
+                parameters={
+                    "user_text": user_text, "explained_mistakes": explained_mistakes, "language": ctx.language,
+                    "explanation_language": ctx.parameters.get("explanation_language"),
+                },
             ))
             f7 = ex.submit(_timed, 7, "summarise_writing_session", SkillInput(
                 user_id=ctx.user_id, level=ctx.level,

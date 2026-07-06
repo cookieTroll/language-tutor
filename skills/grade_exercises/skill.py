@@ -18,6 +18,7 @@ class GradeExercisesSkill(SkillProtocol):
     def run(self, input: SkillInput, llm: BaseLLM) -> SkillOutput:
         items: list[dict] = input.parameters.get("items", [])
         language = input.parameters.get("language", "German").capitalize()
+        explanation_language = (input.parameters.get("explanation_language") or "english").capitalize()
 
         if not items:
             return SkillOutput(skill_name=self.name, success=True, metadata={"results": []})
@@ -32,6 +33,7 @@ class GradeExercisesSkill(SkillProtocol):
         prompt = GRADE_EXERCISES_PROMPT.format(
             level=input.level.upper(),
             language=language,
+            explanation_language=explanation_language,
             topic=topic,
             items_json=json.dumps(items, ensure_ascii=False, indent=2),
         )
