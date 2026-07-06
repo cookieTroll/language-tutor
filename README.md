@@ -7,12 +7,14 @@ Wharf the Language Tutor is an AI-powered language tutoring agent focused on per
 ```bash
 git clone <repo-url> && cd language-tutor
 pip install -e .
-python -m scripts.check_ollama_model   # first run only: pulls/creates the local Ollama model
+export GEMINI_API_KEY=your-key-here    # get one free at ai.google.dev
 python -m ui.cli                       # or: python -m ui.app  (web UI, http://localhost:5000)
 ```
 
-The default config (`config.yaml`) uses a local Ollama model — see
-[PROVIDERS.md](PROVIDERS.md) to switch to Gemini or Vertex AI instead.
+The default config (`config.yaml`) uses Gemini. Prefer to run fully free and local
+instead? `python -m scripts.check_ollama_model` (one-time setup), then set
+`LTUT_CONFIG=config.ollama.yaml` — see [PROVIDERS.md](PROVIDERS.md), which also covers
+Vertex AI.
 
 ## Repository Structure
 

@@ -1,9 +1,9 @@
 """Admin CLI: interactively ensures the Ollama model in the active config is ready.
 
-Handles the cold-clone case ensure_ollama_ready() can't: config.yaml's default model
-('gemma2-9b-tutor') doesn't exist until 'ollama create gemma2-9b-tutor -f Modelfile'
-has been run once. This script checks the base model, the Modelfile, and the target
-model, prompting for confirmation before pulling or creating anything.
+Handles the cold-clone case ensure_ollama_ready() can't: config.ollama.yaml's default
+model ('gemma2-9b-tutor') doesn't exist until 'ollama create gemma2-9b-tutor -f
+Modelfile' has been run once. This script checks the base model, the Modelfile, and
+the target model, prompting for confirmation before pulling or creating anything.
 
 Usage:
     python -m scripts.check_ollama_model
@@ -43,7 +43,7 @@ def _model_present(name: str, local: list[str]) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default=os.environ.get("LTUT_CONFIG", "config.yaml"))
+    parser.add_argument("--config", default=os.environ.get("LTUT_CONFIG", "config.ollama.yaml"))
     args = parser.parse_args()
 
     config = load_config(args.config)

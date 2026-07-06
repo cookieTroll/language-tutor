@@ -10,7 +10,8 @@ from config import load_config
 @pytest.mark.parametrize(
     "path,env,expected_provider",
     [
-        ("config.yaml", {}, "ollama"),
+        ("config.yaml", {"GEMINI_API_KEY": "test-key"}, "gemini"),
+        ("config.ollama.yaml", {}, "ollama"),
         ("config.test.yaml", {}, "ollama"),
         ("config.gemini.yaml", {"GEMINI_API_KEY": "test-key"}, "gemini"),
         ("config.vertex.yaml", {"GCP_PROJECT": "test-project", "GCP_REGION": "europe-west1"}, "vertex"),

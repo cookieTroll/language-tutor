@@ -1,6 +1,11 @@
+import os
 from datetime import datetime, timedelta
 
 import pytest
+
+# mcp_server.py loads config at module level; point it at the key-free test
+# config before import so the suite doesn't require GEMINI_API_KEY.
+os.environ.setdefault("LTUT_CONFIG", "config.test.yaml")
 
 import ui.mcp_server as srv
 from memory.sqlite_store import SQLiteSessionStore

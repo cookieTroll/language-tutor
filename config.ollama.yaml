@@ -1,4 +1,8 @@
-# Wharf the Language Tutor Configuration
+# Wharf the Language Tutor Configuration — Ollama (local, free, private).
+# Opt-in: config.yaml (the default) now uses Gemini. Select this file explicitly:
+#   $env:LTUT_CONFIG = "config.ollama.yaml"   (PowerShell)
+#   export LTUT_CONFIG=config.ollama.yaml     (bash/zsh)
+# First-run setup: python -m scripts.check_ollama_model — see PROVIDERS.md.
 
 # Paths & Directories
 data_root: "data"                      # Root directory for session files, databases, checkpoints, and logs
@@ -11,28 +15,12 @@ interruption_timeout_minutes: 15       # Time window (in minutes) to check and r
 # Storage settings: 'sqlite' for production, 'json' for dev/testing
 storage_backend: "sqlite"              # Storage engine choice ('sqlite' | 'json')
 
-# LLM Backend configurations
-# Switch provider by uncommenting the relevant block below.
-#
-# LM Studio:
-# llm:
-#   provider: "openai_compat"
-#   base_url: "http://localhost:1234/v1"
-#   api_key: "lm-studio"
-#   model: "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-#
-# Ollama (auto-starts server and pulls model on first run):
+# LLM Backend configuration — Ollama (auto-starts server and pulls the base model on first run)
 llm:
   provider: "ollama"
-  model: "gemma2-9b-tutor"
-  num_ctx: 4096                       # context window tokens; omit to use model default
+  model: "gemma2-9b-tutor"             # custom model built from ./Modelfile — see PROVIDERS.md
+  num_ctx: 4096                        # context window tokens; omit to use model default
   # base_url defaults to http://localhost:11434/v1
-#
-# Gemini (set GEMINI_API_KEY env var):
-# llm:
-#   provider: "gemini"
-#   api_key: "${GEMINI_API_KEY}"
-#   model: "gemini-1.5-pro"
   max_tokens: 1000                     # Maximum output token limit for individual completion requests
   show_incomplete_responses: false     # If true, outputs incomplete LLM text when JSON parsing fails
   show_cut_by_limit_tag: true          # If true, appends '[TRUNCATED BY LIMIT]' to responses cut off by max_tokens
