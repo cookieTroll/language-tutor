@@ -1,30 +1,28 @@
 # Wharf the Language Tutor
 
-An AI language tutor that gives you the corrected-output feedback loop normally locked
-behind a subscription — running on your own API key or a fully local model, free either way.
+Wharf is a language learning tool built entirely around language output. It is a self-hosted, multi-agent AI language tutor that provides the deep, corrected-output feedback loop normally locked behind a subscription. It runs on your own API key or a fully local model, free or almost free either way: 60 sessions per month costs roughly €1, which is less than a single espresso.
 
-## The Problem
+## The Problem: A Personal Journey
 
-Building fluency in a language requires producing it — writing, speaking — and getting
-corrective feedback on what you got wrong and why. That feedback loop is the part
-existing tools tend to get wrong:
+This project was born out of a real-world struggle. After moving to Germany as a working professional with zero prior knowledge of German, I hit two massive roadblocks to achieving fluency:
 
-- **Passive tools** (Duolingo and most drill apps) build recognition, not production.
-  They won't tell you why your sentence was wrong or how to fix it.
-- **Tools with genuine corrective feedback** (Cambridge Write & Improve, Grammarly's
-  advanced tier, tutored platforms) sit behind subscription paywalls — or require a
-  human tutor whose time is finite and shared across an entire class.
-- **Raw LLM prompting** (pasting into ChatGPT) gives you feedback, but with no memory
-  of what you've practiced, no error tracking, and no adaptive routing — every session
-  starts from zero.
+1. **The Production Bottleneck:** Traditional language apps focus on passive recognition like flashcards or clicking pre-arranged words. But to learn fast, you need active production such as writing and speaking, paired with immediate, corrective feedback.
+2. **The Flexibility and Cost Trap:** Private tutors are expensive, and group classes lock you into rigid schedules. Even in those settings, a teacher's bandwidth for grading essays and providing detailed, personalized feedback is limited.
 
-Wharf is built around one claim: corrected-output feedback should be free, persistent,
-and adaptive. It runs on your own API key (Gemini, Vertex AI) or a fully local model
-(Ollama — free, private, no data leaving your machine), and it remembers what you've
-practiced across every session.
+Large Language Models (LLMs) are uniquely suited to language processing, offering a natural solution. However, getting feedback from raw LLM chats (like pasting sentences into ChatGPT or Claude) is cumbersome. It forces you to juggle several different environments (chat web apps for translation, separate note files for error tracking, and flashcard apps for vocabulary review) and lacks good persistence. With no historical memory of what you have practiced, no error tracking, and no adaptive routing, every session starts from scratch.
 
-See [`docs/competitive_landscape.md`](docs/competitive_landscape.md) for a detailed
-comparison against named existing tools.
+Wharf bridges this gap by providing a structured, multi-agent feedback loop that is persistent, adaptive, and runs on your own API key or a fully offline local model.
+
+## Why Wharf? Key Differentiators
+
+Unlike generic AI chats or commercial language apps, Wharf is built on four core pillars:
+
+1. **Unified Competency Memory:** Instead of siloed exercises, progress is tracked globally. A mistake in writing automatically routes the student to a targeted grammar session on that topic.
+2. **True Language Independence (Validation, Not Rewrite):** The architecture is entirely data-driven via YAML maps. Supporting a new target language or explanation language does not require code changes — only running the generator script and a native speaker spot-check (as validated with Czech).
+3. **Structured Production Depth:** Moves past simple multiple-choice or sentence-reordering drills. Focuses on free-text writing evaluated by a 7-step pipeline (estimation, detection, verification, taxonomy classification, explanation, correction, summary).
+4. **Extreme Cost Disruption:** Runs completely free and local on suitable hardware, or costs **roughly €1 per month** for a standard study load of 60 sessions (e.g., 2 sessions/day combining essay grading, grammar dumps, and drills) using hosted `gemini-2.5-flash` API keys. This eliminates standard monthly subscription paywalls (€10 to €30/month) for advanced tutoring features.
+
+See [`docs/competitive_landscape.md`](docs/competitive_landscape.md) for a detailed comparison against named existing tools.
 
 ## What It Does
 
@@ -150,12 +148,8 @@ See [PROVIDERS.md](PROVIDERS.md) for full setup instructions per provider.
 
 - **Validated scope:** A1–B2 German is the tested range. Czech has been generated and
   spot-checked but not yet fully exercised end-to-end through a live grammar session.
-- **Cost (Gemini path):** a ~100-word writing session or a grammar topic dump + exercise
-  round typically runs a couple of cents on `gemini-2.5-flash`. Prompt length (accumulated
-  skill system prompts and context) dominates over the user's own text length, so cost
-  stays fairly flat across session lengths. The Ollama path is free.
-- **Local path needs a GPU:** `gemma2:9b` requires ~6 GB VRAM. The Gemini path has no
-  local hardware requirement.
+- **Cost (Gemini path):** A typical session (100-word essay evaluation or grammar topic dump + drill) costs a fraction of a cent on `gemini-2.5-flash`. A full study monthly load of 60 sessions (2 sessions/day) runs **roughly €1 per month**. The prompt context (system prompts and taxonomy details) represents the bulk of the cost, making pricing highly flat and predictable. Furthermore, as a local library of generated lessons and exercises is gradually compiled, subsequent study sessions on those cached topics bypass the LLM entirely, reducing upkeep costs even further.
+- **Local path requirements:** Running locally requires suitable hardware (a dedicated GPU with ~6–8 GB VRAM to run models like `gemma2:9b` or `qwen2.5:7b` at acceptable speeds). Offline execution is completely free, but local models represent the lower end of grading and pedagogical accuracy compared to hosted commercial models.
 - **Recurrence check is session-scoped:** the writing↔grammar bridge fires when an
   error tag recurs within a session's accumulated errors, not across an aggregate of all
   sessions. Cross-session aggregate memory is a planned improvement.

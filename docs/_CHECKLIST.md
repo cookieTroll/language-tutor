@@ -23,14 +23,14 @@ Suggested order and why:
    *and* the source material the writeup and video architecture slide should be drawn
    from — do this before drafting either.
    - [x] [ ] [ ] README rewrite/expansion
-   - [ ] [ ] [ ] Fix `docs/img/content_pipeline.jpg` when image-gen quota resets (~4h): wire both Skills and Orchestrator arrows from `_Registry` (not from map tiles directly); remove Skills↔Orchestrator connection (runtime relationships live on architecture diagram)
+   - [x] [x] [x] Fix `docs/img/content_pipeline.jpg` when image-gen quota resets (~4h): wire both Skills and Orchestrator arrows from `_Registry` (not from map tiles directly); remove Skills↔Orchestrator connection (runtime relationships live on architecture diagram)
 2. **Market research & pricing** — before the writeup, not after, since the writeup's
    Deployability section depends on this number existing.
-   - [ ] [ ] [ ] Re-verify `docs/competitive_landscape.md`'s claims before relying on them (the doc's own note: competitor products change, written 2026-07-05)
-   - [ ] [ ] [ ] Confirm the "couple of cents per exercise" `gemini-2.5-flash` figure with an actual per-request token/cost estimate rather than a rounded gut number; decide where it lands (Deployability section, per `CAPSTONE_READINESS.md` §7's note)
+   - [x] [ ] [ ] Re-verify `docs/competitive_landscape.md`'s claims before relying on them (the doc's own note: competitor products change, written 2026-07-05)
+   - [x] [ ] [ ] Confirm the "couple of cents per exercise" `gemini-2.5-flash` figure with an actual per-request token/cost estimate rather than a rounded gut number; decide where it lands (Deployability section, per `CAPSTONE_READINESS.md` §7's note)
 3. **Kaggle writeup** — architecture decisions, design rationale, testing approach,
    honest PoC scope statement. Needs README + pricing settled first.
-   - [ ] [ ] [ ] Draft against the `CAPSTONE_READINESS.md` §11 word budget
+   - [x] [ ] [ ] Draft against the `CAPSTONE_READINESS.md` §11 word budget
 4. **Demo video** — one complete end-to-end session (≤5 min): startup → recommendation
    → writing → feedback → file written. Benefits from the writeup's framing being
    settled first (same "why agents"/architecture story), but can be shot in parallel.
