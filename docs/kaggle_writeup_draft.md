@@ -70,7 +70,7 @@ The core pedagogical value of Wharf lies in the bidirectional bridge between the
    Feedback is calibrated to the student's current CEFR level. If an A2 student makes a B2-level error (e.g., complex subjunctive usage), the system flags it as `minor` and provides a brief hint. If they make a basic A1 error (e.g., subject-verb agreement), it is flagged as `critical` and triggers a detailed, structural explanation.
 
 3. **Routing to Grammar Drills:** 
-   The Orchestrator monitors the frequency of error tags. If a specific taxonomy tag recurs (frequency $\ge 2$) within the session logs, the Orchestrator generates a bridge recommendation. Upon starting the next session, the learner is prompted: *"We noticed a recurring issue with Verb-Second Word Order. Would you like to practice this now?"*
+   The Orchestrator monitors the frequency of error tags within the current session's accumulated logs. If a specific taxonomy tag recurs (frequency ≥ 2), the Orchestrator generates a bridge recommendation. Upon starting the next session, the learner is prompted: *"We noticed a recurring issue with Verb-Second Word Order. Would you like to practice this now?"*
 
 4. **Dynamic Theory & Exercise Generation:** 
    If accepted, the `GrammarModule` is invoked:
@@ -118,6 +118,9 @@ A single configuration file switcher (`LTUT_CONFIG`) changes the execution envir
 - **Key Isolation:** API keys are never hardcoded; `config.py` resolves `${VAR_NAME}` syntax against the operating system's environment variables at runtime.
 - **Strict Input/Output Validation:** Every LLM response is Pydantic-validated. All user-input strings are sanitized, and the web UI enforces path-traversal guards on file reads, checking that resolved paths stay strictly within the designated `data_root`.
 
+### MCP Server — Programmatic Access Layer
+`ui/mcp_server.py` exposes the session and progress storage layer as a read-only MCP server with 10 typed tools: `list_users`, `list_languages`, `get_progress`, `list_sessions`, `get_session`, `get_recurring_errors`, `get_vocab_flags`, `export_writing_history`, `get_error_taxonomy`, and `get_grammar_topic_list`. No LLM calls, no writes. The server speaks MCP over stdio and connects to any MCP-compatible client (e.g., Claude Desktop) without code changes.
+
 ---
 
 ## 7. Testing Strategy: Three-Tier Offline Testing & LLM-as-a-Judge
@@ -133,7 +136,7 @@ To verify the agentic pipelines without generating massive API bills or relying 
    Because grading and correcting text are subjective, unit tests cannot verify quality. The `tests/judge/` suite implements a two-LLM judge framework:
    - One model executes the skill (e.g., `detect_mistakes`).
    - A separate, larger evaluator model grades the output against ground-truth student submissions.
-   - This suite was used to select the default local model: `gemma2:9b` achieved 12/12 correct evaluations on the mistake detection benchmark, whereas `qwen2.5:7b` failed 4 evaluations, setting `gemma2:9b` as our local baseline.
+   - This suite was used to select the default local model: `gemma2:9b` achieved 12/12 correct evaluations on the mistake detection benchmark, whereas `qwen2.5:7b` failed 4 evaluations, setting `gemma2:9b` as our local baseline. The tooling for repeated variance sweeps (`scripts/run_judge_variance.py`) exists and is configured; full statistical stability across repeated runs was not measured within the project scope.
 
 3. **Tier 3: Regression Suite**
    Whenever a prompt hallucination or bug is identified, a test case is added to the regression suite. The rule "Tests before commit" is enforced workspace-wide to ensure zero regression before code changes are merged.
