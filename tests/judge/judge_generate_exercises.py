@@ -19,7 +19,7 @@ import os
 import yaml
 import pytest
 
-from tests.judge.utils import make_llm, strip_markdown_json, write_results, PROJECT_ROOT
+from tests.judge.utils import make_llm, run_metadata, strip_markdown_json, write_results, PROJECT_ROOT
 
 
 FIXTURE_PATH = os.path.join(PROJECT_ROOT, "tests", "fixtures", "generate_exercises_cases.json")
@@ -107,7 +107,7 @@ def judge_llm():
 def results_collector():
     records = []
     yield records
-    path = write_results(records, "judge_generate_exercises")
+    path = write_results(records, "judge_generate_exercises", metadata=run_metadata())
     print(f"\nResults written to: {path}")
 
 

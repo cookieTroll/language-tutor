@@ -12,7 +12,7 @@ import json
 import os
 import pytest
 
-from tests.judge.utils import load_cases, make_llm, strip_markdown_json, write_results
+from tests.judge.utils import load_cases, make_llm, run_metadata, strip_markdown_json, write_results
 
 JUDGE_PROMPT = """\
 You are evaluating explanations written by a German language teacher (Step 3 of a writing pipeline).
@@ -77,7 +77,7 @@ def judge_llm():
 def results_collector():
     records = []
     yield records
-    path = write_results(records, "judge_explainer")
+    path = write_results(records, "judge_explainer", metadata=run_metadata())
     print(f"\nResults written to: {path}")
 
 

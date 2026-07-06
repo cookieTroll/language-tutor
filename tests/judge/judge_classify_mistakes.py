@@ -13,7 +13,7 @@ import os
 import yaml
 import pytest
 
-from tests.judge.utils import load_cases, make_llm, strip_markdown_json, write_results, PROJECT_ROOT
+from tests.judge.utils import load_cases, make_llm, run_metadata, strip_markdown_json, write_results, PROJECT_ROOT
 
 
 def _load_taxonomy():
@@ -114,7 +114,7 @@ def judge_llm():
 def results_collector():
     records = []
     yield records
-    path = write_results(records, "judge_classifier")
+    path = write_results(records, "judge_classifier", metadata=run_metadata())
     print(f"\nResults written to: {path}")
 
 

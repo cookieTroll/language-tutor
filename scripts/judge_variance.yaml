@@ -1,0 +1,36 @@
+# Config for scripts/run_judge_variance.py — repeats each judge test file N times
+# to measure variance in judge verdicts and executor output quality across runs.
+
+batch_id: null          # tag embedded in each result JSON's metadata; auto-generated (timestamp) if null
+repeats: 5              # how many times to repeat each (judge, executor_config, judge_config) combo
+
+judges:
+  - judge_detect_mistakes
+  - judge_classify_mistakes
+  - judge_explain_mistakes
+  - judge_write_correction
+  - judge_summary
+  - judge_summarize_progress
+  - judge_summarize_writing_history
+  - judge_select_grammar
+  - judge_dump_grammar
+  - judge_generate_exercises
+  - judge_grade_exercises
+  - judge_grammar_module
+  - judge_verify_mistakes
+  # judge_orchestrator intentionally left out by default: per docs/... judge suite
+  # notes it never calls the real Orchestrator.recommend_exercise() path faithfully
+  # yet — add it back explicitly once that's fixed, otherwise you're just measuring
+  # variance in a reimplementation.
+
+# LTUT_CONFIG (executor) and LTUT_JUDGE_CONFIG (judge) — each a list so you can sweep
+# independently. Every executor_config is paired with every judge_config (cross product).
+executor_configs:
+  - config.test.yaml
+
+judge_configs:
+  - config.test.yaml
+
+case_filter: null              # optional pytest -k expression, e.g. "single_001" to scope to one fixture case
+on_error: continue             # continue | stop — stop aborts the whole run on the first crash (not on a FAIL verdict)
+log_dir: tests/judge/results/logs   # per-repeat pytest stdout/stderr, one file per run, under log_dir/<batch_id>/

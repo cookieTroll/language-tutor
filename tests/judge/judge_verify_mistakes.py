@@ -16,7 +16,7 @@ import json
 import os
 import pytest
 
-from tests.judge.utils import make_llm, write_results, PROJECT_ROOT
+from tests.judge.utils import make_llm, run_metadata, write_results, PROJECT_ROOT
 
 FIXTURE_PATH = os.path.join(PROJECT_ROOT, "tests", "fixtures", "verify_mistakes_cases.json")
 
@@ -35,7 +35,7 @@ def executor_llm():
 def results_collector():
     records = []
     yield records
-    path = write_results(records, "judge_verify_mistakes")
+    path = write_results(records, "judge_verify_mistakes", metadata=run_metadata(include_judge_config=False))
     print(f"\nResults written to: {path}")
 
 

@@ -30,10 +30,29 @@ def strip_markdown_json(text: str) -> str:
     return text.strip()
 
 
-def write_results(records: list[dict], prefix: str) -> str:
+def run_metadata(include_judge_config: bool = True) -> dict:
+    """Run-identifying metadata sourced from env vars set by scripts/run_judge_variance.py.
+
+    Falls back to sensible defaults so a plain `pytest tests/judge/...` invocation
+    (no runner involved) still produces a valid, if sparse, metadata block.
+    """
+    repeat_index = os.environ.get("LTUT_REPEAT_INDEX")
+    executor_config = os.environ.get("LTUT_CONFIG", "config.test.yaml")
+    metadata = {
+        "batch_id": os.environ.get("LTUT_BATCH_ID"),
+        "repeat_index": int(repeat_index) if repeat_index else None,
+        "executor_config": executor_config,
+    }
+    if include_judge_config:
+        metadata["judge_config"] = os.environ.get("LTUT_JUDGE_CONFIG", executor_config)
+    return metadata
+
+
+def write_results(records: list[dict], prefix: str, metadata: dict | None = None) -> str:
     os.makedirs(RESULTS_DIR, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     path = os.path.join(RESULTS_DIR, f"{prefix}_{timestamp}.json")
+    payload = {"metadata": metadata or {}, "records": records}
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, indent=2)
     return path
