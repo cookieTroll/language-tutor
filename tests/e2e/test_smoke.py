@@ -26,16 +26,18 @@ def test_full_writing_session(isolated_e2e_config):
     #   1. user ID
     #   2. language
     #   3. CEFR level
-    #   4. confirm writing module (Enter = yes)
-    #   5. empty line = accept suggested topic (manual topic override prompt, Layer 2a-i)
-    #   6. one line of essay text
-    #   7. empty line = submit
-    #   8. empty line = exit follow-up phase
-    #   9. decline another session
+    #   4. explanation language (Enter = English)
+    #   5. confirm writing module (Enter = yes)
+    #   6. empty line = accept suggested topic
+    #   7. one line of essay text
+    #   8. empty line = submit
+    #   9. empty line = exit follow-up phase
+    #   10. decline another session
     inputs = "\n".join([
         user_id,
         "german",
         "a2",
+        "",
         "",
         "",
         "Ich stehe morgens um sieben Uhr auf. Dann frühstücke ich mit meiner Familie.",

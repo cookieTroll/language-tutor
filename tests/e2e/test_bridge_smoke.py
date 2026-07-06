@@ -44,10 +44,12 @@ def test_writing_to_grammar_bridge_chains_live(isolated_e2e_config):
         "y",                                 # accept "Start grammar practice on '...' now?"
         "",                                  # chained session: continue studying german
         "",                                  # chained session: keep level a1
-        GRAMMAR_TOPIC,                       # manual grammar topic — skips select_grammar's LLM call
-        "test", "test", "test", "test", "test",  # dummy answers; padded/truncated regardless of count
+        "",                                  # chained session: keep explanation language (English)
+        "test", "test", "test", "test", "test",
+        "test", "test", "test", "test", "test",  # 10 dummy answers for the 10 generated exercises
         "",                                  # blank line submits the answer block
-        "n",                                 # decline another session — ends the CLI loop
+        "n",                                 # decline another exercise on this grammar topic
+        "n",                                 # decline starting another learning session — ends the CLI loop
     ]) + "\n"
 
     env = {**os.environ, "LTUT_CONFIG": isolated_e2e_config, "PYTHONIOENCODING": "utf-8"}
