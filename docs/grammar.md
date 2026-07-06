@@ -1,8 +1,8 @@
-# GermanTutor — Grammar Module & Skills
+# LanguageTutor — Grammar Module & Skills
 
 Layer 2a. Four atomic skills composing a grammar practice session.
 
-See `docs/contracts.md` for `ModuleProtocol`, `SkillProtocol`, `GrammarSessionContent`.
+See `docs/_contracts.md` for `ModuleProtocol`, `SkillProtocol`, `GrammarSessionContent`.
 
 ---
 
@@ -44,9 +44,15 @@ def context_request(self) -> ContextRequest:
 | 2a | `dump_grammar` | comprehensive explanation |
 | 2a | `generate_exercises` | exercise generation |
 | 2a | `grade_exercises` | one batched call: judges open-ended exercises + produces feedback for every wrong answer, exact-match included |
-| PoC | `btw_handler` | utility — inline /btw questions |
 
 `explain_grammar` (originally planned as a separate utility skill) was dropped — `grade_exercises` absorbs its only required use. See Backlog.
+
+Unlike the writing module, `btw_handler` is **not** wired into the grammar
+module — `get_grammar_skills()` (`modules/grammar/skills.py`) only returns
+the four skills above, and `modules/grammar/agent.py` has no `/btw` parsing
+anywhere in its input loop. The "Per-exercise input boxes" backlog item below
+describes a *future* `/btw`-prefixed-line design for the web answer textarea,
+but nothing implements it today.
 
 ### Session flow (`modules/grammar/agent.py`)
 
@@ -59,28 +65,55 @@ adjustment needed — `input()` only reads one line, so it must read until a
 blank line to collect the block.
 
 ```
-1. select_grammar(error_frequency, recent_topics, level) → topic
+1. Topic pick (`GrammarModule._pick_topic`):
+   a. If no `suggested_focus` was already set (i.e. no recommendation/bridge
+      chain was already accepted for this session), prompt: "Enter your own
+      grammar topic, or press Enter for a suggestion".
+      - User types a topic → `resolve_manual_topic(topic, level, language)`
+        (`skills/select_grammar/skill.py`) resolves it without an LLM call:
+        matches against the curated major-topic list by exact,
+        case-insensitive string; otherwise treated as an ad hoc minor topic
+        at the user's level. `select_grammar` is skipped entirely in this
+        branch.
+      - User presses Enter (blank input) → falls through to
+        `select_grammar(error_frequency, recent_topics, level,
+        suggested_focus)` → topic
+   b. If `suggested_focus` was already set, the manual-entry prompt is
+      skipped and `select_grammar` is called directly with that focus as a
+      hint — the user already confirmed this session's focus upstream.
 2. dump_grammar(topic, level) → explanation
 3. Display explanation to user
-4. generate_exercises(topic, level) → exercises[] (each tagged exercise_type + grading mode)
-5. Display all exercises as one numbered block
-6. Accept answers as a single multi-line block — one line per exercise, in order
-   └─ /btw handled inline at any point before submission
-7. Split the block by newline (pad/truncate to exercise count) and check:
-   a. Exact-match exercises (fill_in_the_blank, multiple_choice, true_false)
-      → compared in Python, normalised (lowercase, stripped) — no LLM call,
-      correctness already known
-   b. Open-ended exercises (error_correction, transformation, word_order,
-      sentence_completion, sentence_combining, translation)
-      → correctness not knowable in Python; deferred to step 8
-8. One batched grade_exercises call: judges every open-ended exercise for
-   correctness, and produces feedback for every wrong answer overall —
-   open-ended ones it judged itself, exact-match ones Python already flagged
-   wrong in step 7a (those just need feedback phrasing, not a correctness
-   judgment) — see `grade_exercises` below for the `already_known_wrong` split
-9. Log errors to session errors list
-10. Compute score = correct / total
-11. Return (ModuleResult, GrammarSessionContent)
+4. Round loop — repeats until the user declines another round or a round
+   generates no exercises:
+   a. generate_exercises(topic, level, exercise_type) → exercises[] (each
+      tagged exercise_type + grading mode) — `exercise_type` is one type
+      picked in code for the whole round (`_pick_exercise_type`), avoiding
+      a repeat of the immediately previous round's type
+   b. Display all exercises as one numbered block
+   c. Accept answers as a single multi-line block — one line per exercise,
+      in order
+   d. Split the block by newline (pad/truncate to exercise count) and check:
+      i.  Exact-match exercises (fill_in_the_blank, multiple_choice, true_false)
+          → compared in Python, normalised (lowercase, stripped) — no LLM
+          call, correctness already known
+      ii. Open-ended exercises (error_correction, transformation, word_order,
+          sentence_completion, sentence_combining, translation)
+          → correctness not knowable in Python; deferred to step e
+   e. One batched grade_exercises call: judges every open-ended exercise for
+      correctness, and produces feedback for every wrong answer overall —
+      open-ended ones it judged itself, exact-match ones Python already
+      flagged wrong in step d.i (those just need feedback phrasing, not a
+      correctness judgment) — see `grade_exercises` below for the
+      `already_known_wrong` split
+   f. Display this round's results; log this round's errors into the
+      session-wide errors list; pool this round's items into the
+      session-wide items list
+   g. If exercises were generated this round, prompt: "Another exercise on
+      '{topic}'? [Y/n]". Anything other than `n` starts another round from
+      step a on the same topic; `n` (or generation itself failing, i.e. no
+      exercises this round) ends the loop
+5. Compute score = correct / total, across every pooled item from every round
+6. Return (ModuleResult, GrammarSessionContent)
 ```
 
 `GrammarSessionContent.items` holds every exercise from the set, correct and
@@ -93,12 +126,18 @@ useful than an isolated mistake list.
 ### `ModuleResult.metadata` keys
 
 ```python
-{
-  "btw_entries": [BtwEntry, ...],
-}
+{}
 ```
 
-`score` and `topic` are not duplicated into `metadata` — they're already typed fields on `GrammarSessionContent`, and `metadata` is reserved for things the orchestrator must separately persist elsewhere (matches the documented convention: `btw_entries` → btw_log, `vocab_signals` → vocab_flags). Grammar sessions don't produce `vocab_signals` (`include_vocab_flags=False` in `context_request()`).
+`modules/grammar/agent.py` always sets `metadata={}` — unlike the writing
+module, this module has no `btw_entries` (no `/btw` support, see "Skills
+injected" above) or `vocab_signals` (`include_vocab_flags=False` in
+`context_request()`) to carry. `score` and `topic` are not duplicated into
+`metadata` either — they're already typed fields on `GrammarSessionContent`.
+`metadata` is reserved for things the orchestrator must separately persist
+elsewhere (matches the documented convention on the writing module:
+`btw_entries` → btw_log, `vocab_signals` → vocab_flags); grammar simply has
+nothing that fits that description today.
 
 ---
 
@@ -433,7 +472,7 @@ Full list to be compiled from Goethe Institut A1–B2 curriculum before Layer 2a
   covered by `grade_exercises`'s batched feedback, and the writing module's
   follow-up phase (`modules/writing/agent.py:250` `_follow_up_phase`)
   already routes "why is this wrong?" questions through `btw_handler`
-  (see 2a-vi in `docs/CHECKLIST.md` — that path needs the evaluation
+  (see 2a-vi in `docs/_CHECKLIST.md` — that path needs the evaluation
   results threaded into its `session_context`, not a new skill). Revisit
   only if a concrete future need for an ad hoc, system-triggered "explain
   this one thing" call emerges that batching can't cover.
@@ -448,22 +487,23 @@ Full list to be compiled from Goethe Institut A1–B2 curriculum before Layer 2a
   tag at all) and surfaces the raw tag as `suggested_focus`, leaving the
   actual level-aware topic pick to `select_grammar`. A precise "you keep
   messing up X, here's exactly topic Y" recommendation would need the
-  already-tracked taxonomy work in `docs/CHECKLIST.md` Layer 1a
+  already-tracked taxonomy work in `docs/_CHECKLIST.md` Layer 1a
   ("Vary error taxonomy by progression level... finer at B2/C1") — finer
   tags would shrink the fan-out enough for 1:1 or near-1:1 tag→topic
   mapping. Revisit this bridge once that taxonomy work lands.
 
 - **Per-exercise input boxes for the web grammar UI (2a-viii)** — the web
   answer-collection widget is a single flat textarea (mirrors `GrammarModule`
-  calling `io.prompt_block()` exactly once — the whole answer set, including
-  any inline `/btw ...` lines, is one submitted blob parsed server-side by
-  `parse_answer_block` before grading, not a live per-exercise round-trip).
-  A richer UI — one input box per exercise, avoiding the user having to keep
-  line-ordering straight in one blob — is a legitimate future improvement,
-  but needs a separate "ask a question" field whose value gets re-assembled
-  into a `/btw`-prefixed line client-side before the single `sendInput()`
-  call, to preserve the existing question-asking feature without a
-  regression. Bounded UX gain, not a functional gap — deferred as UI polish.
+  calling `io.prompt_block()` exactly once — the whole answer set is one
+  submitted blob, padded/truncated by `parse_answer_block` before grading,
+  not a live per-exercise round-trip). A richer UI — one input box per
+  exercise, avoiding the user having to keep line-ordering straight in one
+  blob — is a legitimate future improvement. Note this module has no
+  `/btw` support today (see "Skills injected" above), so unlike the writing
+  module's equivalent UI, there is no existing inline-question feature to
+  preserve here — any such feature would need to be designed and wired up
+  from scratch, not just re-assembled client-side. Bounded UX gain, not a
+  functional gap — deferred as UI polish.
 
 Exercise types considered and deliberately deferred — not part of the Layer
 2a `generate_exercises` type set:

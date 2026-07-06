@@ -1,6 +1,6 @@
-# GermanTutor — Finished Work
+# LanguageTutor — Finished Work
 
-Items with at least two sign-offs (Validated + optionally Finished). Pulled from CHECKLIST.md as sections complete.
+Items with at least two sign-offs (Validated + optionally Finished). Pulled from `_CHECKLIST.md` as sections complete.
 
 `[Impl]` (Implemented) | `[Val]` (Validated — user sign-off) | `[Fin]` (Finished — second sign-off at stage end)
 
@@ -107,7 +107,7 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 - [x] [x] [x] Unit test: `write_vocab_flag()` increments count on duplicate, does not insert new row
 
 ### Interruption — Resume / Log / Discard (PoC)
-- [x] [x] [ ] Checkpoint file written incrementally during `skill.run()` — each turn appended to `data/checkpoints/{user_id}/{session_id}.json`
+- [x] [x] [ ] Checkpoint file written incrementally during `skill.run()` — each turn appended to `data/checkpoints/{user_id}/{session_id}.json`. **Correction, found 2026-07-05:** this was checked off prematurely — the file is created empty and neither `WritingModule` nor `GrammarModule` ever appends to it. The "Log it" summary path this feeds still works, just always off an empty transcript. Tracked as a post-submission fix in `docs/CHECKLIST.md`, not re-opened here since sign-off already happened and the historical record should show that, not erase it.
 - [x] [x] [ ] `status='interrupted'` added to valid status values; schema updated
 - [x] [x] [ ] On startup: detect `in_progress` sessions, present resume/log/discard prompt
 - [x] [x] [ ] "Log it" path: load transcript → LLM summarize → write partial session file with `status='interrupted'`
@@ -131,46 +131,54 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 
 ## Layer 1a — Full Evaluator Pipeline
 
-### Steps 1–4 — Detect, Classify, Explain, Correct
-- [x] [x] [ ] `skills/detect_mistakes/skill.py` — Step 1: Raw Mistake Detector
+### Design Research — Error Taxonomy & Feedback Rubrics
+- [x] [x] [ ] Evaluate whether taxonomy tags surface to the user directly or are mapped to learner-friendly labels in the UI layer — resolved: raw `error_tag` values (`verb_conjugation`, etc.) now go through `shared/humanize.py::humanize_tag()` (underscore→space, title case) at every render/display site (`TerminalIOHandler`/`WebIOHandler` in `shared/io.py`, plus a `humanize_tag` Jinja filter used in `session.html`/`sessions.html`) rather than being stored or re-derived per site. `weak_tags`/`strong_tags` needed no change — `orchestrator/mastery.py` already resolves those to full taxonomy descriptions or grammar topic names, not raw tag keys
+
+### Steps 2, 3, 4, 5, 6 — Detect, Verify, Classify, Explain, Correct
+- [x] [x] [ ] `skills/detect_mistakes/skill.py` — Step 2: Raw Mistake Detector
   - [x] [x] [ ] Prompt in `skills/detect_mistakes/prompts.py`; CEFR context injected via `lang.loader.get_cefr_context(language, level)`
   - [x] [x] [ ] Returns `list[dict]` with `fragment` and `error_type_hint` fields
   - [x] [x] [ ] Handles empty mistake list and malformed LLM JSON gracefully
-- [x] [x] [ ] `skills/classify_mistakes/skill.py` — Step 2: Mistake Classifier
+- [x] [x] [ ] `skills/verify_mistakes/skill.py` — Step 3: Mistake Verifier (added after the original 1a build; see judge-test note below)
+  - [x] [x] [ ] Prompt in `skills/verify_mistakes/prompts.py`; re-checks each raw fragment from Step 2 against its original sentence context and drops false positives (Step 2 judges the whole text in one pass and can misjudge a fragment — e.g. correct verb-second inversion — in isolation)
+  - [x] [x] [ ] Registered in `modules/writing/skills.py`; wired into `WritingPipeline` (`modules/writing/pipeline.py`) between `detect_mistakes` and `classify_mistakes`
+  - [x] [x] [ ] Unit test coverage in `tests/unit/writing/test_writing_pipeline.py`
+- [x] [x] [ ] `skills/classify_mistakes/skill.py` — Step 4: Mistake Classifier
   - [x] [x] [ ] Classifies each mistake with `error_tag` via `lang.loader.get_taxonomy()`; uses `taxonomy.format_for_prompt()` and `taxonomy.validate_tag()` with `TaxonomyError` → `"other"` fallback
   - [x] [x] [ ] Adds `correction` field to each mistake
-- [x] [x] [ ] `skills/explain_mistakes/skill.py` — Step 3: Explanation Generator
+- [x] [x] [ ] `skills/explain_mistakes/skill.py` — Step 5: Explanation Generator
   - [x] [x] [ ] Adds `explanation` field pitched to user's level; short-circuits gracefully if mistake list is empty
-- [x] [x] [ ] `skills/write_correction/skill.py` — Step 4: Correction Writer
+- [x] [x] [ ] `skills/write_correction/skill.py` — Step 6: Correction Writer
   - [x] [x] [ ] Returns `corrected_text`, `recommendations[]`, `comment`; correction derived from structured mistakes, not regenerated freeform
-- [x] [x] [ ] `WritingModule._run_pipeline()` wires Steps 1–4; `_build_results()` assembles full `WritingSessionContent`
+- [x] [x] [ ] `WritingModule._run_pipeline()` wires Steps 2–6; `_build_results()` assembles full `WritingSessionContent`
 - [x] [x] [ ] **Writing fixture set** — minimum 3 verified input/output pairs (`tests/fixtures/writing_pairs.json`)
-- [x] [x] [ ] `tests/writing/test_writing_pipeline.py` — unit tests for Steps 2, 3, 4 (mocked LLM, offline)
-- [x] [x] [ ] `tests/writing/test_writing.py` — unit tests for `WritingModule` helper methods
+- [x] [x] [ ] `tests/unit/writing/test_writing_pipeline.py` — unit tests for Steps 3, 4, 5, 6 (mocked LLM, offline)
+- [x] [x] [ ] `tests/unit/writing/test_writing.py` — unit tests for `WritingModule` helper methods
 
-### Steps 5–6 — Text-Level Estimation & Session Summary
-- [x] [x] [ ] `skills/estimate_text_level/skill.py` — Step 5: Text CEFR Estimator
+### Steps 1, 7 — Text-Level Estimation & Session Summary
+- [x] [x] [ ] `skills/estimate_text_level/skill.py` — Step 1: Text CEFR Estimator
   - [x] [x] [ ] Input: raw user text + writing prompt + user's stated level
   - [x] [x] [ ] Output: `text_level_estimate: str` (CEFR band) or `None` if text is too short
   - [x] [x] [ ] Prompt grounds estimation in CEFR descriptors from `lang/maps/cefr_descriptors/`
-- [x] [x] [ ] `skills/summarise_session/writing/skill.py` — Step 6: Session Summariser
+- [x] [x] [ ] `skills/summarise_session/writing/skill.py` — Step 7: Session Summariser
   - [x] [x] [ ] Input: user level, text level estimate, explained mistakes (with `error_tag`, `occurrence_count` per tag), writing prompt
   - [x] [x] [ ] Output: `session_summary: str`, `mistakes: list[dict]` enriched with `severity` (`critical` / `expected` / `minor`), `tips: list[str]`, `comparison_note: None`
 - [x] [x] [ ] `skills/summarise_session/base.py` — `BaseSummariseSkill`: abstract base for module-specific summarisers; handles LLM call, JSON parsing, common field validation, error fallback
 - [x] [x] [ ] Update `WritingSessionContent`: add `severity` to each mistake dict, replace `recommendations: list[str]` with `tips: list[str]`, replace `comment: str` with `session_summary: str`, add `comparison_note: str | None = None`
 - [x] [x] [ ] Update `_PipelineResult`; update `_print_evaluation()` to display severity-grouped mistakes and tips
-- [x] [x] [ ] Wire Steps 5–6 into `WritingModule._run_pipeline()`
-- [x] [x] [ ] Unit tests for Steps 5 and 6 (mocked LLM)
+- [x] [x] [ ] Wire Steps 1, 7 into `WritingModule._run_pipeline()`
+- [x] [x] [ ] Unit tests for Steps 1 and 7 (mocked LLM)
 
-### Steps 1–4 — Judges
-- [x] [x] [ ] `tests/judge/judge_detect_mistakes.py` — judge for Step 1 (fragment detection only)
-- [x] [x] [ ] `tests/judge/judge_classify_mistakes.py` — judge for Step 2 (error_tag accuracy)
-- [x] [x] [ ] `tests/judge/judge_explain_mistakes.py` — judge for Step 3 (explanation quality, semantic)
-- [x] [x] [ ] `tests/judge/judge_write_correction.py` — judge for Step 4 (corrected_text vs expected)
+### Steps 2, 3, 4, 5, 6 — Judges
+- [x] [x] [ ] `tests/judge/judge_detect_mistakes.py` — judge for Step 2 (fragment detection only)
+- [x] [x] [ ] `tests/judge/judge_verify_mistakes.py` — judge for Step 3 (false-positive filtering accuracy — added alongside the `verify_mistakes` skill itself)
+- [x] [x] [ ] `tests/judge/judge_classify_mistakes.py` — judge for Step 4 (error_tag accuracy)
+- [x] [x] [ ] `tests/judge/judge_explain_mistakes.py` — judge for Step 5 (explanation quality, semantic)
+- [x] [x] [ ] `tests/judge/judge_write_correction.py` — judge for Step 6 (corrected_text vs expected)
 - [x] [x] [ ] Run each judge 5× on same fixture; verify variance is acceptable; document threshold
 
-### Steps 5–6 — Judges
-- [x] [x] [ ] `tests/judge/judge_summary.py` — judge for Step 6 output (severity accuracy, tip relevance)
+### Steps 1, 7 — Judges
+- [x] [x] [ ] `tests/judge/judge_summary.py` — judge for Step 7 output (severity accuracy, tip relevance)
 
 ---
 
@@ -339,7 +347,7 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 
 > Merges the original Layer 2c (CEFR Estimator) and Layer 3b (Level Progression Tracking) into
 > one build: both turned out to be different renderings of the same underlying mastery data, not
-> independent features — see `docs/TODO.md` for how this was resolved. Complements Step 5
+> independent features — see `docs/_TODO.md` for how this was resolved. Complements Step 5
 > (per-session `text_level_estimate` on raw text) by aggregating it, and other per-session
 > signals, into a user-level view.
 >
@@ -356,7 +364,7 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 - [x] [x] [ ] `get_module_mastery(user_id, language, module)` (`orchestrator/mastery.py`) — grammar: `topics_total`/`topics_mastered` scoped to the curated topics *for the user's current level* (score ≥ `GRAMMAR_MASTERY_THRESHOLD`), weak tags from `get_error_frequency(module="grammar")`; writing: `texts_written` (completed session count), same weak/strong tag lookup (grammar error tags surface during writing too — same tag space); both: `total_words`, `words_at_current_level` (sum of `word_count` filtered to `sessions.level == user_profiles.level`). Also added `SessionLog.score` (grammar sessions) and `shared/slugify.py::slugify_topic` (shared between `modules/grammar/agent.py`'s `task_label` and mastery's topic matching — task_label is a slug, curated topic names aren't, so both sides must slugify identically)
 - [x] [x] [ ] Weak/strong tag → human label: reuse `get_taxonomy(language)` / `get_grammar_topics(language)` (`lang/loader.py`, the same functions the MCP server's `get_error_taxonomy`/`get_grammar_topic_list` wrap) — don't duplicate the lookup
 - [x] [x] [ ] `get_level_trend(user_id, language, module="writing")` (`orchestrator/mastery.py`) — chronological `[(date, text_level_estimate)]` pulled directly from `sessions.text_level_estimate` (Layer 2b field); no new computation, no LLM call
-- [x] [x] [ ] Define minimum session count before estimation is meaningful — `MIN_SESSIONS_FOR_ESTIMATE = 5` (`orchestrator/mastery.py`), caps writing's mastery_ratio at 1.0
+- [x] [x] [ ] Define minimum session count before estimation is meaningful — `TEXTS_PER_LEVEL_FOR_MASTERY = 25` (`orchestrator/mastery.py`), caps writing's mastery_ratio at 1.0 once 25 completed sessions *at the user's current level* are reached
 - [x] [x] [ ] `skills/cefr_estimator/skill.py` — the level-up decision is a threshold crossing on `get_module_mastery`'s mastery ratio (~`GRAMMAR_MASTERY_THRESHOLD`, i.e. structured coverage), not a separate blended heuristic over multiple fuzzy signals; `get_level_trend` is informational only, shown alongside rather than folded into the gate. Suggests only (`should_level_up`, `next_level` in metadata) — the caller (`Orchestrator._handle_progress_command`) confirms with the user before calling `store.write_level(..., source="estimated")` — no `user_levels` table exists or is needed (see `docs/memory.md`)
 - [x] [x] [ ] Decide and document: estimated level vs stated level — suggest only, do not override `user_profiles.level` without user confirmation (see `Orchestrator._handle_progress_command`'s `[Y/n]` prompt before `write_level`)
 - [x] [x] [ ] UI: progression bar per module — fill % = mastery ratio from `get_module_mastery`, weak/strong topic chips, word-count flavor stats (`total_words`, `words_at_current_level`); trend sparkline from `get_level_trend`. Rendering goes through `IOHandler.render_progress(data)` (`shared/io.py`) — same "orchestrator gathers data, IOHandler renders" split as `render_evaluation`/`render_exercises`/`render_results`, so CLI and web UI share one data shape: `TerminalIOHandler` draws ASCII bars, `WebIOHandler` forwards a `progress_ready` SSE event to `ui/static/progress-ui.js`, which renders a conic-gradient dial per module (`#cmd-sidebar`-adjacent `.dial`/`.dial-wrap` CSS in `ui/templates/index.html`) plus weak/strong tag chips and the trend sparkline
@@ -373,3 +381,23 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 - [x] [x] [ ] Reference-data tools over `lang/loader.py` (no user data, no LLM calls): `get_error_taxonomy(language)` (tag → description, for interpreting `get_recurring_errors` output) and `get_grammar_topic_list(language)` (curated topics + difficulty + related error tags, for cross-referencing against recurring errors)
 - [x] [x] [ ] `tests/unit/test_mcp_server.py` — seeded-storage fixture exercising every tool (progress defaults to active language, ownership check on `get_session`, days/count filtering on `export_writing_history`, taxonomy/topic lookups); `tests/unit/test_storage.py` — `get_session_by_id`/`list_users` on both backends
 - [x] [x] [ ] Document running and testing the MCP server in README.md
+
+---
+
+## Language Generation & Configurability
+
+### Generation Utility
+> The `lang/` package was already architected to be language-agnostic — a new target
+> language is just new content files in the same shape, no loader/model changes needed.
+> This utility closes the gap between "architecturally possible" and "actually usable"
+> by generating that content via LLM instead of requiring it to be hand-authored.
+- [x] [x] [ ] `lang/generate.py` — `generate_taxonomy` / `generate_cefr_hints` / `generate_grammar_topics`, each validated via the existing Pydantic models (`TaxonomyMap` / `CEFRMap` / `GrammarTopicsMap`) through `skills.protocols.call_with_self_correction`; `write_language_assets()` writes all four files and re-validates end-to-end via a fresh `lang.loader._Registry` pointed at the real `lang/maps`/`lang/languages` directories — reuses the exact cross-reference validation `lang/loader.py` already runs at import time instead of duplicating it
+- [x] [x] [ ] `lang/generate_prompts.py` — prompt templates for the three generators (compact inlined example, not the full German file, to keep token cost sane)
+- [x] [x] [ ] `scripts/generate_language.py` — CLI entry (`python -m scripts.generate_language <language>`), wires config/LLM the same way `ui/cli.py::main` does; refuses to overwrite an existing `lang/languages/{name}.yaml` without `--force`
+- [x] [x] [ ] `lang/loader.py::is_configured()` + `orchestrator._check_language_config` + `ui/cli.py::_language_config_warning` — when a user picks a language with no config file at all, tell them it needs generating (and how) instead of silently falling back to generic defaults
+- [x] [x] [ ] `tests/unit/lang/test_generate.py` — mocked-LLM coverage: happy-path parse/validate per generator, self-correction retry when a generated grammar topic references an unknown taxonomy tag, round-trip through a fresh `_Registry` at `tmp_path`
+
+Czech (`lang/languages/czech.yaml` + maps) was generated with this utility and
+spot-checked at a high level by a native Czech speaker (the author). The remaining
+manual-smoke-test item (an end-to-end grammar session run in the generated language)
+stays tracked in `docs/_CHECKLIST.md` since it isn't fully confirmed yet.

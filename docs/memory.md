@@ -4,7 +4,7 @@ Storage is infrastructure. Only the orchestrator calls `StorageProtocol` — thi
 
 The effective session key throughout is `(user_id, language)`. All queries are scoped to both — a user's German progress never pollutes their Spanish profile.
 
-See `docs/contracts.md` for `StorageProtocol`, `SessionLog`, `SessionFileContent`, `BtwEntry`, `VocabFlag` definitions.
+See `docs/_contracts.md` for `StorageProtocol`, `SessionLog`, `SessionFileContent`, `BtwEntry`, `VocabFlag` definitions.
 
 ---
 
@@ -23,6 +23,7 @@ Per-user, per-language profile. Replaces the old `user_levels` table. One row pe
 | `active` | BOOLEAN | last language the user selected |
 | `created_at` | DATETIME | |
 | `updated_at` | DATETIME | updated when level changes |
+| `explanation_language` | TEXT | default `'english'`; meta-commentary language (dump_grammar, `/history`) — distinct from `language`, the target study language |
 
 **Primary key:** `(user_id, language)`
 
@@ -51,6 +52,9 @@ Queryable index of all sessions. One row per session.
 | `started_at` | DATETIME | set on write-ahead |
 | `completed_at` | DATETIME | set on completion |
 | `duration_minutes` | REAL | stored for query convenience |
+| `text_level_estimate` | TEXT | writing sessions only; denormalized (Layer 2b) |
+| `word_count` | INTEGER | writing sessions only; denormalized (Layer 2c) |
+| `score` | REAL | grammar sessions only; denormalized (Layer 2c) |
 
 **Index:** `(user_id, language)` — all session queries filter on both.
 
@@ -63,6 +67,7 @@ Normalized error log. Separate table enables frequency queries across sessions w
 | `error_id` | TEXT PK | UUID |
 | `session_id` | TEXT FK | → sessions |
 | `language` | TEXT | denormalized from session for direct query |
+| `module` | TEXT | registry key, denormalized from session for direct query |
 | `error_tag` | TEXT | from language-scoped taxonomy |
 | `error_detail` | TEXT | human-readable description |
 | `source_text` | TEXT | user's original fragment |
@@ -154,11 +159,12 @@ mistakes:
     fragment: "mit meinen Bruder"
     correction: "mit meinem Bruder"
     explanation: "After 'mit', German requires dative case..."
-recommendations:
+    severity: expected   # critical | expected | minor — gap between user's level and this tag's mastery level
+tips:
   - "Review dative case after prepositions (mit, bei, nach, seit, von, zu)"
 corrected_text: |
   Ich bin heute Morgen um sieben Uhr aufgestanden...
-comment: "Good use of separable verbs overall. Dative case needs attention."
+session_summary: "Good use of separable verbs overall. Dative case needs attention."
 btw_log:
   - question: "what does aufstehen mean?"
     answer: "aufstehen means 'to get up / to stand up'. It's a separable verb..."
@@ -168,7 +174,16 @@ vocab_updates:
   - word: "aufstehen"
     source: "btw"
     occurrence_count: 1
+suggested_focus: null            # set when this session was a forced_recommendation follow-up
+text_level_estimate: "B1"        # Step 5 estimate on the raw text; null if text too short
+word_count: 187                  # computed at submission; progress-bar flavor stat
+next_actions: []                 # populated when a recurring error triggers the writing→grammar bridge
 ```
+
+`tips`/`session_summary` were formerly named `recommendations`/`comment` — renamed in
+Layer 1a Steps 5–6. The now-removed `comparison_note` field (an earlier Layer 2b
+placeholder) is gone entirely, not just emptied — see `docs/_design.md`'s schema-evolution
+note and `docs/writing.md` for why (superseded by the on-demand `/history` command).
 
 ### Grammar session body (`GrammarSessionContent`) — Layer 2a
 
@@ -191,38 +206,29 @@ btw_log: []
 
 ---
 
-## Summary Files
+## Summary Files — superseded, no longer generated
 
-Generated on demand ("how am I doing?") or post-session if enabled.
-
-Path: `{data_root}/summaries/{user_id}/{language}/summary_{date}.md`
-
-Language added to path — summaries are per-language, not cross-language.
+The original PoC design (this section, prior to this edit) planned a persisted
+`{data_root}/summaries/{user_id}/{language}/summary_{date}.md` file per progress
+summary. That was never built — `storage`'s init still creates the `data/summaries/`
+directory (alongside `data/sessions/` and `data/checkpoints/`), but nothing writes into
+it. Progress and history are computed on demand instead and shown live, never persisted
+as their own file: `Orchestrator.summarize_progress()` returns a `ProgressSummary` object
+consumed immediately, and the `/history`/`/progress` commands (Layers 2b/2c) regenerate
+their report fresh on every request from `get_sessions_by_module()`/`get_module_mastery()`
+rather than reading back anything written earlier. The `data/summaries/` directory can be
+treated as vestigial.
 
 ---
 
 ## Language Asset Discovery
 
-Language-specific assets (grammar topic lists, word lists, error taxonomies) follow a convention:
-
-```
-skills/{skill_name}/assets/{language}/
-  e.g. skills/select_grammar/assets/german/topics.yaml
-       skills/select_grammar/assets/spanish/topics.yaml
-       skills/drill_vocab/assets/german/greetings.yaml
-       skills/drill_vocab/assets/spanish/greetings.yaml
-```
-
-Skills discover assets by convention at runtime using the `language` value from `ModuleContext`. No hardcoded paths — adding a new language means adding asset files, not changing code.
-
-Error taxonomies follow the same pattern:
-```
-skills/detect_mistakes/taxonomy/{language}.py
-  e.g. taxonomy/german.py   → ERROR_TAXONOMY = {"dative_case", ...}
-       taxonomy/spanish.py  → ERROR_TAXONOMY = {"subjunctive_mood", ...}
-```
-
-`validate_error_tag(tag, language)` loads the correct taxonomy for the session language.
+Language-specific content (error taxonomy, CEFR hints, grammar topics, exercise types)
+lives in the `lang/` package — versioned YAML maps under `lang/maps/{concept}/`, resolved
+per-language via `lang/languages/{language}.yaml` and loaded through `lang/loader.py`'s
+`_Registry`, which cross-validates every reference at startup. See `docs/lang.md` for the
+full architecture and `docs/lang_generation.md` for how new languages' content gets
+produced. Adding a language means adding YAML files, not changing code.
 
 ---
 
@@ -241,7 +247,15 @@ skills/detect_mistakes/taxonomy/{language}.py
 
 **Write-ahead:** Orchestrator writes minimal `SessionLog(status='in_progress')` before `module.run()`. Updates to `completed` on success.
 
-**Checkpoint transcript:** During `module.run()`, each turn (user input + agent response) is appended to `{data_root}/checkpoints/{user_id}/{session_id}.json`. Incremental — crash at any point preserves all turns up to that moment.
+**Checkpoint transcript — designed, not implemented (found 2026-07-05):** The intent was for
+each turn (user input + agent response) to be appended incrementally to
+`{data_root}/checkpoints/{user_id}/{session_id}.json` during `module.run()`, so a crash at
+any point preserves all turns up to that moment. `init_write_ahead_log()` creates this file
+with an empty list, but no module ever appends to it afterward — neither `WritingModule` nor
+`GrammarModule` implements the (optional) `save_checkpoint()` hook. The "Log it" path below
+still works and doesn't crash, but its LLM summary is always generated from an empty
+transcript, not partial progress. See `docs/_CHECKLIST.md`'s "Interrupted-Session Checkpoint
+Transcript" item — tracked as a post-submission fix, not pre-submission.
 
 **Atomic writes:** Session files written to `.tmp` path first, renamed on success.
 
@@ -271,10 +285,10 @@ Checkpoint file deleted on any terminal outcome (completed, interrupted, abandon
 
 `vocab_flags` table is the per-user, per-language persistent record of unknown/misused words. A user's German vocab flags are entirely separate from their Spanish vocab flags.
 
-**Two write sources (both via orchestrator post-session):**
-- `/btw` handler returns `flagged_word` in `BtwEntry` → `write_vocab_flag(source='btw')`
-- Evaluator `vocabulary` errors → `write_vocab_flag(source='evaluator')`
+**One write source today, a second designed but not built (found 2026-07-05):**
+- `/btw` handler returns `flagged_word` in `BtwEntry` → `vocab_signals` → `write_vocab_flag(source='btw')`. This path is real: `modules/writing/agent.py:204` populates `vocab_signals` from flagged words, and `SessionManager.finalize_session` writes each one.
+- Evaluator `vocabulary`-tagged errors → `write_vocab_flag(source='evaluator')` was the intent, but nothing wires it up — `vocab_signals` is never populated from `classify_mistakes`/`explain_mistakes` output, and `finalize_session` hardcodes `source="btw"` on every write regardless of origin. See `docs/_CHECKLIST.md`'s "Evaluator-Sourced Vocab Flags" item — tracked as a post-submission fix.
 
-**Deduplication:** Words normalized (lowercase, punctuation stripped) before write. Unique constraint on `(user_id, language, word)` — `write_vocab_flag()` increments `occurrence_count` and updates `last_seen` on conflict rather than inserting new row.
+**Deduplication:** already solved, and not blocked on the above. Words normalized (lowercase, punctuation stripped) at the one real call site (`session_manager.py`) before write. Unique constraint on `(user_id, language, word)` — `write_vocab_flag()` increments `occurrence_count` and updates `last_seen` on conflict rather than inserting new row. This applies to any source, so the evaluator path will get deduplication for free once it's wired up.
 
 **Consumers:** topic picker (avoid flagged words), vocab module drill list, Anki export — all scoped to active language.

@@ -3,7 +3,7 @@
 #   gcloud auth application-default login
 #
 # Required: set GCP_PROJECT to your Google Cloud project ID.
-# Optional: set GCP_REGION (defaults to us-central1 if not set).
+# Optional: set GCP_REGION (defaults to europe-west1 if not set).
 
 data_root: "data/test"
 default_level: "a2"

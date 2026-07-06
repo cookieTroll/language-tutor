@@ -1,4 +1,4 @@
-# GermanTutor — Layer Manifest
+# LanguageTutor — Layer Manifest
 
 Machine-readable delivery plan. Read this first in any coding session to know what is in scope for the current layer. Each entry maps to a specific folder and file in the repo.
 
@@ -37,25 +37,25 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 - `ui/cli.py` — startup, orchestrator loop, writing session flow, elapsed timer display
 
 ### Tests
-- `tests/test_storage.py` — all storage unit tests
-- `tests/test_registry.py` — module registry compliance
-- `tests/test_orchestrator.py` — cold start, interrupted session detection
-- `tests/test_llm.py` — factory, mock, backend switching
+- `tests/unit/test_storage.py` — all storage unit tests
+- `tests/unit/test_orchestrator.py` — cold start, interrupted session detection
+- `tests/unit/test_llm.py` — factory, mock, backend switching
 
 ---
 
 ## Layer 1a — Full Evaluator Pipeline ✓
 
 ### Skills
-- `skills/detect_mistakes/` — Step 1: Raw Mistake Detector (gate — skips Steps 2–4 if no mistakes)
-- `skills/classify_mistakes/` — Step 2: Taxonomy Classifier
-- `skills/explain_mistakes/` — Step 3: Explanation Generator
-- `skills/write_correction/` — Step 4: Correction Writer (produces `corrected_text`, `tips`, `session_summary`)
-- `skills/estimate_text_level/` — Step 5: CEFR Band Estimator (runs before Step 1; independent)
-- `skills/summarise_session/` — Step 6: Session Summariser (severity-grouped mistakes, `session_summary`, `tips`)
+- `skills/estimate_text_level/` — Step 1: CEFR Band Estimator (runs in parallel with Step 2)
+- `skills/detect_mistakes/` — Step 2: Raw Mistake Detector (gate — pipeline short-circuits on failure)
+- `skills/verify_mistakes/` — Step 3: re-checks raw fragments against sentence context, drops false positives before classification
+- `skills/classify_mistakes/` — Step 4: Taxonomy Classifier
+- `skills/explain_mistakes/` — Step 5: Explanation Generator
+- `skills/write_correction/` — Step 6: Correction Writer (produces `corrected_text`, `tips`; runs in parallel with Step 7)
+- `skills/summarise_session/` — Step 7: Session Summariser (severity-grouped mistakes, `session_summary`)
 
 ### Module
-- `modules/writing/pipeline.py` — `WritingPipeline` sequences all six steps; `WritingModule` delegates to it
+- `modules/writing/pipeline.py` — `WritingPipeline` sequences all seven steps (Steps 1+2 parallel, Steps 6+7 parallel); `WritingModule` delegates to it
 - `modules/writing/agent.py` — updated: delegates to pipeline, handles I/O via `IOHandler`
 
 ### Tests
@@ -84,9 +84,9 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 
 ---
 
-## Layer 1c — Local Frontend
+## Layer 1c — Local Frontend ✓
 
-- `ui/app.py` — Flask/FastAPI local server
+- `ui/app.py` — Flask local server
   - `/` — chat window (session flow)
   - `/sessions` — session file browser (YAML rendered as HTML)
   - `/session/{session_id}` — individual session view
@@ -94,9 +94,9 @@ Machine-readable delivery plan. Read this first in any coding session to know wh
 
 ---
 
-## Layer 2a — Grammar Module
+## Layer 2a — Grammar Module ✓
 
-See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii for the staged build order.
+See `docs/grammar.md` for full design and `docs/_CHECKLIST.md`'s 2a-i…2a-viii for the staged build order.
 
 - `lang/maps/grammar_topics/german_a1_b2.yaml` + `lang/models.py`/`lang/loader.py` support (same versioned-map pattern as `taxonomy`/`cefr_hints`)
 - `lang/maps/exercise_types/default.yaml` — exercise type vocabulary (name/grading/description) for `generate_exercises`, same versioned-map pattern; language-agnostic pedagogy, not German-specific content
@@ -113,15 +113,29 @@ See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii f
 
 ---
 
-## Layer 2b — Cross-Session Writing Comparison
+## Layer 2b — Writing History Summary ✓
 
-- `modules/writing/agent.py` — updated: comparison step added post-evaluation
-- `memory/protocols.py` — updated: `StorageProtocol.get_writing_sessions()` added
-- `WritingSessionContent` — updated: `comparison_to_previous` field added (optional)
+> Supersedes the original "cross-session comparison" plan below this line (kept only as
+> history of what changed): not a per-session diff against the immediately-previous
+> session, and not automatically attached to every session file. Neither
+> `StorageProtocol.get_writing_sessions()` nor a `comparison_to_previous` field were ever
+> built — both were superseded before implementation by the on-demand design actually
+> shipped. See `docs/writing.md` and `docs/_CHECKLIST_FINISHED.md`'s Layer 2b entry.
+
+- `memory/protocols.py` — `SessionLog.text_level_estimate: str | None` added (the one
+  schema addition this layer needed); `WritingSessionContent.comparison_note` (the Layer
+  1a Step 6 stub) removed entirely rather than left permanently `None`
+- `skills/summarize_writing_history/` — new skill; input is pre-aggregated topics,
+  recurring-mistake tag counts, and a chronological level-estimate trend, built in Python
+  from `get_sessions_by_module()`'s existing return value — no new storage method needed
+- `orchestrator.py::_get_confirmed_module()` — recognizes `/history`, `/history <n>`,
+  `/history <n>d` (with an optional `lang:` override) at the existing "Start this module?
+  [Y/n]" prompt, same interaction shape as `/btw`. Nothing is persisted to any session
+  file — the report regenerates fresh on every request
 
 ---
 
-## Layer 2c — Level & Progress
+## Layer 2c — Level & Progress ✓
 
 > Merges the original Layer 2c (CEFR Estimator) and Layer 3b (Level Progression Tracking) —
 > both turned out to be different views over the same mastery data, not independent features.
@@ -158,7 +172,7 @@ See `docs/grammar.md` for full design and `docs/CHECKLIST.md`'s 2a-i…2a-viii f
 
 ---
 
-## Layer 3d — MCP Server
+## Layer 3d — MCP Server ✓
 
 > Redesigned from the original plan: rather than wrapping session skills
 > (`explain_grammar` was dropped in Layer 2a; a vocab drill skill doesn't

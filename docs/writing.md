@@ -1,8 +1,8 @@
-# GermanTutor — Writing Module & Skills
+# LanguageTutor — Writing Module & Skills
 
 The writing module is the PoC showpiece. Composed of atomic skills, it handles topic selection, error detection, feedback generation, and correction writing.
 
-See `docs/contracts.md` for `ModuleProtocol`, `SkillProtocol`, `WritingSessionContent`.
+See `docs/_contracts.md` for `ModuleProtocol`, `SkillProtocol`, `WritingSessionContent`.
 
 ---
 
@@ -39,69 +39,111 @@ def context_request(self) -> ContextRequest:
 
 `WritingPipeline` sequences all seven evaluator skills. `WritingModule.run()` delegates to it — the module handles I/O (prompts, display), the pipeline handles LLM calls.
 
-Execution order: **Step 5 → 1 → 1.5 → 2 → 3 → 4 → 6**. Step 5 (`estimate_text_level`) runs first because it only needs the raw user text; Step 1 (`detect_mistakes`) acts as a gate — if no mistakes are found, Step 1.5 and Steps 2–4 are skipped. Step 1.5 (`verify_mistakes`) re-checks each raw fragment against its original sentence context and drops false positives before classification — `detect_mistakes` judges the whole text in one pass and can misjudge an isolated fragment (e.g. correct verb-second word order after a fronted connector).
+Execution order is **1+2 in parallel → 3 → 4 → 5 → 6+7 in parallel**, run via
+`concurrent.futures.ThreadPoolExecutor`:
 
-Returns `PipelineResult` dataclass carrying all per-step outputs.
+- **Step 1** `estimate_text_level` and **Step 2** `detect_mistakes` run
+  concurrently (two workers) — both only need the raw user text and are
+  independent of each other. Step 2 also acts as a **gate**: if it fails
+  (bad JSON / LLM error), the pipeline returns early with
+  `detector_success=False` and no further LLM calls are made; Step 1's
+  result is still carried through even in that case.
+- **Step 3** `verify_mistakes` re-checks each raw fragment from Step 2
+  against its original sentence context and drops false positives —
+  `detect_mistakes` judges the whole text in one pass and can misjudge an
+  isolated fragment (e.g. correct verb-second word order after a fronted
+  connector) — before classification.
+- **Step 4** `classify_mistakes` maps verified fragments to taxonomy
+  `error_tag`s.
+- **Step 5** `explain_mistakes` adds a learner-facing pedagogical
+  explanation to each classified mistake.
+- **Step 6** `write_correction` and **Step 7** `summarise_writing_session`
+  run concurrently (two workers) — both only need Step 5's
+  `explained_mistakes` and are independent of each other. Step 6 rewrites
+  the full corrected text; Step 7 adds severity tags, `tips[]`, and
+  `session_summary`.
+
+Returns a `PipelineResult` dataclass carrying all per-step outputs, plus (when
+timing is enabled) `step_timings: list[StepTiming]` and `total_wall_s`. Each
+step's wall-clock duration is appended to `data/logs/skill_latency.jsonl`
+after the pipeline finishes (`modules/writing/agent.py::_write_latency_log`)
+— one JSON line per step per session, plus a final `"step": "total"` line
+for the whole pipeline; skipped during pytest runs (`PYTEST_CURRENT_TEST`
+set).
 
 ### Skills injected
 
 | Layer | Skill | Role |
 |-------|-------|------|
-| PoC | `btw_handler` | utility — inline /btw questions during writing |
-| 1a | `detect_mistakes` | Step 1 — raw mistake detection (gate) |
-| 1a | `verify_mistakes` | Step 1.5 — re-checks each candidate against context, drops false positives |
-| 1a | `classify_mistakes` | Step 2 — taxonomy classification |
-| 1a | `explain_mistakes` | Step 3 — explanations pitched to level |
-| 1a | `write_correction` | Step 4 — corrected text + tips + session summary |
-| 1a | `estimate_text_level` | Step 5 — CEFR band estimation (runs first, independent) |
-| 1a | `summarise_session` | Step 6 — severity-grouped summary |
+| PoC | `btw_handler` | utility — inline /btw questions during writing and follow-up |
+| 1a | `estimate_text_level` | Step 1 — CEFR band estimation (parallel with Step 2) |
+| 1a | `detect_mistakes` | Step 2 — raw mistake detection (gate, parallel with Step 1) |
+| 1a | `verify_mistakes` | Step 3 — re-checks each candidate against context, drops false positives |
+| 1a | `classify_mistakes` | Step 4 — taxonomy classification |
+| 1a | `explain_mistakes` | Step 5 — explanations pitched to level |
+| 1a | `write_correction` | Step 6 — corrected text (parallel with Step 7) |
+| 1a | `summarise_writing_session` | Step 7 — severity-grouped summary, tips, session_summary (parallel with Step 6) |
 | 1b | `topic_picker` | topic generation |
 
 ### Session flow (`modules/writing/agent.py`)
 
 ```
-PoC flow:
-  1. Use hardcoded topic (PoC) or pick_topic skill (1b)
+  1. pick_topic (`WritingModule._pick_topic`):
+     prompt "Enter your own topic, or press Enter for a suggestion"
+       → user types a topic: used directly, requirements defaulted
+         (word count + suggested_focus if any) — topic_picker skill
+         is not called
+       → blank input: topic_picker(level, recent_topics, error_tags,
+         suggested_focus, min_words) → topic + requirements
   2. Display topic + requirements to user
   3. Accept multi-line text input (blank line or /end to submit)
      └─ /btw [question] handled inline at any point during writing
-  4. detect_mistakes(user_text, topic, level) → raw mistakes   [PoC]
-     process_mistakes(raw_mistakes) → classified               [1a]
-     generate_feedback(classified, level) → explained          [1a]
-     write_correction(user_text, classified) → corrected       [1a]
-  5. Display feedback to user (mistakes, explanations, corrected text)
+       (routed to btw_handler; session_context has no pipeline results
+       yet at this point)
+     └─ /word_count shown on request
+  4. Pipeline (`WritingPipeline.run`, see "Pipeline" above) — 7 steps,
+     steps 1+2 and 6+7 run in parallel:
+       estimate_text_level + detect_mistakes → verify_mistakes →
+       classify_mistakes → explain_mistakes → write_correction +
+       summarise_writing_session
+  5. Display feedback to user (mistakes, explanations, corrected text,
+     tips, session_summary)
 
-  6. Review loop                                               [1a]
-     User may ask follow-up questions about specific mistakes.
-     Loop continues until user types /done or /end.
+  6. Follow-up phase (`WritingModule._follow_up_phase`)          [1a]
+     "Unsure about a mistake? Ask me here — or press Enter to finish."
+     Loop continues until the user submits a blank input line.
 
-     For each follow-up:
-       if grammar question → explain_grammar(mistake, correction, error_tag, level)
-       if vocab/usage question → btw_handler(question, session_context)
+     For each non-blank line:
+       if it matches "practi[cs]e|exercise|drill" (`_PRACTICE_REQUEST_RE`)
+         → `_offer_practice_topic`: picks the most common error_tag across
+           this session's explained_mistakes and records it (only the
+           first match counts; later matches just get an
+           "already noted" acknowledgement)
+       otherwise → routed to btw_handler(question, session_context),
+         session_context now includes the pipeline's explained_mistakes,
+         corrected_text, tips, and session_summary — richer than during
+         the writing phase (step 3)
        display answer, continue loop
-
-     Context available in review loop:
-       - full classified mistake list
-       - user's original text
-       - corrected text
-       - current session topic + level
 
   7. Return (ModuleResult, WritingSessionContent)
 ```
 
 **Phase distinction:**
-- **Writing phase** (step 3): `/btw` for quick inline questions that don't break flow. User is mid-composition.
-- **Review phase** (step 6): explicit Q&A after evaluation. User is reading feedback and asking "why?". Both `explain_grammar` and `btw_handler` available here, with richer context than during writing.
+- **Writing phase** (step 3): `/btw` for quick inline questions that don't break flow. User is mid-composition; no evaluation results exist yet to pass as context.
+- **Follow-up phase** (step 6): Q&A after evaluation. User is reading feedback and asking "why?". Every question here goes through `btw_handler`, now with the full evaluation (explained_mistakes, corrected_text, tips, session_summary) available as context — there is no separate `explain_grammar` skill routing; that skill was deliberately dropped (see `docs/grammar.md`'s Backlog section / `docs/_layers.md`). The real replacement for what `explain_grammar` routing would have offered is the practice-request feature below, not a second skill in this loop.
+
+**Practice request:** During the follow-up phase, typing anything containing "practice"/"practise"/"exercise"/"drill" (case-insensitive, matched via `_PRACTICE_REQUEST_RE`) is treated as a request to practise the material just covered, instead of being sent to `btw_handler`. `_offer_practice_topic` (`modules/writing/agent.py`) takes the most frequent `error_tag` across this session's `explained_mistakes` (via `collections.Counter`), tells the user a grammar session on that tag will be suggested, and returns it as `practice_requested_topic`. If there were no classified mistakes to draw a tag from, it tells the user a general suggestion will be passed along instead and returns `None`. Only the first practice request in a session counts — repeats just get a "already noted" message. The actual "Start grammar practice now?" offer happens later, at the orchestrator's normal end-of-session chaining point (`session_manager._writing_error_recurrence_signal`), not inside this loop — this phase only records the intent and the tag to focus it on.
 
 ### `ModuleResult.metadata` keys
 
 ```python
 {
-  "btw_entries": [BtwEntry, ...],      # from both writing and review phases
-  "vocab_signals": ["word1", ...],     # for orchestrator → vocab_flags
-  "review_qa": [                       # post-evaluation Q&A log
-      {"question": str, "answer": str, "skill": "explain_grammar|btw_handler"}
-  ],
+  "btw_entries": [BtwEntry, ...],           # from both writing and follow-up phases
+  "vocab_signals": ["word1", ...],          # for orchestrator → vocab_flags
+  "practice_requested_topic": str | None,   # error_tag to focus a suggested grammar
+                                             # session on, from the practice-request
+                                             # feature above; None if never requested
+                                             # or no mistakes to draw a tag from
 }
 ```
 
@@ -205,7 +247,7 @@ output rather than through a second judge LLM call.
 
 **Input:**
 ```python
-raw_mistakes: list[dict]   # verified_mistakes from verify_mistakes (Step 1.5), not detect_mistakes' raw output directly
+raw_mistakes: list[dict]   # verified_mistakes from verify_mistakes (Step 3), not detect_mistakes' raw output directly
 user_text: str
 ```
 
@@ -244,47 +286,97 @@ explained: list[dict]     # [{error_tag, fragment, correction, explanation}]
 
 ### `skills/write_correction/` — Correction Writer
 
-**Layer:** 1a
+**Layer:** 1a — Step 6 (runs in parallel with Step 7, `summarise_writing_session`)
 **Type:** session
 
 **Input:**
 ```python
 user_text: str
-classified: list[dict]    # from process_mistakes (structured, not freeform)
+explained_mistakes: list[dict]    # from explain_mistakes (Step 5), structured, not freeform
 level: str
 ```
 
 **Output:**
 ```python
 corrected_text: str
-tips: list[str]            # actionable next-steps (formerly recommendations)
-session_summary: str       # overall comment (formerly comment)
+recommendations: list[str]   # short next-step suggestions
+comment: str                 # one-sentence overall comment
 ```
+
+**Note:** Only `corrected_text` is actually consumed downstream
+(`WritingPipeline.run` reads `correction_output.metadata["corrected_text"]`
+and nothing else from this skill). `recommendations` and `comment` are part
+of this skill's return shape but are superseded by `tips`/`session_summary`
+from the parallel Step 7 (`summarise_writing_session`) — see that skill
+below, which is what actually reaches `PipelineResult.tips` /
+`.session_summary`. Short-circuits without an LLM call if
+`explained_mistakes` is empty, returning the original text unchanged and a
+canned "no mistakes" comment.
 
 **Prompt template:**
 ```
-Apply the following corrections to the student's text and produce a corrected version.
-Do not change anything that is not in the corrections list.
+You are a {language} language teacher. A {level} learner has written the following text.
+You have already identified and classified all mistakes. Your task now is to:
 
-Student text:
-{user_text}
+1. Produce a corrected version of the text by applying ONLY the listed corrections.
+   Treat each correction as a literal substitution: find the exact fragment in the text and
+   replace only those words — do not restructure any surrounding clause.
+2. Write 2-4 short, actionable recommendations the student should focus on going forward.
+3. Write one encouraging sentence as an overall comment on the student's attempt.
 
-Corrections to apply:
-{corrections_json}   # [{fragment, correction}] — derived from classified
+Original student text:
+"""{user_text}"""
 
-Also provide:
-- 2-3 actionable recommendations for what to focus on next
-- A 1-2 sentence overall comment on the student's performance
+Mistakes with corrections (JSON):
+{explained_mistakes}
 
-Return JSON only:
+Return JSON only. Format:
 {
-  "corrected_text": "...",
-  "recommendations": ["Review dative prepositions", "..."],
-  "comment": "Good sentence variety. Main issue is dative case after prepositions."
+  "corrected_text": "<full corrected version of the text>",
+  "recommendations": ["<recommendation 1>", "<recommendation 2>"],
+  "comment": "<one encouraging sentence>"
 }
 ```
 
-**Key design point:** Correction derived from structured `classified` list, not regenerated freeform. More consistent, easier to verify against judge fixtures.
+**Key design point:** Correction derived from structured `explained_mistakes`, not regenerated freeform. More consistent, easier to verify against judge fixtures.
+
+---
+
+### `skills/summarise_session/writing/` — Session Summariser (`summarise_writing_session`)
+
+**Layer:** 1a — Step 7 (runs in parallel with Step 6, `write_correction`)
+**Type:** session
+
+Module-specific variant of `summarise_session`, invoked as `SummariseWritingSessionSkill`.
+Takes the same `explained_mistakes` as `write_correction` and produces the fields that
+actually reach the session file and the user-facing report — `write_correction`'s own
+`recommendations`/`comment` are superseded by this skill's output (see that skill above).
+
+**Input:**
+```python
+user_text: str
+explained_mistakes: list[dict]    # from explain_mistakes (Step 5)
+level: str
+```
+
+**Output:**
+```python
+tips: list[str]                # short next-step suggestions, sorted by distance from user level
+session_summary: str           # one-sentence overall comment
+mistakes: list[dict]           # explained_mistakes enriched with severity
+# severity: "critical" | "expected" | "minor", added per mistake
+```
+
+**Notes:**
+- Short-circuits without an LLM call if `explained_mistakes` is empty, returning a canned
+  "no mistakes" summary and no tips.
+- `severity` grouping and `tips` ordering are what `PipelineResult.tips` /
+  `.session_summary` actually carry downstream — not `write_correction`'s
+  `recommendations`/`comment`.
+
+**Test criteria (judge):** `tests/judge/judge_summary.py` — severity assignment and tip
+quality (no separate per-skill judge file; this skill is covered by the aggregator, unlike
+most other Step skills in this pipeline).
 
 ---
 
@@ -387,7 +479,7 @@ Loaded at runtime from `lang/maps/taxonomy/` YAML files via `lang.loader.get_tax
 
 All `error_tag` values in `classify_mistakes` output are validated against the loaded taxonomy. Unknown tags fall back to `"other"` via `taxonomy.validate_tag()`. To add tags without breaking existing fixtures, create a new taxonomy version file and update the language config — do not edit an in-use version in place.
 
-See `docs/contracts.md` for the current German taxonomy tags.
+See `docs/_contracts.md` for the current German taxonomy tags.
 
 ---
 

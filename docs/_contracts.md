@@ -1,4 +1,4 @@
-# GermanTutor — Contracts
+# LanguageTutor — Contracts
 
 All Protocol definitions and shared dataclasses. Include this document in every LLM coding task — all components depend only on these interfaces, never on concrete implementations.
 
@@ -50,6 +50,43 @@ class SkillProtocol(Protocol):
         ...
 ```
 
+### Self-correction retry contract (`skills/protocols.py`)
+
+Every skill that asks the LLM for structured (JSON) output parses/validates that output
+through `call_with_self_correction()` rather than parsing inline. This is the retry
+contract every skill depends on — not just an implementation detail of one skill.
+
+```python
+class SelfCorrectionError(Exception):
+    def __init__(self, message: str, raw_response: str | None = None):
+        super().__init__(message)
+        self.raw_response = raw_response
+
+def call_with_self_correction(
+    llm: BaseLLM,
+    messages: list[LLMMessage],
+    parse_fn: Callable[[str], T],
+    temperature: float = 0.1,
+) -> T:
+    """
+    Calls llm.complete(), then parse_fn(response.text) — parse_fn does both JSON
+    parsing and schema/business-rule validation, so a raise from either failure
+    mode gives the model the same chance to self-correct.
+
+    On failure, appends the bad assistant response plus a user message describing
+    the error and retries, up to `llm.config.max_skill_retries` attempts (default 3).
+    On final failure, raises SelfCorrectionError — the caller (skill) catches this
+    and returns SkillOutput(success=False, ...), never lets it propagate raw.
+    """
+    ...
+```
+
+Callers (e.g. `skills/detect_mistakes/skill.py`, `skills/grade_exercises/skill.py`) follow
+the same shape: define a local `parse_fn` that parses and validates the LLM's JSON, call
+`call_with_self_correction(llm, messages, parse_fn, temperature=...)`, and catch
+`SelfCorrectionError` around it to produce a `SkillOutput(success=False, metadata={"error": ...})`
+instead of raising.
+
 ---
 
 ## IO Contracts (`shared/io.py`)
@@ -57,7 +94,22 @@ class SkillProtocol(Protocol):
 Thin I/O abstraction passed into modules and orchestrator — keeps storage-free components testable without patching `print`/`input`.
 
 ```python
-from typing import Protocol
+from typing import Protocol, Literal
+
+# Reserved WebIOHandler.prompt()/prompt_block() inputs — never valid answers to any real
+# prompt — used by the web UI's "Return to Menu"/"Switch User" buttons to interrupt
+# whatever the session thread is currently blocked on.
+ABANDON_SESSION_SENTINEL = "__abandon_session__"
+SWITCH_USER_SENTINEL = "__switch_user__"
+
+class SessionAbortRequested(Exception):
+    """Raised by WebIOHandler when a reserved sentinel input is received instead of a
+    real answer. action="restart" (Return to Menu): abandon the in-progress session
+    if any, then go back to the module chooser for the same user. action="end"
+    (Switch User): abandon the in-progress session if any, then end the whole
+    session thread so the browser can log in as someone else."""
+    def __init__(self, action: Literal["restart", "end"]):
+        self.action = action
 
 class IOHandler(Protocol):
     show_cli_hints: bool   # True in CLI; False in web/test — controls hint text in banners
@@ -77,6 +129,34 @@ class IOHandler(Protocol):
         textarea value in one send_input() call."""
         ...
 
+    def reset_for_new_activity(self) -> None:
+        """Signal that the session is returning to the module chooser for a fresh
+        activity — a no-op everywhere except WebIOHandler, which tells the browser
+        to switch panels back to the setup/chooser view."""
+        ...
+
+    def render_evaluation(self, data: dict) -> None:
+        """Render writing-session evaluation output (mistakes, corrected text, tips,
+        text-level estimate)."""
+        ...
+
+    def render_exercises(self, data: dict) -> None:
+        """Render a generated exercise list, batched by type.
+        data: {"groups": [{"exercise_type", "instruction", "exercises": [{"prompt"}, ...]}, ...]}."""
+        ...
+
+    def render_results(self, data: dict) -> None:
+        """Render graded exercise results. data: {"items": [...], "score": float}."""
+        ...
+
+    def render_progress(self, data: dict) -> None:
+        """Render mastery/level-progress data (Layer 2c /progress command).
+        data: {"current_level": str, "modules": [asdict(ModuleMastery), ...], "trend": [{"date", "level"}, ...]}."""
+        ...
+
+    def start_timer(self, label: str = "Writing") -> None: ...
+    def stop_timer(self) -> None: ...
+
 class TerminalIOHandler:
     """Concrete implementation for the local CLI."""
     show_cli_hints = True
@@ -86,6 +166,14 @@ class TerminalIOHandler:
 
     def prompt(self, text: str = "") -> str:
         return input(text)
+
+class WebIOHandler:
+    """Bridges a blocking session thread to an HTTP/SSE client via two queues — the
+    session thread calls output()/prompt() normally, the Flask layer reads events via
+    get_event() and posts replies via send_input(). prompt()/prompt_block() raise
+    SessionAbortRequested when the client sends one of the reserved sentinels above
+    instead of a real answer."""
+    show_cli_hints = False
 ```
 
 ---
@@ -100,6 +188,14 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from pydantic import BaseModel
+
+class WritingPrompt(BaseModel):
+    """Exercise specification returned by topic_picker and consumed by WritingModule."""
+    topic: str
+    requirements: str
+    min_words: int
+    task_label: str = "writing_free"
+    suggested_focus: str | None = None
 
 class ContextRequest(BaseModel):
     """Declares what a module needs from memory. Orchestrator fulfills it."""
@@ -256,6 +352,7 @@ class SessionLog(BaseModel):
     duration_minutes: float | None = None
     text_level_estimate: str | None = None   # writing sessions only; None for other modules (Layer 2b)
     word_count: int | None = None            # writing sessions only; None for other modules (Layer 2c)
+    score: float | None = None               # grammar sessions only; None for other modules (Layer 2c)
 
 class SessionAggregate(BaseModel):
     """Aggregated session profile for a (user, language) pair. Used by progress summariser."""
@@ -295,6 +392,9 @@ class UserProfile(BaseModel):
     active: bool                          # last language selected by user
     created_at: datetime
     updated_at: datetime
+    explanation_language: str = "english"  # meta-commentary language (dump_grammar,
+                                            # /history) — distinct from `language`,
+                                            # the target study language
 
 # --- Sub-protocols ---
 
@@ -307,6 +407,9 @@ class SessionStore(Protocol):
         ...
     def get_recent_sessions(self, user_id: str, language: str, n: int = 10) -> list[SessionLog]: ...
     def get_sessions_by_module(self, user_id: str, language: str, module: str) -> list[SessionLog]: ...
+    def get_session_by_id(self, session_id: str) -> SessionLog | None:
+        """Look up a single session directly, not scoped to (user_id, language) — added for Layer 3d (MCP server)."""
+        ...
     def get_error_frequency(self, user_id: str, language: str, module: str | None = None) -> dict[str, int]: ...
     def get_recent_topics(self, user_id: str, language: str, module: str, n: int = 5) -> list[str]: ...
     def get_session_aggregate(self, user_id: str, language: str) -> SessionAggregate: ...
@@ -342,6 +445,9 @@ class ProfileStore(Protocol):
         ...
     def get_user_languages(self, user_id: str) -> list[str]: ...
     def get_active_language(self, user_id: str) -> str | None: ...
+    def list_users(self) -> list[str]:
+        """Return all distinct user_ids with at least one profile — added for Layer 3d (MCP server)."""
+        ...
 
 class StorageProtocol(SessionStore, LevelStore, BtwLogStore, VocabStore, ProfileStore, Protocol):
     """Full storage interface — composed from domain-specific sub-protocols."""
@@ -391,27 +497,25 @@ class OrchestratorProtocol(Protocol):
         forced_recommendation: ExerciseRecommendation | None = None,
     ) -> ExerciseRecommendation | None:
         """
-        0.  Check interrupted sessions → resume / log / discard (SessionManager)
-        1.  Language selection + user profile (get/create)
-        2.  summarize_progress(user_id, language) — may return None
-        3.  recommend_exercise
-        4.  Present to user, await confirmation or override
-              └─ steps 2–4 skipped when forced_recommendation is set — used as-is instead
-        5.  Write-ahead: write_session(status='in_progress') + create checkpoint file (SessionManager)
-        6.  Fulfill module's ContextRequest from storage (SessionManager)
-        7.  module.run(ctx, llm, io) → (ModuleResult, SessionFileContent)
+        0.  Check interrupted sessions → resume / log / discard
+        1.  summarize_progress(user_id, language) — may return None
+        2.  recommend_exercise
+        3.  Present to user, await confirmation or override
+              └─ skipped when forced_recommendation is set — used as-is instead
+        4.  Write-ahead: write_session(status='in_progress')
+        5.  Fulfill module's ContextRequest from storage (all queries scoped to language)
+        6.  module.run() → (ModuleResult, SessionFileContent)
               └─ clock runs; checkpoint transcript written per turn
               └─ /btw handled inline inside module
-        8.  write_file() → temp → atomic rename
-        9.  update_session_status('completed')
-        10. write_session() → full result update
-        11. write_btw() for each entry in result.metadata['btw_entries']
-        12. write_vocab_flag() for each signal in result.metadata['vocab_signals']
-        13. Delete checkpoint file
-        14. If file_content.next_actions is set, prompt to start it now; return the
-            accepted ExerciseRecommendation for the caller to re-invoke run_session
-            with as forced_recommendation, or None if declined / not offered.
-        Steps 5, 6, 8–13 delegated to SessionManager.
+        7.  write_file() → temp → atomic rename
+        8.  update_session_status('completed')
+        9.  write_session() → full result update
+        10. write_btw() for each entry in result.metadata['btw_entries']
+        11. write_vocab_flag() for each signal in result.metadata['vocab_signals']
+        12. Delete checkpoint file
+        13. If file_content.next_actions is set, prompt to start it now. Returns the
+            accepted recommendation (for the caller to re-invoke run_session with as
+            forced_recommendation) or None if declined / not offered.
         """
         ...
 ```
@@ -458,6 +562,104 @@ class BaseLLM(ABC):
     def check_health(self) -> bool:
         """Returns True if the backend is reachable. Default: True."""
         ...
+```
+
+---
+
+## Language Contracts (`lang/models.py`)
+
+See `docs/lang.md` for the architecture (registry, cross-validation, which maps are
+per-language vs. default) and `docs/lang_generation.md` for the LLM generation utility.
+This section is the raw shapes only.
+
+```python
+class CEFRMap(BaseModel):
+    """lang/maps/cefr/*.yaml — one pedagogical focus hint per CEFR level."""
+    a1: str = ""
+    a2: str = ""
+    b1: str = ""
+    b2: str = ""
+    c1: str = ""
+    c2: str = ""
+    default: str = "Identify all grammatical, lexical, and spelling errors."
+
+    def get(self, level: str) -> str: ...
+
+class TaxonomyMap(BaseModel):
+    """lang/maps/taxonomy/*.yaml — error tag → human-readable description.
+    'other' must always be present (enforced by a model validator)."""
+    tags: dict[str, str]
+
+    def validate_tag(self, tag: str) -> str:
+        """Raises TaxonomyError if tag not in self.tags."""
+        ...
+    def format_for_prompt(self) -> str: ...
+    @property
+    def tag_set(self) -> frozenset[str]: ...
+
+class CEFRDescriptorMap(BaseModel):
+    """lang/maps/cefr_descriptors/*.yaml — per-level text-complexity descriptions,
+    used to ground estimate_text_level. Language-agnostic by default (CEFR is an
+    international standard); every language today uses default.yaml."""
+    a1: str = ""; a2: str = ""; b1: str = ""; b2: str = ""; c1: str = ""; c2: str = ""
+    default: str = "Assess overall text complexity, vocabulary range, grammatical accuracy, and coherence."
+
+    def format_for_prompt(self) -> str: ...
+
+class WritingMinWordsMap(BaseModel):
+    """lang/maps/writing_word_ranges/*.yaml — minimum word count per CEFR level."""
+    a1: int = 40; a2: int = 60; b1: int = 100; b2: int = 150; c1: int = 200; c2: int = 250
+
+    def get(self, level: str) -> int: ...
+
+class GrammarTopic(BaseModel):
+    """One curated syllabus entry. scope='minor' never appears in a loaded map —
+    reserved for topics select_grammar proposes on the fly."""
+    topic: str
+    difficulty: str                      # validated against a1..c2
+    scope: Literal["major", "minor"]
+    related_error_tags: list[str]        # cross-validated against the language's TaxonomyMap at load time
+    in_scope: list[str] = []
+    out_of_scope: list[str] = []
+
+class GrammarTopicsMap(BaseModel):
+    """lang/maps/grammar_topics/*.yaml (flat YAML list at file root) —
+    the syllabus backbone select_grammar picks major topics from."""
+    topics: list[GrammarTopic]
+
+    def scope_for(self, topic: str) -> GrammarTopic | None: ...
+
+class ExerciseType(BaseModel):
+    """grading is fixed per type, never chosen by the LLM."""
+    type: str
+    grading: Literal["exact", "llm"]
+    description: str
+    student_instruction: str
+
+class ExerciseTypesMap(BaseModel):
+    """lang/maps/exercise_types/*.yaml (flat YAML list) — exercise-type vocabulary
+    for generate_exercises. Pedagogically universal; every language today uses default.yaml."""
+    types: list[ExerciseType]
+
+    @property
+    def type_names(self) -> frozenset[str]: ...
+    def grading_for(self, exercise_type: str) -> str | None: ...
+    def instruction_for(self, exercise_type: str) -> str | None: ...
+    def format_for_prompt(self) -> str: ...
+    def describe_one(self, exercise_type: str) -> str | None:
+        """Same one-line format as format_for_prompt, for a single pre-chosen type —
+        used when the caller (not the LLM) has already picked the exercise type."""
+        ...
+
+class LanguageConfig(BaseModel):
+    """lang/languages/{name}.yaml — wires a language to its versioned maps by name."""
+    name: str
+    cefr_hints: str
+    taxonomy: str
+    cefr_descriptors: str = "default"
+    writing_word_ranges: str = "default"
+    grammar_topics: str | None = None    # None → language has no grammar syllabus yet
+    exercise_types: str = "default"
 ```
 
 ---

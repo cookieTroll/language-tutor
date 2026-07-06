@@ -1,4 +1,4 @@
-# GermanTutor — Testing Architecture
+# LanguageTutor — Testing Architecture
 
 Three tiers, each with a distinct purpose. Tier 1 runs in CI. Tiers 2 and 3 run manually or on a schedule — they cost API calls and should not block commits.
 
@@ -12,7 +12,11 @@ All orchestrator and module tests use a **mock LLM** returning fixed strings —
 
 ### Coverage
 
-**Storage (`tests/test_storage.py`)**
+All unit test files live under `tests/unit/` (e.g. `tests/unit/test_storage.py`, not
+`tests/test_storage.py`) — organized flat plus a few subpackages (`tests/unit/writing/`,
+`tests/unit/lang/`) for areas with several test files of their own.
+
+**Storage (`tests/unit/test_storage.py`)**
 - Write session → read back → assert all fields equal (SQLite and JSON store)
 - Error frequency aggregation across multiple sessions
 - `update_session_status()` transitions correctly; rejects invalid values
@@ -23,34 +27,65 @@ All orchestrator and module tests use a **mock LLM** returning fixed strings —
 - Atomic write: no `.tmp` file exists after successful write; `.tmp` cleaned on failure
 - Relative file path resolves correctly against `data_root`
 - `get_current_level()` returns most recent row when multiple exist
+- `get_session_by_id()`/`list_users()` on both backends (added for the MCP server, Layer 3d)
 
-**Registry (`tests/test_registry.py`)**
-- All registered modules implement `ModuleProtocol`
-- All registered skills implement `SkillProtocol`
-- `get_registry_description()` includes all registry keys
-- Skills declare valid `skill_type` (`session` or `utility`)
+**Registry, taxonomy validation, and CEFR/lang coverage**
+- Module/skill registry compliance and taxonomy-tag validation are covered inline within
+  the relevant test files (`tests/unit/test_orchestrator.py`, `tests/unit/lang/`) rather
+  than in dedicated `test_registry.py`/`test_taxonomy.py` files — those two files don't
+  exist as such.
 
-**Taxonomy (`tests/test_taxonomy.py`)**
-- `validate_error_tag()` accepts all defined tags
-- `validate_error_tag()` rejects unknown tag with `TaxonomyError` + informative message
-
-**Orchestrator (`tests/test_orchestrator.py`)**
+**Orchestrator (`tests/unit/test_orchestrator.py`)**
 - Cold start returns `DEFAULT_RECOMMENDATION` when sessions = 0
 - Cold start returns `DEFAULT_RECOMMENDATION` when sessions < threshold
 - Cold start does NOT trigger when sessions >= threshold
-- `weakest_module` validation: invalid LLM output falls back to default
+- `weakest_module` validation: invalid LLM output falls back to default (hallucination guard)
 - Interrupted session detection surfaces correct records on startup
 - All three interruption paths produce correct DB state (resume/log/discard)
 - Post-session: btw entries written, vocab signals written, checkpoint deleted
+- Writing↔grammar bridge gates (Layer 2a-vii), `/history` scope parsing (Layer 2b)
 
-**LLM (`tests/test_llm.py`)**
-- `build_llm()` returns correct implementation for each backend value
+**LLM (`tests/unit/test_llm.py`)**
+- `build_llm()` returns correct implementation for each backend value (`ollama`,
+  `openai_compat`, `gemini`, `vertex`)
 - `build_llm()` raises informative error on unknown backend value
 - Mock LLM returns fixed strings; can be configured per test
 
-**Storage (`tests/test_storage.py`) — interruption**
-- `update_session_status()` transitions correctly; rejects invalid status values
-- Atomic write leaves no `.tmp` on success; `.tmp` cleaned up on failure
+**Grammar module (`tests/unit/test_grammar.py`)** — Layer 2a
+- `parse_answer_block()`: exact count passes through, short blocks padded, long blocks
+  truncated, empty block handled
+- `GrammarModule.run()` end-to-end with a mocked LLM
+
+**Module mastery/progress (`tests/unit/test_mastery.py`)** — Layer 2c
+- Grammar mastery scoped to the user's current level; best score kept across repeated
+  attempts on the same topic; behaves when no topics map is configured
+- Writing mastery word counts and mastery ratio, including the ratio capping at 1.0
+- Weak-tag reporting requires recurrence and surfaces human-readable labels, not raw tags
+- Level trend is chronological and skips sessions with no text-level estimate
+
+**MCP server (`tests/unit/test_mcp_server.py`)** — Layer 3d
+- Listing users/languages; progress defaults to the active language; raises when no
+  active language is set
+- Listing sessions and fetching a single session; raises for the wrong user
+- Recurring errors and vocab flags; writing-history export (including the days filter and
+  the no-sessions message); error taxonomy and grammar topic list lookups
+
+**CEFR estimator (`tests/unit/test_cefr_estimator.py`)**
+- Suggests a level-up once all topics at the current level are mastered; withholds the
+  suggestion below the mastery threshold, when no topics are configured, or past C2
+
+**Tag humanization (`tests/unit/test_humanize.py`)**
+- `humanize_tag()` replaces underscores and title-cases; handles single-word tags and
+  empty-string passthrough
+
+**Error logging (`tests/unit/test_error_log.py`)**
+- `log_skill_error()` writes one JSON line with the expected fields, appends across
+  multiple calls, and works when called without additional context
+
+**Config loading (`tests/unit/test_config.py`)**
+- `load_config()` against the real committed config files (`config.yaml`,
+  `config.test.yaml`, `config.gemini.yaml`, `config.vertex.yaml`) resolves the expected
+  provider for each, guarding against config/dependency drift going unnoticed
 
 ---
 
@@ -172,8 +207,14 @@ On prompt changes, re-run all regression fixtures through the relevant judge. A 
 
 | Tier | When | Command |
 |------|------|---------|
-| Tier 1 — unit tests | Every commit | `pytest tests/ -x -q --ignore=tests/judge` |
+| Tier 1 — unit tests | Every commit | `pytest tests/ -x -q --ignore=tests/judge --ignore=tests/e2e` |
 | Tier 2 — LLM judge | Before merging prompt changes | `pytest tests/judge/ -v -s` |
 | Tier 3 — regression | Before merging prompt changes | `pytest tests/judge/ -v -s` (same runner) |
+| e2e smoke (manual) | Verifying a full flow against a real LLM before a demo | `pytest tests/e2e/ -v -s` |
 
-Tier 1 requires no API keys. Tiers 2 and 3 require a live LLM backend (Ollama local or `GEMINI_API_KEY` for Gemini). See `PROVIDERS.md` for setup.
+Tier 1 requires no API keys — `--ignore=tests/e2e` matters here, not just `--ignore=tests/judge`:
+`tests/e2e/` (`test_smoke.py`, `test_bridge_smoke.py`) drives the CLI against a real,
+running LLM backend end-to-end (e.g. confirming the writing→grammar bridge actually
+chains a new session), so it belongs with the manual/live tiers, not Tier 1. Tiers 2, 3,
+and the e2e smoke tier all require a live LLM backend (Ollama local or `GEMINI_API_KEY`
+for Gemini). See `PROVIDERS.md` for setup.

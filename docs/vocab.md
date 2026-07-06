@@ -1,8 +1,13 @@
-# GermanTutor — Vocab Module & Skills
+# LanguageTutor — Vocab Module & Skills
+
+> **Status: not implemented.** Layer 3a was cut — `modules/vocab/` and `skills/drill_vocab/`
+> do not exist in the codebase. This document is a design spec for future work, not a
+> record of shipped behavior. See `docs/_design.md`'s Delivery Layers table and
+> `docs/_CHECKLIST.md` for current scope.
 
 Layer 3a. Lightweight drilling from static word lists, seeded by the negative vocab list.
 
-See `docs/contracts.md` for `ModuleProtocol`, `SkillProtocol`, `SessionFileContent`.
+See `docs/_contracts.md` for `ModuleProtocol`, `SkillProtocol`, `SessionFileContent`.
 
 ---
 

@@ -1,4 +1,4 @@
-# Custom Workspace Rules for GermanTutor
+# Custom Workspace Rules for LanguageTutor
 
 These rules define workspace-specific guidelines for AI agents working on this project.
 
@@ -26,10 +26,10 @@ Each `docs/` file owns a specific concern (see below). After any commit that add
 
 | File | Owns |
 |---|---|
-| `DESIGN.md` | Architecture overview, delivery layers, repo structure tree, skills listing, key design decisions |
-| `TODO.md` | Deferred decisions and known risks — mark items done when the referenced code is implemented; update stale file paths |
-| `CHECKLIST.md` | Implementation progress — mark `[Impl]` for newly implemented items; add new items for planned work |
-| `contracts.md` | All protocol and dataclass definitions (`ModuleProtocol`, `SkillProtocol`, `StorageProtocol`, etc.) |
+| `_design.md` | Architecture overview, delivery layers, repo structure tree, skills listing, key design decisions |
+| `_TODO.md` | Deferred decisions and known risks — mark items done when the referenced code is implemented; update stale file paths |
+| `_CHECKLIST.md` | Implementation progress — mark `[Impl]` for newly implemented items; add new items for planned work |
+| `_contracts.md` | All protocol and dataclass definitions (`ModuleProtocol`, `SkillProtocol`, `StorageProtocol`, etc.) |
 | `memory.md` | Storage schema, session file format, interruption/checkpoint flow |
 | `orchestrator.md` | Orchestrator logic, cold start, prompts, LLM routing |
 | `testing.md` | Three-tier test architecture, judge setup, fixture conventions |
@@ -37,6 +37,6 @@ Each `docs/` file owns a specific concern (see below). After any commit that add
 | `writing.md` | Writing module + evaluator pipeline (Steps 1–6), `WritingSessionContent` schema |
 | `grammar.md` | Grammar module spec (Layer 2a) |
 | `vocab.md` | Vocab module spec (Layer 3a) |
-| `LAYERS.md` | Flat layer manifest — update when a layer's scope or status changes |
+| `_layers.md` | Flat layer manifest — update when a layer's scope or status changes |
 
 Routine commits (prompt tweaks, YAML content updates, bug fixes that don't change interfaces) do not require a doc pass.

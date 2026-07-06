@@ -4,13 +4,16 @@ Top-level agent. The only component that touches storage. Routes between modules
 
 The effective session key is `(user_id, language)`. All progress aggregation, cold start tracking, error frequency, and vocab flags are scoped to this pair — a user's Spanish progress is fully independent from their German progress.
 
-See `docs/contracts.md` for `OrchestratorProtocol`, `ProgressSummary`, `ExerciseRecommendation`.
+See `docs/_contracts.md` for `OrchestratorProtocol`, `ProgressSummary`, `ExerciseRecommendation`.
 
 ---
 
 ## Files
 
 - `orchestrator/orchestrator.py` — `OrchestratorProtocol` implementation
+- `orchestrator/protocols.py` — `OrchestratorProtocol`, `ProgressSummary`, `ExerciseRecommendation`
+- `orchestrator/session_manager.py` — `SessionManager`: checkpoints, context fulfillment, finalization, writing↔grammar next-action signal computation
+- `orchestrator/mastery.py` — `get_module_mastery()` / `get_level_trend()` — mastery & progress logic
 - `orchestrator/prompts.py` — prompt templates (Layer 1b+)
 
 ---
@@ -22,7 +25,7 @@ See `docs/contracts.md` for `OrchestratorProtocol`, `ProgressSummary`, `Exercise
 MODULE_REGISTRY: dict[str, ModuleProtocol] = {
     "writing": WritingModule(),
     "grammar": GrammarModule(),     # Layer 2a
-    "vocab": VocabModule(),         # Layer 3a
+    # "vocab": VocabModule(),       # Layer 3a — not yet registered, module doesn't exist yet
 }
 
 def get_registry_description() -> str:
@@ -219,6 +222,136 @@ All signals below are scoped to `(user_id, language)` — no cross-language blee
 
 ### Traceability
 `suggested_focus` from `ExerciseRecommendation` is passed through `ModuleContext` and recorded in every session file. Creates a traceable link: history aggregate → recommendation → what was practiced.
+
+---
+
+## Writing ↔ Grammar Bridge (Layer 2a-vii)
+
+This is the personalization loop the whole pitch centers on: a recurring mistake in one
+module surfaces a live offer to practice the other module next, and accepting chains
+straight into a new session without returning to the main menu.
+
+### How a signal gets raised (`orchestrator/session_manager.py::_compute_next_actions`)
+
+Runs once, at the end of `finalize_session()`, dispatching by which module just ran —
+each direction has a different signal shape, so this is two separate gates, not one
+shared check:
+
+**Writing → grammar** (`_writing_error_recurrence_signal`) fires only when *both* hold:
+1. **Existence check** — at least one `error_tag` from *this* session's mistakes maps to
+   a curated grammar topic at all (`tag in topic.related_error_tags` for some topic in
+   `lang.loader.get_grammar_topics(language)`).
+2. **Recurrence check** — that tag's count in `error_frequency` (the standing aggregate,
+   not just this session) is `>= RECURRING_ERROR_THRESHOLD` (2).
+
+`suggested_focus` carries the raw **tag**, not a resolved topic name — several curated
+topics can share a tag (e.g. 12 topics all tag `verb_tense`), and this gate has no
+level-aware way to pick the right one. Naming a specific topic here would risk promising
+something `select_grammar` (which does the real pick when the grammar module actually
+runs) doesn't deliver. An explicit `/btw` "help me practice" request during the
+follow-up phase (`requested_topic`) bypasses the recurrence threshold entirely — the
+user already asked — and can offer a second, alternative signal if the first is declined.
+
+**Grammar → writing** (`_grammar_mastery_signal`) fires when a grammar session's score is
+`>= GRAMMAR_MASTERY_THRESHOLD` (0.8). Here `suggested_focus` *is* the actual topic name,
+not a tag — safe because `WritingModule._pick_topic` only ever uses it as a soft phrase
+("try to practise: ...") in the topic-picker prompt, not a hard contract the way
+`generate_exercises`' topic input is.
+
+Both thresholds are separately-defined module constants (`session_manager.py`'s
+`RECURRING_ERROR_THRESHOLD` and `orchestrator.py`'s `RECURRING_MISTAKE_THRESHOLD`, both
+`= 2`, matching `SessionAggregate.recurring_errors`' own threshold) — not imported from
+one shared location. Keep this in mind if the recurrence threshold is ever tuned; it
+needs changing in more than one place today.
+
+### Presenting and chaining the offer (`orchestrator.py::run_session`)
+
+After `finalize_session()` returns, `run_session` loops over `file_content.next_actions`:
+prompts `"Session complete. Start {module} practice on '{focus}' now? [Y/n]"` (or, for a
+second alternative signal, `"How about {module} practice{focus} instead?"`), records the
+answer via `SessionManager.record_next_action_decision()` (a follow-up rewrite of the
+just-written session file — the file was already persisted *before* this interactive
+prompt, since `SessionManager` never prompts, only informs), and on accept returns an
+`ExerciseRecommendation` built from the signal. The caller (`ui/cli.py`'s loop,
+`ui/app.py`'s `/api/start`) re-invokes `run_session(forced_recommendation=...)`, which
+skips straight past steps 2–4 (summarize/recommend/confirm) into the write-ahead log for
+the new session — no return to the main menu in between.
+
+---
+
+## `/history` — Writing History Summary (Layer 2b)
+
+On-demand report, typed at the `_get_confirmed_module` prompt exactly like `/btw`.
+Nothing is written back to storage — regenerated fresh from `get_sessions_by_module()`
+on every call, never read from anything previously saved. This superseded an earlier,
+different Layer 2b design (a per-session `comparison_note` field diffing against the
+immediately-previous session) — see `docs/writing.md` for why that shape was dropped.
+
+**Syntax**, all recognized by `_parse_history_scope`/`_split_history_args`:
+- `/history` — last `DEFAULT_HISTORY_SESSIONS` (10) completed writing sessions
+- `/history <n>` — last `n` sessions
+- `/history <n>d` — last `n` days
+- `lang:<language>` token anywhere in the args (e.g. `/history 5 lang:german`) —
+  overrides the report's own output language for this one call only, independent of the
+  scope argument. Absent an override, the report is written in the user's
+  `profile.explanation_language` (see `/language` below), not the target study language —
+  the report is meta-commentary the learner reads, not target-language content.
+
+`_handle_history_command` builds three inputs from the filtered session window — topics
+covered (`task_label`, deduplicated), recurring mistakes (`error_tag` counts `>=
+RECURRING_MISTAKE_THRESHOLD`, this session-window's own tally, not the standing
+`error_frequency` aggregate the bridge gate uses), and a chronological level trend from
+each session's `text_level_estimate` — then calls `SummarizeWritingHistorySkill` once and
+prints `history_summary` via `io.output()`.
+
+### `/language` — on-demand explanation-language change
+
+Not its own layer, but lives right next to `/history` in the same command loop: `/language
+<language>` updates `profile.explanation_language` immediately (persisted via
+`write_user_profile`), so a user doesn't have to wait for the next session's start-of-session
+prompt (`_confirm_or_update_explanation_language`) to change which language `/history`
+and `dump_grammar` write their output in.
+
+---
+
+## `/progress` — Mastery & Level Progress (Layer 2c)
+
+On-demand, same shape as `/history` — nothing persisted except an optional,
+user-confirmed level-up at the end. Merges what were originally two separate planned
+layers (a CEFR estimator and a level-progression tracker): both turned out to be
+different renderings of the same mastery data, not independent features — see
+`docs/memory.md` on why no `level_history` table exists.
+
+`_handle_progress_command` gathers three things and hands them to `io.render_progress()`
+— the same "orchestrator gathers data, `IOHandler` renders it" split as
+`render_evaluation`/`render_exercises`/`render_results`, so `TerminalIOHandler` draws
+ASCII bars while the web UI renders an actual dial (`ui/static/progress-ui.js`):
+
+- **`get_module_mastery(store, user_id, language, module)`** (`orchestrator/mastery.py`)
+  — for grammar: `topics_mastered / topics_total`, scoped to curated `scope: major`
+  topics *at the user's current level* (best session score per topic `>=
+  GRAMMAR_MASTERY_THRESHOLD`, matched by `shared/slugify.py::slugify_topic` against
+  `task_label`); for writing: completed sessions *at the user's current level* against
+  `TEXTS_PER_LEVEL_FOR_MASTERY` (25), capped at 1.0 — writing has no discrete topic unit
+  to count instead, so it mirrors grammar's per-level scoping via session count instead
+  (`texts_written` itself stays an all-time total — just a display stat, not the ratio).
+  Both also carry
+  `weak_tags`/`strong_tags` (from `get_error_frequency`, resolved to human-readable
+  taxonomy descriptions or topic names — never raw tag keys) and word-count flavor stats.
+- **`get_level_trend(store, user_id, language, module="writing")`** — chronological
+  `text_level_estimate` pull, no new computation, same field `/history`'s trend uses.
+- **`CefrEstimatorSkill`** — the actual level-up decision: a threshold crossing on
+  grammar's mastery ratio, not a blended weighting of trend + error frequency + scores
+  (deliberately avoids inventing a second fuzzy rule on top of a threshold that already
+  exists). Suggests only — `_handle_progress_command` confirms with the user
+  (`[Y/n]`) before `store.write_level(..., source="estimated")` ever overwrites
+  `user_profiles.level`.
+
+No fixed "N texts" or "N words to reach the next level" threshold exists, and
+deliberately so — checked against published sources (Goethe/telc word-count targets,
+Milton's CEFR vocabulary-breadth research) and none give a cumulative writing-volume
+threshold for leveling up. Word/text counts are shown as flavor stats on the progress
+bar, not used as a gate.
 
 ---
 

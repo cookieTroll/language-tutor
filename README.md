@@ -2,13 +2,27 @@
 
 LanguageTutor is an AI-powered language tutoring agent focused on personalized **output and writing** practice. It tracks session history, identifies recurring grammatical and vocabulary errors, and routes users to adaptive exercises.
 
+## Quickstart
+
+```bash
+git clone <repo-url> && cd language-tutor
+pip install -e .
+python -m scripts.check_ollama_model   # first run only: pulls/creates the local Ollama model
+python -m ui.cli                       # or: python -m ui.app  (web UI, http://localhost:5000)
+```
+
+The default config (`config.yaml`) uses a local Ollama model — see
+[PROVIDERS.md](PROVIDERS.md) to switch to Gemini or Vertex AI instead.
+
 ## Repository Structure
 
-* [docs/DESIGN.md](docs/DESIGN.md) — Human-facing architectural overview.
-* [docs/LAYERS.md](docs/LAYERS.md) — Deliverable manifest per release layer.
-* [docs/CHECKLIST.md](docs/CHECKLIST.md) — Implementation task list.
-* [docs/TODO.md](docs/TODO.md) — Known risks, backlog, and deferred design items.
-* [docs/contracts.md](docs/contracts.md) — Original interface and protocol specifications.
+* [docs/_design.md](docs/_design.md) — Human-facing architectural overview.
+* [docs/_layers.md](docs/_layers.md) — Deliverable manifest per release layer.
+* [docs/_CHECKLIST.md](docs/_CHECKLIST.md) — Implementation task list.
+* [docs/_TODO.md](docs/_TODO.md) — Known risks, backlog, and deferred design items.
+* [docs/_contracts.md](docs/_contracts.md) — Original interface and protocol specifications.
+* [docs/lang.md](docs/lang.md) — Language architecture: versioned content maps, registry, cross-validation.
+* [docs/ui.md](docs/ui.md) — UI layer: Flask routes, the `IOHandler` CLI/web split, static JS.
 * [PROVIDERS.md](PROVIDERS.md) — LLM provider setup, API key management, config selection.
 
 ### Source Code
@@ -32,7 +46,7 @@ and writing-session export. It's read-only — no LLM calls, no writes.
 ### Run it
 
 ```bash
-pip install -r requirements.txt   # installs the `mcp` package
+pip install -e .   # installs the `mcp` package and everything else the app needs
 python ui/mcp_server.py
 ```
 

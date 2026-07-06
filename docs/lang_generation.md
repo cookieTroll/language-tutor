@@ -1,8 +1,8 @@
-# GermanTutor — Language Asset Generation
+# LanguageTutor — Language Asset Generation
 
 How to add support for a new target language, and how the generator works internally.
 
-See `docs/contracts.md` for the underlying data shapes (`TaxonomyMap`, `CEFRMap`,
+See `docs/_contracts.md` for the underlying data shapes (`TaxonomyMap`, `CEFRMap`,
 `GrammarTopicsMap`, `LanguageConfig`) and `lang/loader.py` for how they're resolved at
 runtime.
 
@@ -153,7 +153,7 @@ distinguishes the two cases via `lang.loader.is_configured()`:
 This utility only generates the LLM-facing content maps above. It does **not** localize
 the app's own backend-generated text (orchestrator menus, confirmations, status lines —
 see the "Backlog — Message Catalog" and "Backlog — Fully Configurable Origin / Target /
-Communication Languages" entries in `docs/CHECKLIST.md`), and it makes no web UI changes.
+Communication Languages" entries in `docs/_CHECKLIST.md`), and it makes no web UI changes.
 
 ---
 
