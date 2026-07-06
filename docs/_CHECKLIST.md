@@ -22,7 +22,8 @@ Suggested order and why:
    limitations. First because it's both a direct rubric line (Documentation, 20 pts)
    *and* the source material the writeup and video architecture slide should be drawn
    from — do this before drafting either.
-   - [ ] [ ] [ ] README rewrite/expansion
+   - [x] [ ] [ ] README rewrite/expansion
+   - [ ] [ ] [ ] Fix `docs/img/content_pipeline.jpg` when image-gen quota resets (~4h): wire both Skills and Orchestrator arrows from `_Registry` (not from map tiles directly); remove Skills↔Orchestrator connection (runtime relationships live on architecture diagram)
 2. **Market research & pricing** — before the writeup, not after, since the writeup's
    Deployability section depends on this number existing.
    - [ ] [ ] [ ] Re-verify `docs/competitive_landscape.md`'s claims before relying on them (the doc's own note: competitor products change, written 2026-07-05)
