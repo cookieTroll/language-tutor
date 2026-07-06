@@ -1012,3 +1012,66 @@ def test_check_language_config_warns_configured_false_when_unconfigured(store_an
         orchestrator._check_language_config("klingon", on_warn=on_warn)
 
     on_warn.assert_called_once_with("klingon", ["cefr hints", "taxonomy"], False)
+
+
+def test_check_message_catalog_resolves_messages_attribute(store_and_llm):
+    """self._messages is re-bound to the resolved catalog every call, regardless
+    of whether a warning fires — this is what makes self._messages.get(...) in
+    every io.output/io.prompt call site reflect the current explanation_language."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    sentinel = object()
+
+    with patch("orchestrator.orchestrator.get_messages", return_value=sentinel), \
+         patch("orchestrator.orchestrator.is_message_catalog_configured", return_value=True):
+        orchestrator._check_message_catalog("spanish")
+
+    assert orchestrator._messages is sentinel
+
+
+def test_check_message_catalog_no_warning_when_configured(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    on_warn = MagicMock()
+
+    with patch("orchestrator.orchestrator.is_message_catalog_configured", return_value=True):
+        orchestrator._check_message_catalog("spanish", on_warn=on_warn)
+
+    on_warn.assert_not_called()
+
+
+def test_check_message_catalog_warns_when_unconfigured(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    on_warn = MagicMock()
+
+    with patch("orchestrator.orchestrator.is_message_catalog_configured", return_value=False):
+        orchestrator._check_message_catalog("spanish", on_warn=on_warn)
+
+    on_warn.assert_called_once_with("spanish")
+
+
+def test_check_message_catalog_never_warns_for_english(store_and_llm):
+    """English always resolves to lang/messages/default.yaml itself -- it has no
+    catalog file of its own, but that's expected, not a gap to warn about."""
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    on_warn = MagicMock()
+
+    with patch("orchestrator.orchestrator.is_message_catalog_configured", return_value=False):
+        orchestrator._check_message_catalog("english", on_warn=on_warn)
+        orchestrator._check_message_catalog("English", on_warn=on_warn)
+
+    on_warn.assert_not_called()
+
+
+def test_check_message_catalog_warns_only_once_per_language(store_and_llm):
+    store, llm, config, io = store_and_llm
+    orchestrator = Orchestrator(store, llm, config, io=io)
+    on_warn = MagicMock()
+
+    with patch("orchestrator.orchestrator.is_message_catalog_configured", return_value=False):
+        orchestrator._check_message_catalog("spanish", on_warn=on_warn)
+        orchestrator._check_message_catalog("spanish", on_warn=on_warn)
+
+    on_warn.assert_called_once_with("spanish")

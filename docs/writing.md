@@ -270,17 +270,20 @@ classified: list[dict]     # [{fragment, error_tag, correction}]
 ```python
 classified: list[dict]    # from classify_mistakes
 level: str
+explanation_language: str # profile.explanation_language, defaults to English if unset
 ```
 
 **Output:**
 ```python
 explained: list[dict]     # [{error_tag, fragment, correction, explanation}]
-# explanation pitched to level
+# explanation pitched to level, written in explanation_language
 ```
 
 **Notes:**
 - Short-circuits gracefully if `classified` is empty — returns empty list
 - Explanation depth calibrated to level: A1 = very simple, B1 = rule + example, B2+ = nuance
+- `explanation` text is written in `explanation_language`, not necessarily the target
+  study language — previously hardcoded to English regardless of the user's setting
 
 ---
 
@@ -294,13 +297,14 @@ explained: list[dict]     # [{error_tag, fragment, correction, explanation}]
 user_text: str
 explained_mistakes: list[dict]    # from explain_mistakes (Step 5), structured, not freeform
 level: str
+explanation_language: str # profile.explanation_language, defaults to English if unset
 ```
 
 **Output:**
 ```python
 corrected_text: str
-recommendations: list[str]   # short next-step suggestions
-comment: str                 # one-sentence overall comment
+recommendations: list[str]   # short next-step suggestions, written in explanation_language
+comment: str                 # one-sentence overall comment, written in explanation_language
 ```
 
 **Note:** Only `corrected_text` is actually consumed downstream
@@ -320,9 +324,12 @@ You have already identified and classified all mistakes. Your task now is to:
 
 1. Produce a corrected version of the text by applying ONLY the listed corrections.
    Treat each correction as a literal substitution: find the exact fragment in the text and
-   replace only those words — do not restructure any surrounding clause.
-2. Write 2-4 short, actionable recommendations the student should focus on going forward.
-3. Write one encouraging sentence as an overall comment on the student's attempt.
+   replace only those words — do not restructure any surrounding clause, and preserve
+   {language}'s own word order conventions when the substitution is applied.
+2. Write 2-4 short, actionable recommendations the student should focus on going forward,
+   in {explanation_language}.
+3. Write one encouraging sentence as an overall comment on the student's attempt,
+   in {explanation_language}.
 
 Original student text:
 """{user_text}"""
@@ -434,7 +441,7 @@ A utility skill — not a standalone session. Invoked inline during any active m
 **Input:**
 ```python
 question: str
-session_context: dict     # current module, topic, user_text_so_far, level
+session_context: dict     # current module, topic, user_text_so_far, level, explanation_language
 ```
 
 **Output:**
@@ -455,8 +462,14 @@ Current session context:
 
 Student's question: {question}
 
-Answer concisely, explaining in English (use {language} only for translations, examples, and vocabulary words). Answer in context. If the question is about a specific word, define it clearly and note if it's relevant to what they're writing.
+Answer concisely, explaining in {explanation_language} (use {language} only for translations, examples, and vocabulary words). Answer in context. If the question is about a specific word, define it clearly and note if it's relevant to what they're writing.
 ```
+
+`explanation_language` comes from `ctx.parameters` the same way every other module
+gets it (`orchestrator/session_manager.py`'s `build_module_context`), defaulting to
+English if unset — previously hardcoded to English regardless of the user's
+`profile.explanation_language` setting; see `docs/_CHECKLIST.md`'s Message Catalog
+entry for the broader audit this was found and fixed alongside.
 
 **Word extraction:** After answering, attempt to extract a single target language word from the question if it's vocabulary-related (regex pattern: quoted word, or "what does X mean", "how do I say X"). Fall back to LLM extraction if regex fails.
 

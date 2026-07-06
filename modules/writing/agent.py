@@ -236,6 +236,7 @@ class WritingModule(ModuleProtocol):
             "user_text_so_far": "\n".join(user_lines),
             "level": ctx.level,
             "language": ctx.language,
+            "explanation_language": ctx.parameters.get("explanation_language"),
         }
         if pipeline is not None:
             session_context.update({

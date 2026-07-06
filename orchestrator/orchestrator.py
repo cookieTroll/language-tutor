@@ -13,7 +13,7 @@ from skills.protocols import SkillInput
 from modules.registry import MODULE_REGISTRY
 from shared.io import IOHandler, SessionAbortRequested
 from shared.error_log import log_skill_error
-from lang.loader import using_defaults, is_configured
+from lang.loader import using_defaults, is_configured, get_messages, is_message_catalog_configured
 from orchestrator.mastery import get_module_mastery, get_level_trend
 
 DEFAULT_RECOMMENDATION = ExerciseRecommendation(
@@ -32,9 +32,13 @@ class Orchestrator(OrchestratorProtocol):
         self.config = config
         self.io = io
         self._warned_languages: set[str] = set()
+        self._warned_catalogs: set[str] = set()
+        self._messages = get_messages("english")
         self._session_manager = SessionManager(store, config, llm, io)
 
-    def summarize_progress(self, user_id: str, language: str) -> ProgressSummary | None:
+    def summarize_progress(
+        self, user_id: str, language: str, explanation_language: str = "english",
+    ) -> ProgressSummary | None:
         """Returns None if below cold_start_threshold; otherwise calls SummarizeProgressSkill."""
         agg = self.store.get_session_aggregate(user_id, language)
         total_completed = sum(agg.sessions_by_module.values())
@@ -53,6 +57,7 @@ class Orchestrator(OrchestratorProtocol):
                 parameters={
                     "aggregate": agg.model_dump(),
                     "modules": available_modules,
+                    "explanation_language": explanation_language,
                 },
             ),
             self.llm,
@@ -94,7 +99,7 @@ class Orchestrator(OrchestratorProtocol):
         self._print_interruption_banner(interrupted)
 
         while True:
-            choice = self.io.prompt("Choice [l/d]: ").strip().lower()
+            choice = self.io.prompt(self._messages.get("interruption_choice_prompt")).strip().lower()
             if choice == "l":
                 for s in interrupted:
                     self._session_manager.log_interrupted_session(s, user_id)
@@ -104,33 +109,23 @@ class Orchestrator(OrchestratorProtocol):
                     self._session_manager.discard_interrupted_session(s, user_id)
                 break
             elif choice == "r":
-                self.io.output("[!] Resume option is currently unavailable in PoC mode. Please select 'l' to log or 'd' to discard.")
+                self.io.output(self._messages.get("interruption_resume_unavailable"))
             else:
-                self.io.output(f"[!] Invalid option '{choice}'. Please enter 'l' to log or 'd' to discard.")
+                self.io.output(self._messages.get("interruption_invalid_choice", choice=choice))
 
     def _print_interruption_banner(self, interrupted: list[SessionLog]) -> None:
         session_lines = "\n".join(
             f"- Session ID: {s.session_id} ({s.module} in {s.language}, started {s.started_at})"
             for s in interrupted
         )
-        self.io.output(
-            "\n=================================================="
-            "\n          INTERRUPTED SESSION DETECTED"
-            "\n=================================================="
-            f"\n{session_lines}"
-            "\n--------------------------------------------------"
-            "\nWhat would you like to do?"
-            "\n  [l] Log it   - Summarize what was completed and start fresh"
-            "\n  [d] Discard  - Delete the partial session and start fresh"
-            "\n  [r] Resume   - (Unavailable in PoC mode)"
-            "\n=================================================="
-        )
+        self.io.output(self._messages.get("interruption_banner", session_lines=session_lines))
 
     def run_session(
         self,
         user_id: str,
         language: str,
         on_language_warning=None,
+        on_message_catalog_warning=None,
         forced_recommendation: ExerciseRecommendation | None = None,
     ) -> ExerciseRecommendation | None:
         """Executes a full interactive session lifecycle.
@@ -138,6 +133,10 @@ class Orchestrator(OrchestratorProtocol):
         display config warnings — configured=False means the language has no lang/languages/
         config file at all (needs scripts/generate_language.py), True means it has one but
         some maps still fall back to generic defaults.
+        on_message_catalog_warning: optional callable(language) for UI to tell the user
+        their explanation_language has no lang/messages/{language}.yaml catalog yet —
+        menus/prompts fall back to English until one is generated
+        (scripts/generate_messages.py).
         forced_recommendation: when set, skips summarize/recommend/confirm and runs this
         module directly — used to chain straight into a session accepted from the
         previous session's next_actions prompt.
@@ -150,17 +149,20 @@ class Orchestrator(OrchestratorProtocol):
         # 1. Select language and user profile
         selected_lang, profile = self._select_language_and_profile(user_id, language)
         self._check_language_config(selected_lang, on_warn=on_language_warning)
+        self._check_message_catalog(profile.explanation_language, on_warn=on_message_catalog_warning)
 
         if forced_recommendation is not None:
             recommendation = forced_recommendation
             module_key = recommendation.module
         else:
             # 2 & 3. Summarize and recommend
-            summary = self.summarize_progress(user_id, selected_lang)
+            summary = self.summarize_progress(user_id, selected_lang, profile.explanation_language)
             recommendation = self.recommend_exercise(summary)
 
             # 4. Present recommendation, confirm or override
-            module_key = self._get_confirmed_module(recommendation, user_id, selected_lang, profile)
+            module_key = self._get_confirmed_module(
+                recommendation, user_id, selected_lang, profile, on_message_catalog_warning,
+            )
         module = MODULE_REGISTRY[module_key]
 
         # 5. Write-ahead log + checkpoint creation
@@ -184,7 +186,7 @@ class Orchestrator(OrchestratorProtocol):
             file_content.session_id = session_id
 
         except KeyboardInterrupt:
-            self.io.output("\n[!] Session interrupted. You can resume or log it next time.")
+            self.io.output(self._messages.get("session_interrupted_keyboard"))
             return None
         except SessionAbortRequested:
             # Whether this ends the whole browser session (action="end") or loops back
@@ -206,12 +208,8 @@ class Orchestrator(OrchestratorProtocol):
         # session_manager._writing_error_recurrence_signal's requested_topic branch).
         for idx, signal in enumerate(file_content.next_actions):
             focus_label = f" on '{signal.suggested_focus}'" if signal.suggested_focus else ""
-            prompt_text = (
-                f"\nSession complete. Start {signal.module} practice{focus_label} now? "
-                f"This will begin a new session. [Y/n]: "
-                if idx == 0 else
-                f"\nHow about {signal.module} practice{focus_label} instead? [Y/n]: "
-            )
+            msg_id = "next_action_prompt_first" if idx == 0 else "next_action_prompt_other"
+            prompt_text = self._messages.get(msg_id, module=signal.module, focus_label=focus_label)
             choice = self.io.prompt(prompt_text).strip().lower()
             accepted = choice != "n"
             self._session_manager.record_next_action_decision(file_content, accepted, index=idx)
@@ -231,9 +229,21 @@ class Orchestrator(OrchestratorProtocol):
         if missing and on_warn:
             on_warn(language, missing, is_configured(language))
 
+    def _check_message_catalog(self, language: str, on_warn=None) -> None:
+        """Resolves self._messages to `language`'s catalog and, the first time this
+        language is seen, warns via on_warn if no catalog is configured for it yet —
+        same shape as _check_language_config, but for backend UI text rather than
+        LLM-facing content maps."""
+        self._messages = get_messages(language)
+        if language in self._warned_catalogs:
+            return
+        self._warned_catalogs.add(language)
+        if not is_message_catalog_configured(language) and language.lower() != "english" and on_warn:
+            on_warn(language)
+
     def _confirm_or_update_level(self, user_id: str, profile: UserProfile) -> None:
-        self.io.output(f"\nYour current CEFR level: {profile.level.upper()}")
-        choice = self.io.prompt("Press Enter to keep, or type a new level (A1–C2): ").strip().lower()
+        self.io.output(self._messages.get("confirm_level_display", level=profile.level.upper()))
+        choice = self.io.prompt(self._messages.get("confirm_level_prompt")).strip().lower()
         if choice and choice != profile.level:
             self.store.write_level(user_id, choice, "stated")
             profile.level = choice
@@ -243,8 +253,10 @@ class Orchestrator(OrchestratorProtocol):
         language, not necessarily the target study language — e.g. a German
         learner may still want grammar explained in English. Reconfirmed each
         session like level, so it's easy to change without a dedicated command."""
-        self.io.output(f"Explanations/summaries language: {profile.explanation_language.capitalize()}")
-        choice = self.io.prompt("Press Enter to keep, or type a new language: ").strip().lower()
+        self.io.output(self._messages.get(
+            "confirm_explanation_language_display", language=profile.explanation_language.capitalize(),
+        ))
+        choice = self.io.prompt(self._messages.get("confirm_explanation_language_prompt")).strip().lower()
         if choice and choice != profile.explanation_language:
             profile.explanation_language = choice
 
@@ -253,25 +265,25 @@ class Orchestrator(OrchestratorProtocol):
         selected_lang = language
 
         if active_lang:
-            self.io.output(f"\nCurrently studying {active_lang.upper()}.")
-            choice = self.io.prompt("Continue or switch language? [Press Enter to continue, or type new language]: ").strip().lower()
+            self.io.output(self._messages.get("active_language_status", language=active_lang.upper()))
+            choice = self.io.prompt(self._messages.get("active_language_switch_prompt")).strip().lower()
             if choice:
                 selected_lang = choice
             else:
                 selected_lang = active_lang
         else:
             if not selected_lang:
-                selected_lang = self.io.prompt("\nWhich language would you like to study? ").strip().lower()
+                selected_lang = self.io.prompt(self._messages.get("ask_target_language")).strip().lower()
 
         profile = self.store.get_user_profile(user_id, selected_lang)
         if not profile:
             default = self.config.default_level
             level_input = self.io.prompt(
-                f"Enter your CEFR level for {selected_lang.upper()} [default: {default.upper()}]: "
+                self._messages.get("ask_level", language=selected_lang.upper(), default=default.upper())
             ).strip().lower()
             level = level_input if level_input else default
             explanation_language = self.io.prompt(
-                "Which language should explanations/summaries be written in? [default: English]: "
+                self._messages.get("ask_explanation_language_new")
             ).strip().lower() or "english"
             profile = UserProfile(
                 user_id=user_id,
@@ -285,6 +297,12 @@ class Orchestrator(OrchestratorProtocol):
             )
             self.store.write_user_profile(profile)
         else:
+            # Resolve the catalog to this profile's already-known explanation_language
+            # before displaying the confirm prompts below, so an existing user with a
+            # non-English setting isn't shown these two specific prompts in English —
+            # _check_message_catalog (called by run_session right after this method
+            # returns) re-resolves again in case the user changes it in the line below.
+            self._messages = get_messages(profile.explanation_language)
             self._confirm_or_update_level(user_id, profile)
             self._confirm_or_update_explanation_language(profile)
             profile.active = True
@@ -295,33 +313,21 @@ class Orchestrator(OrchestratorProtocol):
 
     def _get_confirmed_module(
         self, recommendation: ExerciseRecommendation, user_id: str, language: str,
-        profile: UserProfile | None = None,
+        profile: UserProfile | None = None, on_message_catalog_warning=None,
     ) -> str:
         focus_line = f"\nSuggested focus: {recommendation.suggested_focus}" if recommendation.suggested_focus else ""
-        self.io.output(
-            f"\n[Recommendation]: We suggest using the '{recommendation.module.upper()}' module."
-            f"\nReason: {recommendation.reason}"
-            f"{focus_line}"
-        )
+        self.io.output(self._messages.get(
+            "recommendation_display",
+            module=recommendation.module.upper(), reason=recommendation.reason, focus_line=focus_line,
+        ))
 
-        history_hint = (
-            " (writing-history report: /history for last 10 sessions,"
-            " /history <n> e.g. /history 5 for last n sessions,"
-            " /history <n>d e.g. /history 7d for last n days,"
-            " add lang:<language> e.g. /history 5 lang:german to change the"
-            " report's language (default: your explanation-language setting),"
-            " /language <language> e.g. /language german to change your"
-            " explanation-language setting itself,"
-            " /progress for mastery + level progress)"
-        ) if self.io.show_cli_hints else ""
+        history_hint = self._messages.get("history_hint_block") if self.io.show_cli_hints else ""
         available = ", ".join(MODULE_REGISTRY.keys())
         default_report_language = profile.explanation_language if profile else "english"
 
         while True:
             choice = self.io.prompt(
-                f"\nAccept suggestion? [Y/Enter to accept, or type a module name to switch]"
-                f"\nAvailable modules: {available}{history_hint}"
-                f"\n> "
+                self._messages.get("module_choice_prompt", available=available, history_hint=history_hint)
             ).strip().lower()
 
             if choice.startswith("/history"):
@@ -329,7 +335,7 @@ class Orchestrator(OrchestratorProtocol):
                 continue
 
             if choice.startswith("/language"):
-                self._handle_language_command(profile, choice)
+                self._handle_language_command(profile, choice, on_message_catalog_warning)
                 default_report_language = profile.explanation_language if profile else default_report_language
                 continue
 
@@ -343,27 +349,28 @@ class Orchestrator(OrchestratorProtocol):
             if choice in MODULE_REGISTRY:
                 return choice
 
-            self.io.output(
-                f"[!] Invalid module. Falling back to suggested module '{recommendation.module}'."
-            )
+            self.io.output(self._messages.get("invalid_module_fallback", module=recommendation.module))
             return recommendation.module
 
-    def _handle_language_command(self, profile: UserProfile | None, raw_command: str) -> None:
+    def _handle_language_command(
+        self, profile: UserProfile | None, raw_command: str, on_message_catalog_warning=None,
+    ) -> None:
         """On-demand change of explanation_language (dump_grammar, /history's default) —
         the same setting asked once at session start, adjustable here too without
         waiting for the next session."""
         new_language = raw_command[len("/language"):].strip().lower()
         if not new_language:
             current = profile.explanation_language if profile else "english"
-            self.io.output(f"[*] Current explanation language: {current.capitalize()}. Usage: /language <language>")
+            self.io.output(self._messages.get("language_command_current", language=current.capitalize()))
             return
         if profile is None:
-            self.io.output("[!] No active profile to update.")
+            self.io.output(self._messages.get("language_command_no_profile"))
             return
+        self._check_message_catalog(new_language, on_warn=on_message_catalog_warning)
         profile.explanation_language = new_language
         profile.updated_at = datetime.now()
         self.store.write_user_profile(profile)
-        self.io.output(f"[*] Explanation language set to {new_language.capitalize()}.")
+        self.io.output(self._messages.get("language_command_updated", language=new_language.capitalize()))
 
     def _parse_history_scope(self, arg: str) -> tuple[str, int] | None:
         """Returns (kind, n) where kind is 'sessions' or 'days'. None if arg is malformed."""
@@ -411,10 +418,7 @@ class Orchestrator(OrchestratorProtocol):
         scope_arg, report_language = self._split_history_args(raw_arg, default_report_language)
         scope = self._parse_history_scope(scope_arg)
         if scope is None:
-            self.io.output(
-                "[!] Invalid /history argument. Use '/history', '/history <n>' (sessions), "
-                "or '/history <n>d' (days)."
-            )
+            self.io.output(self._messages.get("history_invalid_arg"))
             return
         kind, n = scope
 
@@ -431,7 +435,7 @@ class Orchestrator(OrchestratorProtocol):
             scope_label = f"last {n} day{'s' if n != 1 else ''}"
 
         if not window:
-            self.io.output("\nNo completed writing sessions in that window yet.")
+            self.io.output(self._messages.get("history_no_sessions"))
             return
 
         topics = list(dict.fromkeys(s.task_label for s in window if s.task_label))
@@ -475,10 +479,12 @@ class Orchestrator(OrchestratorProtocol):
                 "orchestrator", "summarize_writing_history", out.metadata.get("error", ""),
                 {"user_id": user_id, "language": language},
             )
-            self.io.output("\n[!] Could not generate a history summary right now.")
+            self.io.output(self._messages.get("history_could_not_generate"))
             return
 
-        self.io.output(f"\n--- Writing History ({scope_label}) ---\n{out.metadata['history_summary']}")
+        self.io.output(self._messages.get(
+            "history_report_header", scope_label=scope_label, summary=out.metadata["history_summary"],
+        ))
 
     def _handle_progress_command(self, user_id: str, language: str) -> None:
         """On-demand mastery + level progress report (Layer 2c). Same on-demand shape
@@ -509,10 +515,9 @@ class Orchestrator(OrchestratorProtocol):
         )
         if out.metadata.get("should_level_up"):
             next_level = out.metadata["next_level"]
-            choice = self.io.prompt(
-                f"\nYou've mastered all curated grammar topics for {current_level.upper()}. "
-                f"Advance to {next_level.upper()}? [Y/n]: "
-            ).strip().lower()
+            choice = self.io.prompt(self._messages.get(
+                "level_up_prompt", current_level=current_level.upper(), next_level=next_level.upper(),
+            )).strip().lower()
             if choice != "n":
                 self.store.write_level(user_id, next_level, "estimated")
-                self.io.output(f"[*] Level updated to {next_level.upper()}.")
+                self.io.output(self._messages.get("level_up_confirmed", next_level=next_level.upper()))

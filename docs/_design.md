@@ -267,10 +267,11 @@ language-tutor/
 │   └── competitive_landscape.md # how the writing evaluator compares to existing tools
 │
 ├── lang/                   # versioned content maps + language-asset generation (see docs/lang.md)
-│   ├── models.py           # Pydantic models: CEFRMap, TaxonomyMap, LanguageConfig
+│   ├── models.py           # Pydantic models: CEFRMap, TaxonomyMap, LanguageConfig, MessageCatalog
 │   ├── loader.py           # _Registry: loads + cross-validates maps at startup
 │   ├── generate.py         # language-asset generation subsystem — see docs/lang.md
 │   ├── generate_prompts.py # prompt templates for generate.py — see docs/lang.md
+│   ├── generate_messages.py # message-catalog generation — see docs/lang_generation.md
 │   ├── maps/
 │   │   ├── cefr/                   # {name}.yaml — versioned CEFR pedagogical hint maps
 │   │   ├── taxonomy/               # {name}.yaml — versioned error taxonomy maps
@@ -278,7 +279,9 @@ language-tutor/
 │   │   ├── exercise_types/         # {name}.yaml — grammar exercise type vocabulary (Layer 2a)
 │   │   ├── grammar_topics/         # {name}.yaml — versioned grammar topic maps (Layer 2a)
 │   │   └── writing_word_ranges/    # {name}.yaml — per-level minimum word counts for writing
-│   └── languages/          # {language}.yaml — maps language → cefr_hints + taxonomy
+│   ├── languages/          # {language}.yaml — maps language → cefr_hints + taxonomy
+│   └── messages/           # {language}.yaml — id-keyed backend UI text, resolved by
+│                           #   explanation_language (not the target language) — see docs/lang.md
 │
 ├── shared/
 │   ├── timer.py            # SessionTimer — background thread, updates terminal title
@@ -358,7 +361,8 @@ language-tutor/
 │   ├── check_ollama_model.py  # interactive cold-start helper: ensures the Ollama model in the
 │   │                           # active config exists locally, offers to pull the base model and
 │   │                           # run `ollama create` for the custom Modelfile-based model
-│   └── generate_language.py   # CLI entry point for lang/generate.py's language-asset chain
+│   ├── generate_language.py   # CLI entry point for lang/generate.py's language-asset chain
+│   └── generate_messages.py   # CLI entry point for lang/generate_messages.py's catalog generator
 │
 ├── tests/
 │   ├── unit/
@@ -372,7 +376,9 @@ language-tutor/
 │   │   │   └── test_grammar_skills.py
 │   │   ├── lang/
 │   │   │   ├── test_lang.py
-│   │   │   └── test_generate.py
+│   │   │   ├── test_generate.py
+│   │   │   ├── test_messages.py
+│   │   │   └── test_generate_messages.py
 │   │   └── ...              # test_cli.py, test_ui.py, test_mastery.py, test_mcp_server.py, etc.
 │   ├── e2e/                # test_smoke.py, test_bridge_smoke.py, conftest.py, seed_helpers.py
 │   ├── judge/              # LLM-as-judge eval tests; one judge_*.py per skill/module,
@@ -421,10 +427,10 @@ language-tutor/
 
 **Three-tier testing.** Unit tests (deterministic, run automatically — mocked LLM, no network). LLM-as-judge (semantic quality — a judge runner exists per skill/module, `tests/judge/`, fully built and ready to run on demand; not wired into the default suite since it makes real LLM calls). Regression fixtures (accumulated during development). Ground truth within B1 scope.
 
-**`lang/` versioned content maps.** CEFR pedagogical hints, error taxonomy, CEFR level descriptors, grammar exercise types, grammar topics, and per-level writing word ranges all live as versioned YAML artifacts under their own subdirectory in `lang/maps/`. Language configs in `lang/languages/` reference maps by name. The registry cross-validates all references at startup. Default maps (`default.yaml`) provide a language-agnostic fallback for unconfigured languages. Adding a language = one YAML file; adding a new taxonomy variant = one YAML file, no code change. `lang/generate.py`/`lang/generate_prompts.py` generate these map assets — see `docs/lang.md` for that subsystem.
+**`lang/` versioned content maps.** CEFR pedagogical hints, error taxonomy, CEFR level descriptors, grammar exercise types, grammar topics, and per-level writing word ranges all live as versioned YAML artifacts under their own subdirectory in `lang/maps/`. Language configs in `lang/languages/` reference maps by name. The registry cross-validates all references at startup. Default maps (`default.yaml`) provide a language-agnostic fallback for unconfigured languages. Adding a language = one YAML file; adding a new taxonomy variant = one YAML file, no code change. `lang/generate.py`/`lang/generate_prompts.py` generate these map assets — see `docs/lang.md` for that subsystem. A second, orthogonal catalog, `lang/messages/{language}.yaml`, holds id-keyed backend UI text (orchestrator menus, confirmations) resolved by `explanation_language` instead — see `docs/lang.md`'s "Message catalog" section.
 
 **Config files, not hardcoded settings.** `config.py`'s `load_config()` parses whichever YAML file `LTUT_CONFIG` points at (`config.yaml` by default) into typed dataclasses, resolving any `${VAR_NAME}` value against the environment at load time — API keys and other secrets never sit in a committed file. Swapping the LLM backend (a stated Goal) means pointing `LTUT_CONFIG` at a different file, not editing code.
 
-**Supporting scripts are separate from runtime.** `scripts/check_ollama_model.py` and `scripts/generate_language.py` are one-off admin CLIs a user runs directly — neither is imported by `ui/cli.py` or `ui/app.py`. The former handles the local-model cold start (pulling the base model, then running `ollama create` for the custom Modelfile-based model); the latter drives `lang/generate.py`'s self-correcting LLM chain to flesh out a new target language's content maps.
+**Supporting scripts are separate from runtime.** `scripts/check_ollama_model.py`, `scripts/generate_language.py`, and `scripts/generate_messages.py` are one-off admin CLIs a user runs directly — none is imported by `ui/cli.py` or `ui/app.py`. The first handles the local-model cold start (pulling the base model, then running `ollama create` for the custom Modelfile-based model); the second drives `lang/generate.py`'s self-correcting LLM chain to flesh out a new target language's content maps; the third drives `lang/generate_messages.py` to translate the backend UI text catalog into a new `explanation_language`.
 
 **`WritingSessionContent` schema evolution.** Layer 1a Steps 1–4 populate `mistakes`, `recommendations`, `comment`, `corrected_text`. Steps 5–6 extend the schema: add `text_level_estimate`, enrich each mistake with `severity` (`critical`/`expected`/`minor`), replace `recommendations` with `tips` (sorted by distance from user level), replace `comment` with `session_summary`. Schema changes are additive; no breaking changes to storage. (An earlier draft also added a `comparison_note: str | None` stub as a Layer 2b placeholder; Layer 2b took a different shape — an on-demand `/history` command, not a per-session field — so that stub was removed rather than left permanently `None`. See `docs/writing.md`.)

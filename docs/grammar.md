@@ -368,6 +368,7 @@ items: list[dict]
 #                                # judge correctness AND produce feedback if wrong.
 # }]
 level: str
+explanation_language: str # profile.explanation_language, defaults to English if unset
 ```
 
 Only exercises that need a call are included: `grading: exact` items that
@@ -387,11 +388,12 @@ results: list[dict]
 
 **Prompt template:**
 ```
-Grade these {level} German grammar exercises on "{topic}". Some answers are
+Grade these {level} {language} grammar exercises on "{topic}". Some answers are
 already known to be wrong (marked already_known_wrong) — for those, just
 explain why, don't re-judge them. For the rest, answers may be phrased
 differently from the reference and still be correct — judge on grammatical
 correctness and whether the target rule was applied, not on exact wording.
+Write every feedback string in {explanation_language}.
 
 {items_json}
 

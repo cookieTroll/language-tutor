@@ -50,6 +50,13 @@ def _lang_warning(io: WebIOHandler, language: str, missing: list, configured: bo
     io.prompt("Press Enter to continue: ")
 
 
+def _message_catalog_warning(io: WebIOHandler, language: str) -> None:
+    io.output(
+        f"\n[!] Menus/prompts aren't available in '{language.upper()}' yet — falling back to English."
+        f"\n    Generate them with: python -m scripts.generate_messages {language.lower()}"
+    )
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -74,6 +81,7 @@ def api_start():
                         user_id,
                         language=None,
                         on_language_warning=lambda lang, missing, configured=True: _lang_warning(io, lang, missing, configured),
+                        on_message_catalog_warning=lambda lang: _message_catalog_warning(io, lang),
                         forced_recommendation=forced_recommendation,
                     )
                 except SessionAbortRequested as abort:

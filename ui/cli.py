@@ -33,6 +33,11 @@ def _language_config_warning(language: str, missing: list, configured: bool = Tr
         raise
 
 
+def _message_catalog_warning(language: str) -> None:
+    print(f"\n[!] Menus/prompts aren't available in '{language.upper()}' yet — falling back to English.")
+    print(f"    Generate them with: python -m scripts.generate_messages {language.lower()}")
+
+
 def main():
     if len(sys.argv) > 1:
         cmd = sys.argv[1].strip().lower()
@@ -73,6 +78,7 @@ def main():
             # Run the full session flow (includes startup check, active language selection, etc.)
             forced_recommendation = orchestrator.run_session(
                 user_id, language=None, on_language_warning=_language_config_warning,
+                on_message_catalog_warning=_message_catalog_warning,
                 forced_recommendation=forced_recommendation,
             )
         except KeyboardInterrupt:

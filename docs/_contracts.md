@@ -660,7 +660,23 @@ class LanguageConfig(BaseModel):
     writing_word_ranges: str = "default"
     grammar_topics: str | None = None    # None → language has no grammar syllabus yet
     exercise_types: str = "default"
+
+class MessageCatalog(BaseModel):
+    """lang/messages/{language}.yaml — id-keyed backend UI strings (menus, prompts,
+    confirmations), resolved by profile.explanation_language — an orthogonal axis
+    from LanguageConfig, which resolves by the target study language. default.yaml
+    is the universal English fallback. See docs/lang.md."""
+    language: str
+    messages: dict[str, str]  # msg_id → str.format() template
+
+    def get(self, msg_id: str, **kwargs) -> str:
+        """Formats the template with kwargs; raises KeyError for an unknown msg_id."""
+        ...
 ```
+
+`MessageCatalog`'s own `model_validator` enforces every id in `REQUIRED_MESSAGE_IDS`
+(one per `orchestrator.py` `io.output`/`io.prompt` call site) is present — same shape
+as `TaxonomyMap`'s "other must be present" check, generalized to a full required set.
 
 ---
 

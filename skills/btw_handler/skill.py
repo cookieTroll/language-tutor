@@ -68,16 +68,18 @@ class BtwHandlerSkill(SkillProtocol):
             )
 
         # 1. Generate the answer
+        explanation_language = (session_context.get("explanation_language") or "english").capitalize()
         prompt = BTW_PROMPT.format(
             module=session_context.get("module", "unknown"),
             topic=session_context.get("topic", "unknown"),
             user_text_so_far=session_context.get("user_text_so_far", ""),
             level=input.level,
             language=session_context.get("language", "German").capitalize(),
+            explanation_language=explanation_language,
             evaluation_context=_format_evaluation_context(session_context),
             question=question
         )
-        
+
         lang_cap = session_context.get("language", "German").capitalize()
         messages = [
             LLMMessage(
@@ -85,7 +87,7 @@ class BtwHandlerSkill(SkillProtocol):
                 content=(
                     f"You are a helpful, brief {lang_cap} tutor. "
                     "You explain grammar and vocabulary concepts to students. "
-                    f"Always write your explanations in English, using {lang_cap} only for translations, vocabulary words, and examples. "
+                    f"Always write your explanations in {explanation_language}, using {lang_cap} only for translations, vocabulary words, and examples. "
                     f"CRITICAL: Never invent or hallucinate words in {lang_cap}. If you do not know the exact translation or grammar rule, state that you do not know."
                 )
             ),

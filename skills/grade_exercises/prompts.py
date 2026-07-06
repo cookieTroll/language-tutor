@@ -22,7 +22,7 @@ MANDATORY: process every single item in the list above, including
 already_known_wrong ones — do not skip any item. Every item you mark
 correct=false MUST have a non-empty feedback string explaining the mistake;
 never leave feedback blank for an incorrect item, even if the explanation is
-short.
+short. Write every feedback string in {explanation_language}.
 
 Return JSON only. No markdown.
 {{

@@ -13,7 +13,8 @@ Recurring errors (tag: count):
 Recent writing topics: {recent_topics}
 Vocab flags: {vocab_flag_count}
 
-Based on the above, identify the module the learner should focus on next and explain why in one sentence.
+Based on the above, identify the module the learner should focus on next and explain why in one
+sentence, written in {explanation_language}.
 
 Return JSON only. No markdown, no preamble.
 {{

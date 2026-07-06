@@ -57,6 +57,7 @@ class SummarizeProgressSkill:
         )
         recent_topics = ", ".join(agg.recent_topics) if agg.recent_topics else "(none)"
         modules_str = ", ".join(available_modules) if available_modules else "(any)"
+        explanation_language = (input.parameters.get("explanation_language") or "english").capitalize()
 
         prompt = SUMMARIZE_PROGRESS_PROMPT.format(
             level=input.level,
@@ -65,6 +66,7 @@ class SummarizeProgressSkill:
             error_lines=error_lines,
             recent_topics=recent_topics,
             vocab_flag_count=agg.vocab_flag_count,
+            explanation_language=explanation_language,
         )
 
         messages = [

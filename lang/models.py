@@ -223,6 +223,72 @@ class ExerciseTypesMap(BaseModel):
         return None
 
 
+REQUIRED_MESSAGE_IDS = frozenset({
+    "interruption_banner",
+    "interruption_choice_prompt",
+    "interruption_resume_unavailable",
+    "interruption_invalid_choice",
+    "session_interrupted_keyboard",
+    "next_action_prompt_first",
+    "next_action_prompt_other",
+    "confirm_level_display",
+    "confirm_level_prompt",
+    "confirm_explanation_language_display",
+    "confirm_explanation_language_prompt",
+    "active_language_status",
+    "active_language_switch_prompt",
+    "ask_target_language",
+    "ask_level",
+    "ask_explanation_language_new",
+    "recommendation_display",
+    "history_hint_block",
+    "module_choice_prompt",
+    "invalid_module_fallback",
+    "language_command_current",
+    "language_command_no_profile",
+    "language_command_updated",
+    "history_invalid_arg",
+    "history_no_sessions",
+    "history_could_not_generate",
+    "history_report_header",
+    "level_up_prompt",
+    "level_up_confirmed",
+})
+
+
+class MessageCatalog(BaseModel):
+    """Backend UI strings (menus, prompts, confirmations) — id-keyed, resolved by
+    the user's explanation_language, not the target study language.
+
+    Loaded from lang/messages/*.yaml. Distinct from the six map types above: those
+    are LLM-facing content resolved per target language via LanguageConfig; this is
+    orchestrator-facing display text resolved directly by language name, with
+    lang/messages/default.yaml as the universal English fallback.
+
+    Each value is a str.format() template; placeholders are filled by the caller
+    (orchestrator.py), never by the catalog itself.
+    """
+
+    language: str
+    messages: dict[str, str]
+
+    @model_validator(mode="after")
+    def all_required_ids_present(self) -> "MessageCatalog":
+        missing = REQUIRED_MESSAGE_IDS - self.messages.keys()
+        if missing:
+            raise ValueError(
+                f"MessageCatalog for '{self.language}' is missing required message id(s): "
+                f"{sorted(missing)}"
+            )
+        return self
+
+    def get(self, msg_id: str, **kwargs) -> str:
+        template = self.messages.get(msg_id)
+        if template is None:
+            raise KeyError(f"Unknown message id: '{msg_id}'")
+        return template.format(**kwargs) if kwargs else template
+
+
 class LanguageConfig(BaseModel):
     """Top-level language config — maps learning concepts to versioned content maps.
 

@@ -10,6 +10,7 @@ from lang.models import (
     ExerciseTypesMap,
     GrammarTopicsMap,
     LanguageConfig,
+    MessageCatalog,
     TaxonomyMap,
     WritingMinWordsMap,
 )
@@ -17,6 +18,7 @@ from lang.models import (
 _LANG_DIR = Path(__file__).parent
 _MAPS_DIR = _LANG_DIR / "maps"
 _LANGUAGES_DIR = _LANG_DIR / "languages"
+_MESSAGES_DIR = _LANG_DIR / "messages"
 
 
 class _Registry:
@@ -26,9 +28,11 @@ class _Registry:
         self,
         maps_dir: Path | None = None,
         languages_dir: Path | None = None,
+        messages_dir: Path | None = None,
     ) -> None:
         self._maps_dir = maps_dir or _MAPS_DIR
         self._languages_dir = languages_dir or _LANGUAGES_DIR
+        self._messages_dir = messages_dir or _MESSAGES_DIR
         self._cefr_maps: dict[str, CEFRMap] = {}
         self._taxonomy_maps: dict[str, TaxonomyMap] = {}
         self._cefr_descriptor_maps: dict[str, CEFRDescriptorMap] = {}
@@ -36,6 +40,7 @@ class _Registry:
         self._grammar_topics_maps: dict[str, GrammarTopicsMap] = {}
         self._exercise_types_maps: dict[str, ExerciseTypesMap] = {}
         self._languages: dict[str, LanguageConfig] = {}
+        self._message_catalogs: dict[str, MessageCatalog] = {}
         self._load()
 
     def _load(self) -> None:
@@ -70,6 +75,12 @@ class _Registry:
             config = LanguageConfig.model_validate(data)
             self._validate_references(config)
             self._languages[config.name.lower()] = config
+
+        if self._messages_dir.exists():
+            for path in self._messages_dir.glob("*.yaml"):
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+                catalog = MessageCatalog.model_validate(data)
+                self._message_catalogs[catalog.language.lower()] = catalog
 
     def _validate_references(self, config: LanguageConfig) -> None:
         if config.cefr_hints not in self._cefr_maps:
@@ -177,6 +188,15 @@ class _Registry:
             return ""
         return descriptor_map.format_for_prompt()
 
+    def get_messages(self, language: str) -> MessageCatalog:
+        return self._message_catalogs.get(language.lower()) or self._message_catalogs["default"]
+
+    def is_message_catalog_configured(self, language: str) -> bool:
+        """Whether `language` has its own lang/messages/{name}.yaml catalog —
+        distinct from 'default', the universal English fallback every language
+        resolves to until one is generated (scripts/generate_messages.py)."""
+        return language.lower() in self._message_catalogs and language.lower() != "default"
+
 
 _registry = _Registry()
 
@@ -223,3 +243,14 @@ def using_defaults(language: str) -> dict[str, bool]:
     Example: {"cefr_hints": False, "taxonomy": True} means taxonomy is using the generic default.
     """
     return _registry.is_default(language)
+
+
+def get_messages(language: str) -> MessageCatalog:
+    """Return the MessageCatalog for the given explanation_language, falling back
+    to lang/messages/default.yaml (English) if none is configured for it."""
+    return _registry.get_messages(language)
+
+
+def is_message_catalog_configured(language: str) -> bool:
+    """Return whether `language` has its own lang/messages/{name}.yaml catalog."""
+    return _registry.is_message_catalog_configured(language)

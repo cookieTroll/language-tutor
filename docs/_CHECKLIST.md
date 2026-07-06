@@ -76,27 +76,34 @@ lowest-impact research/design items last.
 > files in the same shape, no loader/model changes needed. The core generation utility is
 > done (see `docs/_CHECKLIST_FINISHED.md`); these are the deferred extensions.
 
-**Message Catalog (i18n for non-LLM backend text)** — not started, deliberately deferred
-past submission (decided 2026-07-05): the pattern is proven (same shape as the
-language-generation utility) but both the hand-authored catalog work and any generator
-extension are new scope this close to the deadline, with no rubric line that needs it.
-`orchestrator.py` has 27 `io.output`/`io.prompt` call sites (menus, confirmations,
-status lines) hardcoded in English, independent of `profile.explanation_language` — a
-user with `explanation_language: spanish` still gets English menus and confirmations.
-This is distinct from LLM-generated content (feedback, explanations, exercises), which
-is already parametrized via `{language}`/`{explanation_language}` in nearly every
-`skills/*/prompts.py` template — only `skills/write_correction/prompts.py` still has
-real hardcoded German prose to generalize.
-- [ ] [ ] [ ] Design a `lang/messages/{language}.yaml` catalog (id-keyed strings), loaded the same way `lang/maps/*` is (per-concept default + language override)
-- [ ] [ ] [ ] Extract `orchestrator.py`'s hardcoded `io.output`/`io.prompt` strings into catalog lookups
-- [ ] [ ] [ ] Extend the generation utility to also generate a language's message catalog, not just the LLM-facing maps — same on-demand-generate-then-validate pattern as `lang/generate.py`, once the catalog shape above is designed
+**Message Catalog (i18n for non-LLM backend text)** — implemented 2026-07-06 (reversing
+the 2026-07-05 deferral decision): `lang/messages/{language}.yaml` (id-keyed strings,
+`MessageCatalog` model in `lang/models.py`) loaded the same per-concept
+default+override way `lang/maps/*` is, resolved by `profile.explanation_language`
+(an orthogonal axis from `LanguageConfig`'s target-language maps). All ~24
+`orchestrator.py` `io.output`/`io.prompt` call sites (menus, confirmations, status
+lines) now resolve through it instead of hardcoded English; a language with no
+generated catalog falls back to English and surfaces a warning
+(`_check_message_catalog`, mirroring `_check_language_config`) via a new
+`on_message_catalog_warning` hook through `ui/cli.py`/`ui/app.py`. See
+`docs/lang.md` for the design and `docs/lang_generation.md` for the generator.
+Auditing every `skills/*/prompts.py` for output-language handling (prompted by this
+work, broader than the original "only write_correction" note below) found 5 prompts
+producing learner-facing prose with no `{explanation_language}` directive at all —
+fixed alongside the catalog. Pending: user validation on this branch
+(`worktree-feature-message-catalog`) and merge to main.
+- [x] [ ] [ ] Design a `lang/messages/{language}.yaml` catalog (id-keyed strings), loaded the same way `lang/maps/*` is (per-concept default + language override)
+- [x] [ ] [ ] Extract `orchestrator.py`'s hardcoded `io.output`/`io.prompt` strings into catalog lookups
+- [x] [ ] [ ] Extend the generation utility to also generate a language's message catalog, not just the LLM-facing maps — `scripts/generate_messages.py` + `lang/generate_messages.py`, same on-demand-generate-then-validate pattern as `lang/generate.py`, validated for required-id completeness and exact `{placeholder}` preservation
+- [x] [ ] [ ] Audit every `skills/*/prompts.py` for an explicit output-language directive, not just `write_correction`'s hardcoded German prose — fixed `explain_mistakes`, `write_correction`, `btw_handler`, `grade_exercises`, `summarize_progress` (two hardcoded "in English", three with no language directive at all); threaded `explanation_language` through the same `ctx.parameters` path `dump_grammar` already used, and dropped `write_correction`'s German-specific word-order note from the shared (all-languages) prompt
 
 **Fully Configurable Origin / Target / Communication Languages** — end goal: a catalog
 of supported languages (backed by `lang/languages/*.yaml` plus the message catalog
 above) that the user picks from along three independent axes — origin/native language,
 target/study language, and communication (explanation) language — with an unsupported
 pick pointed at the generation utility rather than silently degrading to generic
-defaults. Depends on the message catalog above, so deferred with it.
+defaults. The message catalog dependency above is now satisfied; the items below are
+still open.
 - [ ] [ ] [ ] Model "origin language" explicitly — today `UserProfile` only has `language` (target) and `explanation_language`; no distinct native-language concept exists
 - [ ] [ ] [ ] Expose the available-languages catalog to the selection flow (CLI + web) — `lang.loader` already holds the registry internally; needs a public "list configured languages" accessor
 - [ ] [ ] [ ] Validate user selection against the catalog for all three axes; surface "needs generation" consistently across CLI and web, not just the CLI warning path added above
