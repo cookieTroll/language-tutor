@@ -2,7 +2,7 @@
 
 ### Capstone Writeup
 * **Track:** Agents for Good (Advancing Education)
-* **Author:** cookieTroll
+* **Author:** Jan Krejci, Bhavyajeet Singh
 * **GitHub Repository:** [https://github.com/cookieTroll/language-tutor](https://github.com/cookieTroll/language-tutor)
 
 ---
