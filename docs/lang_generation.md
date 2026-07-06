@@ -26,7 +26,14 @@ cross-reference checks the app already trusts for German.
 
 ## Running it
 
+**Use a strong model for this.** In practice, generation quality was noticeably better
+on hosted `gemini-2.5-flash` than on the local `gemma2:9b` default — this is worth the
+hosted path even for users who otherwise run day-to-day study sessions locally. The
+script defaults to `--config $LTUT_CONFIG` or `config.yaml` (Gemini), so set
+`GEMINI_API_KEY` first or it will fail at the health check:
+
 ```bash
+export GEMINI_API_KEY=your-key-here
 python -m scripts.generate_language french
 ```
 
@@ -155,7 +162,12 @@ A separate, smaller generator for `lang/messages/{language}.yaml` (see `docs/lan
 `explanation_language`, not the target study language, so it's a distinct script
 rather than another step chained into `generate_language`.
 
+Same model caveat as `generate_language` above — prefer hosted Gemini for translation
+quality, and set `GEMINI_API_KEY` first since this script also defaults to
+`config.yaml`:
+
 ```bash
+export GEMINI_API_KEY=your-key-here
 python -m scripts.generate_messages spanish
 python -m scripts.generate_messages spanish --force
 ```

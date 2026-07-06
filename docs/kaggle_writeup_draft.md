@@ -3,7 +3,7 @@
 ### Capstone Writeup
 * **Track:** Agents for Good (Advancing Education)
 * **Author:** Jan Krejci, Bhavyajeet Singh
-* **GitHub Repository:** [https://github.com/cookieTroll/language-tutor](https://github.com/cookieTroll/language-tutor)
+* **GitHub Repository:** [https://github.com/cookieTroll/language-tutor](https://github.com/cookieTroll/language-tutor) — see `QUICK_START.md` for the fastest path to a first session
 
 ---
 
@@ -99,6 +99,8 @@ This script triggers a three-stage self-correcting agent pipeline:
 3. **Grammar Curriculum Synthesis:** Establishes the roadmap of grammar topics to be taught.
 
 Each step is constrained by Pydantic schemas. If the generated YAML violates the registry's validation checks, the error is fed back to the LLM for self-correction. By using this pipeline, the target language **Czech** was generated from scratch. Native-speaker spot-checks confirmed that the output was highly accurate, proving that adding a language is a **validation task, not a codebase rewrite**.
+
+Both `gemma2:9b` (local) and `gemini-2.5-flash` (hosted) were tested for this pipeline; the accuracy gap is significant relative to the price difference. For content generation specifically, use the hosted model where possible, or a stronger local model if not.
 
 ![Wharf — Automated Language Asset Generation](img/content_pipeline.jpg)
 

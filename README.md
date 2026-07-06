@@ -2,6 +2,8 @@
 
 Wharf is a language learning tool built entirely around language output. It is a self-hosted, multi-agent AI language tutor that provides the deep, corrected-output feedback loop normally locked behind a subscription. It runs on your own API key or a fully local model, free or almost free either way: 60 sessions per month costs roughly €1, which is less than a single espresso.
 
+**New here?** See [QUICK_START.md](QUICK_START.md) for the fastest path to a first session, in-session commands, and what to try.
+
 ## The Problem: A Personal Journey
 
 This project was born out of a real-world struggle. After moving to Germany as a working professional with zero prior knowledge of German, I hit two massive roadblocks to achieving fluency:
@@ -107,7 +109,13 @@ contracts and cross-checked against the registry. Czech
 ([`lang/languages/czech.yaml`](lang/languages/czech.yaml)) was generated this way and
 spot-checked by a native speaker.
 
+**Use a strong model for this.** Content-generation quality was noticeably better on
+hosted `gemini-2.5-flash` than on the local `gemma2:9b` default — worth the hosted path
+even if you otherwise run day-to-day study sessions locally. Both generation scripts
+default to `config.yaml` (Gemini), so set `GEMINI_API_KEY` before running:
+
 ```bash
+export GEMINI_API_KEY=your-key-here
 python -m scripts.generate_language czech
 ```
 
@@ -120,13 +128,18 @@ design.
 git clone https://github.com/cookieTroll/language-tutor && cd language-tutor
 pip install -e .
 export GEMINI_API_KEY=your-key-here    # get one free at ai.google.dev
-python -m ui.cli                       # or: python -m ui.app  (web UI, http://localhost:5000)
+python -m ui.app                       # web UI, http://localhost:5000 — or: python -m ui.cli
 ```
 
+See [QUICK_START.md](QUICK_START.md) for in-session commands (`/progress`, `/history`,
+`/btw`) and a suggested first walkthrough.
+
 The default config (`config.yaml`) uses Gemini. Prefer to run fully free and local
-instead? `python -m scripts.check_ollama_model` (one-time setup), then set
-`LTUT_CONFIG=config.ollama.yaml` — see [PROVIDERS.md](PROVIDERS.md), which also covers
-Vertex AI.
+instead? Check your hardware first — a dedicated GPU with **~6–8 GB VRAM** to run
+`gemma2:9b` at usable speed; without it, generation will be painfully slow or hang the
+machine. If you're set, run `python -m scripts.check_ollama_model` (one-time setup),
+then set `LTUT_CONFIG=config.ollama.yaml` — see [PROVIDERS.md](PROVIDERS.md), which also
+covers Vertex AI.
 
 ## Configuration & Providers
 
@@ -135,7 +148,7 @@ Switch provider with one env var — no code changes:
 | Config file | Provider | Requires |
 |---|---|---|
 | `config.yaml` | Gemini (default) | `GEMINI_API_KEY` env var |
-| `config.ollama.yaml` | Ollama (local, free, private) | Ollama + one-time model setup |
+| `config.ollama.yaml` | Ollama (local, free, private) | Ollama + one-time model setup + **~6–8 GB VRAM GPU** |
 | `config.vertex.yaml` | Vertex AI (ADC, no API key) | `GCP_PROJECT`, `gcloud auth application-default login` |
 
 ```bash
@@ -159,9 +172,14 @@ See [PROVIDERS.md](PROVIDERS.md) for full setup instructions per provider.
 
 ## MCP Server
 
-`ui/mcp_server.py` exposes the `memory/` storage layer (plus static `lang/maps/`
-reference data) as MCP tools for progress stats, session history, vocab flags,
-and writing-session export. It's read-only — no LLM calls, no writes.
+**Purpose:** let another agent or assistant tool pull your learning stats and history
+straight out of Wharf's storage — "what's my mastery ratio in German grammar" or "export
+my last 10 writing sessions" — without opening the app itself. `ui/mcp_server.py` exposes
+the `memory/` storage layer (plus static `lang/maps/` reference data) as MCP tools for
+progress stats, session history, vocab flags, and writing-session export. It's read-only
+— no LLM calls, no writes, so none of the tutoring features themselves (grading,
+grammar generation, `/btw`) are exposed this way, only the stats/history/taxonomy data
+listed below.
 
 **Tools:** `list_users`, `list_languages`, `get_progress`, `list_sessions`,
 `get_session`, `get_recurring_errors`, `get_vocab_flags`,
@@ -193,6 +211,21 @@ To add it to Claude Desktop, add an entry to its MCP server config:
 }
 ```
 
+Google's equivalent — [Gemini CLI](https://github.com/google-gemini/gemini-cli) — uses
+the same `mcpServers` shape in `~/.gemini/settings.json` (or a project-local
+`.gemini/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "language-tutor": {
+      "command": "python",
+      "args": ["/absolute/path/to/language-tutor/ui/mcp_server.py"]
+    }
+  }
+}
+```
+
 ### Test it
 
 ```bash
@@ -204,6 +237,39 @@ tool functions directly — no client/transport involved.
 
 ## Repository Structure
 
+```
+language-tutor/
+├── docs/                   # design docs, per-module specs, testing/lang architecture
+├── lang/                   # versioned content maps + language-asset generation
+│   ├── models.py           # Pydantic models: CEFRMap, TaxonomyMap, LanguageConfig, MessageCatalog
+│   ├── loader.py           # _Registry: loads + cross-validates maps at startup
+│   ├── generate.py         # language-asset generation subsystem
+│   ├── maps/               # {name}.yaml versioned content: cefr/, taxonomy/, grammar_topics/, ...
+│   ├── languages/          # {language}.yaml — maps language → cefr_hints + taxonomy
+│   └── messages/           # {language}.yaml — backend UI text, resolved by explanation_language
+├── shared/                 # SessionTimer, IOHandler protocol, error_log, humanize, slugify
+├── llm/                    # BaseLLM + one file per provider (gemini, vertex, openai_compat, ollama_setup)
+├── orchestrator/           # OrchestratorProtocol, SessionManager, mastery — the only grain touching storage
+├── modules/
+│   ├── writing/            # WritingModule — 7-step evaluator pipeline
+│   └── grammar/            # GrammarModule — theory, exercises, grading, writing↔grammar bridge
+├── skills/                 # one folder per atomic skill (detect_mistakes, dump_grammar, ...)
+├── memory/                 # StorageProtocol, SQLite/JSON store implementations, schema.sql
+├── data/                   # gitignored — sessions/, summaries/, checkpoints/
+├── ui/
+│   ├── cli.py              # CLI frontend
+│   ├── app.py              # Flask web frontend
+│   └── mcp_server.py       # read-only MCP server over StorageProtocol
+├── scripts/                # standalone admin CLIs: check_ollama_model, generate_language, generate_messages
+├── tests/                  # unit/, e2e/, judge/ (LLM-as-judge), fixtures/
+├── config.yaml, config.gemini.yaml, config.vertex.yaml, config.ollama.yaml, config.test.yaml
+└── Modelfile               # custom Ollama model definition (FROM gemma2:9b)
+```
+
+See [`docs/_design.md`](docs/_design.md#repository-structure) for the fully annotated tree
+(every file, per-line purpose).
+
+* [`QUICK_START.md`](QUICK_START.md) — First-session walkthrough and CLI command reference.
 * [`docs/_design.md`](docs/_design.md) — Architecture overview, three-grain design, key decisions.
 * [`docs/_layers.md`](docs/_layers.md) — Deliverable manifest per release layer.
 * [`docs/_contracts.md`](docs/_contracts.md) — All protocol and dataclass definitions.
