@@ -6,7 +6,7 @@ import threading
 class SessionTimer:
     """Background thread that displays elapsed session time in the terminal title."""
 
-    def __init__(self, label: str = "LanguageTutor"):
+    def __init__(self, label: str = "Wharf the Language Tutor"):
         self._label = label
         self._running = False
         self._thread: threading.Thread | None = None

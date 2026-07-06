@@ -1,4 +1,4 @@
-# LanguageTutor — Memory Architecture
+# Wharf the Language Tutor — Memory Architecture
 
 Storage is infrastructure. Only the orchestrator calls `StorageProtocol` — this is a hard boundary. Modules and skills are pure.
 

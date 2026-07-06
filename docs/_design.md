@@ -1,21 +1,34 @@
-# LanguageTutor Agent — Design Document
+# Wharf the Language Tutor — Design Document
 
 ## Overview
 
-LanguageTutor is a single, unified environment for practicing a language — one login, one
-shared memory of what you've practiced and where you're weak, across every module rather than
-a separate app per skill. Its core is **output**: writing practice drives the loop, because
-producing the language builds fluency faster than passive recognition does. Grammar directly
-complements writing today — a recurring writing mistake can trigger a grammar session on that
-exact point, and a mastered grammar topic can trigger a writing session that uses it. Reading
-(with comprehension), listening, and speaking are planned as further modules under the same
-environment; none of the three is scoped yet, and all are deferred to post-submission.
+Wharf the Language Tutor is a single, unified tool for practicing a language — one login, one
+shared memory of what you've practiced and where you're weak, across every language competency
+rather than a separate app per skill. Its core is **output**: writing practice drives the loop,
+because producing the language builds fluency faster than passive recognition does. Grammar
+directly complements writing today — a recurring writing mistake can trigger a grammar session
+on that exact point, and a mastered grammar topic can trigger a writing session that uses it.
+Reading (with comprehension), listening, and speaking are planned as further competencies under
+the same tool, deferred to post-submission (see Roadmap below).
 
-The primary pitch: **one environment, a personalized feedback loop that spans it**. Most
-language tools are either rigid drill generators or single-skill apps that don't talk to each
-other. This agent learns which skills you've neglected, what errors recur, and routes you
-across modules accordingly — and it's built to keep growing into further modules rather than
-stay a single-exercise tool.
+The primary pitch: **one tool, a personalized feedback loop that spans every competency**.
+Existing language tools tend toward one of two gaps (see `docs/competitive_landscape.md` for a
+detailed comparison): rigid drill generators that don't focus on producing the language, or
+tools with genuine output feedback sitting behind a subscription paywall. Here the only real
+cost is running the LLM itself — free if run locally (Ollama), or a few cents a session on a
+hosted model provider.
+
+This doesn't replace supervised learning — a human teacher still catches things and builds
+rapport a model can't. But it complements one in ways a teacher's own capacity structurally
+can't: feedback is instant and practically impossible to saturate (a teacher's time and
+attention are a shared, finite resource split across a whole class; this tool's isn't), and
+practice is available whenever and wherever the learner is, not scheduled around a lesson slot.
+Data is stored locally by default; the storage layer (`memory/`) is designed to generalize to a
+hosted/cloud backend without touching any other part of the app, when that's ever needed.
+
+This agent learns which competencies you've neglected, what errors recur, and routes you
+accordingly — and it's built to keep growing into further competencies rather than stay a
+single-exercise tool.
 
 Detailed specs for each component live in `docs/`. This document is the human-facing,
 policy-level overview.
@@ -25,41 +38,44 @@ policy-level overview.
 ## Goals & Non-Goals
 
 ### Goals
-- One unified environment across modules — writing and grammar today; vocab management,
+- One unified tool across language competencies — writing and grammar today; vocab management,
   reading, listening, and speaking planned — sharing one login, one memory, one session model
 - Output-first: writing is the core driver skill; grammar directly complements it via a
   bidirectional bridge (recurring writing mistake → grammar session; mastered grammar topic →
   writing session using it)
-- Adaptive module routing based on session history
+- Route the learner to whichever competency needs attention next, based on their own session
+  history — not a fixed curriculum everyone follows in the same order
 - Writing-focused feedback with error annotation
 - Grammar instruction and practice
-- Vocab **management**, not drilling — track a per-user, per-language negative vocab list and
-  export it to Anki; spaced-repetition drilling itself is deliberately not rebuilt in-house
-- AI-supported language-asset generation — `lang/generate.py` chains self-correcting LLM calls
-  to produce a new target language's taxonomy/CEFR/grammar-topic content maps, validated
-  through the same Pydantic contracts and registry cross-check every shipped language passes
+- Catch the words a learner struggles with automatically during a session — from `/btw`
+  questions and mistakes the evaluator flags — and feed them into a vocab-management engine, so
+  nobody has to curate their own weak-word list by hand; drilling itself stays with Anki (see
+  Non-Goals), not rebuilt here
+- Every new target language needs its own language-specific content — error taxonomy, CEFR
+  guidance, grammar topics, and more — and hand-authoring all of that per language doesn't
+  scale, so the project includes a built-in tool to help generate it
 - True multi-language support — independent progress profiles per user per language
-- Persistent memory across sessions (log + files), scoped to (user_id, language)
-- Testable, modular architecture with explicit contracts
-- Swappable LLM backend (Gemini, Vertex AI, OpenAI-compatible APIs, Ollama/LM Studio local),
-  with a supporting setup script (`scripts/check_ollama_model.py`) for the local cold-start case
+- Personalization carries over automatically between sessions — what's been practiced, what
+  keeps recurring — scoped independently per user and per language
+- Explicit, testable contracts between every component, so behavior stays predictable as the
+  tool grows into more competencies
+- Run on whichever LLM backend fits the learner's situation — free and private on a local
+  model, or a hosted provider for less setup — without changing any other code
 - `/btw` inline question command, available during the writing session today — unifies the
-  environment by surfacing translation/grammar help without leaving the current flow
+  tool by surfacing translation/grammar help without leaving the current flow
 - Session clock with a visible timer (CLI and web) — deliberately simulates timed test/exam
   conditions, not just a UX nicety
-- Negative vocab list — per-user per-language, populated from `/btw` flags and evaluator signals
-- Explicit session history aggregation and personalization
-- Both a CLI and a browser frontend, available today, sharing the same orchestrator/module code
-  through the `IOHandler` abstraction
+- Both a CLI and a browser frontend available today — same underlying logic either way, so
+  nothing behaves differently depending on which one you use
 
 ### Non-Goals (for this submission)
 - Building an in-house vocabulary drill/spaced-repetition engine — Anki already solves this
-  well; LanguageTutor manages the vocab list and exports to it instead of reinventing that loop
+  well; Wharf manages the vocab list and exports to it instead of reinventing that loop
 - Real-time audio/video infrastructure
 
 ### Roadmap (planned, explicitly deferred post-submission — none of these are fully scoped yet)
 1. **Vocab management** — the negative vocab list already exists; what's planned next is the
-   management surface and Anki export, not a drill module
+   management surface and Anki export
 2. **Reading**, with comprehension checks
 3. **Listening**
 4. **Speaking / pronunciation**
@@ -81,15 +97,10 @@ policy-level overview.
 | **2c** | Level & Progress — per-module mastery ratio plus a text-level trend, surfaced together on demand (`/progress`) |
 | **3d** | MCP Server — read-only tools over session/progress data |
 
-**Roadmap (post-submission, in priority order — none of these are fully scoped yet):**
-
-1. **Vocab management** — negative vocab list + Anki export; no in-house drill engine
-2. **Reading**, with comprehension checks
-3. **Listening**
-4. **Speaking / pronunciation**
-
-`docs/_CHECKLIST.md` carries the tactical, line-item backlog for both sections above — this
-table states what a layer *is*, the checklist tracks what's actually left to do.
+See Goals & Non-Goals above for the post-submission roadmap (vocab management, reading,
+listening, speaking, in priority order) — not repeated here to avoid drift between two copies.
+`docs/_CHECKLIST.md` carries the tactical, line-item backlog for both shipped and roadmap work
+— this table states what a layer *is*, the checklist tracks what's actually left to do.
 
 ---
 
@@ -108,22 +119,21 @@ The system is organised into three levels of granularity. Each grain has a clear
 │  - Persists all results post-session                      │
 └───────────────────────────┬──────────────────────────────┘
                             │ dispatches to
-             ┌──────────────┼──────────────┐
-             ▼              ▼              ▼
-       [Writing]       [Grammar]       [Vocab]
-        Module          Module         Module
-       (PoC+1a/b)      (Layer 2a)    (Layer 3a)
-             │
-             │ composes and invokes
-    ┌───────────┬────────────┬────────────┬────────────┬────────────┬──────────────┬──────────────────┐
-    ▼           ▼            ▼            ▼            ▼            ▼              ▼
-[estimate_  [detect_    [verify_    [classify_  [explain_   [write_      [summarise_
-text_level] mistakes]  mistakes]   mistakes]   mistakes]   correction]  writing_session]
-  Step 1      Step 2      Step 3       Step 4      Step 5      Step 6        Step 7
-(Steps 1+2 run in parallel; Steps 6+7 run in parallel once Step 5 finishes)
-+ [btw_handler] — utility skill, invoked mid-session, no session file
-+ [topic_picker] [summarize_progress] — Layer 1b
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+       [Writing Module]            [Grammar Module]
 ```
+
+**Writing** composes the 7-step evaluator pipeline — `estimate_text_level` + `detect_mistakes`
+in parallel → `verify_mistakes` → `classify_mistakes` → `explain_mistakes` → `write_correction`
++ `summarise_writing_session` in parallel — plus `topic_picker`/`summarize_progress` (Layer 1b)
+and the `btw_handler` utility skill (writing only today, see Goals & Non-Goals).
+
+**Grammar** composes `select_grammar` (or a manual topic entry that bypasses it) → `dump_grammar`
+→ a repeatable round of `generate_exercises` → `grade_exercises`.
+
+Planned modules — **vocab management**, **reading**, **listening**, **speaking** — aren't
+built yet and compose no skills today; see Goals & Non-Goals and Delivery Layers above.
 
 ### Grain 1 — Skills (atomic, lowest grain)
 
@@ -134,6 +144,13 @@ A skill is a single, focused callable unit. It has:
 - A `skill.md` as its authoritative spec
 
 Skills are pure — no storage access, no LLM provider knowledge. They receive input, call the LLM via `LLMProtocol`, return structured output. Nothing else.
+
+Skills are also a **shared, project-wide asset pool**, not owned by any one module. They live
+under a single top-level `skills/` directory rather than nested inside `modules/writing/` or
+`modules/grammar/`; a module's own `skills.py` just injects whichever subset it needs. Nothing
+in a skill's contract ties it to one module — `btw_handler` is a good example: today only
+`modules/writing/skills.py` injects it (see Goals & Non-Goals), but that's a module-level
+wiring choice, not a property of the skill itself.
 
 Each skill lives in its own folder under `skills/`:
 ```
@@ -163,9 +180,10 @@ skills/
 ├── select_grammar/         # session skill (Layer 2a)
 ├── dump_grammar/           # session skill (Layer 2a)
 ├── generate_exercises/     # session skill (Layer 2a)
-├── grade_exercises/        # session skill (Layer 2a) — batched grading + feedback
-└── drill_vocab/            # session skill (Layer 3a, planned)
+└── grade_exercises/        # session skill (Layer 2a) — batched grading + feedback
 ```
+
+No `drill_vocab` skill is planned (see Goals & Non-Goals).
 
 ### Grain 2 — Modules (agents, middle grain)
 
@@ -178,13 +196,10 @@ modules/
 │   ├── agent.py            # ModuleProtocol implementation
 │   ├── skills.py           # skill instantiation and injection
 │   └── pipeline.py         # WritingPipeline — sequences the 7-skill evaluator pipeline
-├── grammar/                # Layer 2a
-│   ├── agent.py
-│   └── skills.py
-└── vocab/                  # Layer 3a
-    ├── agent.py
-    └── skills.py
+└── grammar/                # agent.py, skills.py — grammar module + writing↔grammar bridge
 ```
+
+Planned, not built: vocab management, reading, listening, speaking — see Delivery Layers above.
 
 Modules are pure — no storage access. They receive `ModuleContext` (fulfilled by orchestrator from storage), run their skills, return `ModuleResult` + `SessionFileContent`.
 
@@ -243,7 +258,13 @@ language-tutor/
 │   ├── orchestrator.md     # orchestrator logic, cold start, prompts, aggregation
 │   ├── testing.md          # three-tier testing architecture
 │   ├── llm_backends.md     # LLM abstraction, implementations, config
-│   └── writing.md          # writing module + evaluator pipeline spec
+│   ├── writing.md          # writing module + evaluator pipeline spec
+│   ├── grammar.md          # grammar module + skills spec (Layer 2a)
+│   ├── vocab.md            # vocab spec — not implemented, see Goals & Non-Goals/Roadmap
+│   ├── ui.md               # UI layer: Flask routes, IOHandler CLI/web split, static JS
+│   ├── lang.md             # lang/ architecture: versioned content maps, registry
+│   ├── lang_generation.md  # lang/generate.py — language-asset generation subsystem
+│   └── competitive_landscape.md # how the writing evaluator compares to existing tools
 │
 ├── lang/                   # versioned content maps + language-asset generation (see docs/lang.md)
 │   ├── models.py           # Pydantic models: CEFRMap, TaxonomyMap, LanguageConfig
@@ -289,8 +310,8 @@ language-tutor/
 │   │   ├── agent.py        # WritingModule — orchestrates evaluator pipeline
 │   │   ├── skills.py       # skill instantiation and injection
 │   │   └── pipeline.py     # WritingPipeline — sequences the 7-skill evaluator pipeline
-│   ├── grammar/            # Layer 2a — agent.py, skills.py
-│   └── vocab/              # Layer 3a
+│   └── grammar/            # Layer 2a — agent.py, skills.py
+│                           # (planned, not built: vocab management, reading, listening, speaking)
 │
 ├── skills/
 │   ├── protocols.py        # SkillProtocol, SkillInput, SkillOutput
@@ -310,8 +331,8 @@ language-tutor/
 │   ├── select_grammar/     # Layer 2a
 │   ├── dump_grammar/       # Layer 2a
 │   ├── generate_exercises/ # Layer 2a
-│   ├── grade_exercises/    # Layer 2a — batched grading + feedback
-│   └── drill_vocab/        # Layer 3a
+│   └── grade_exercises/    # Layer 2a — batched grading + feedback
+│                           # (no drill_vocab planned — see Goals & Non-Goals)
 │
 ├── memory/
 │   ├── protocols.py        # StorageProtocol, SessionLog, SessionFileContent + subclasses
@@ -332,6 +353,12 @@ language-tutor/
 │                           #   (get_progress, list_sessions, get_recurring_errors,
 │                           #    get_vocab_flags, export_writing_history, get_error_taxonomy,
 │                           #    get_grammar_topic_list, etc.) — see README.md
+│
+├── scripts/                # standalone admin CLIs, not imported by the app itself
+│   ├── check_ollama_model.py  # interactive cold-start helper: ensures the Ollama model in the
+│   │                           # active config exists locally, offers to pull the base model and
+│   │                           # run `ollama create` for the custom Modelfile-based model
+│   └── generate_language.py   # CLI entry point for lang/generate.py's language-asset chain
 │
 ├── tests/
 │   ├── unit/
@@ -358,7 +385,12 @@ language-tutor/
 │
 ├── pyproject.toml
 ├── README.md
-└── config.yaml
+├── config.py               # load_config() — parses the active YAML, resolves ${VAR} env refs
+├── config.yaml             # default config (Ollama, local, cold-start path)
+├── config.gemini.yaml      # Gemini backend
+├── config.vertex.yaml      # Vertex AI backend
+├── config.test.yaml        # isolated data_root for tests
+└── Modelfile               # custom Ollama model definition (FROM gemma2:9b) — see PROVIDERS.md
 ```
 
 ---
@@ -387,8 +419,12 @@ language-tutor/
 
 **Storage abstraction.** `SQLiteSessionStore` for production, `JSONSessionStore` for dev/test. Swap via config. Unit tests run against JSON store — no DB setup.
 
-**Three-tier testing.** Unit tests (deterministic), LLM-as-judge (semantic quality), regression fixtures (accumulated during development). Ground truth within B1 scope.
+**Three-tier testing.** Unit tests (deterministic, run automatically — mocked LLM, no network). LLM-as-judge (semantic quality — a judge runner exists per skill/module, `tests/judge/`, fully built and ready to run on demand; not wired into the default suite since it makes real LLM calls). Regression fixtures (accumulated during development). Ground truth within B1 scope.
 
 **`lang/` versioned content maps.** CEFR pedagogical hints, error taxonomy, CEFR level descriptors, grammar exercise types, grammar topics, and per-level writing word ranges all live as versioned YAML artifacts under their own subdirectory in `lang/maps/`. Language configs in `lang/languages/` reference maps by name. The registry cross-validates all references at startup. Default maps (`default.yaml`) provide a language-agnostic fallback for unconfigured languages. Adding a language = one YAML file; adding a new taxonomy variant = one YAML file, no code change. `lang/generate.py`/`lang/generate_prompts.py` generate these map assets — see `docs/lang.md` for that subsystem.
+
+**Config files, not hardcoded settings.** `config.py`'s `load_config()` parses whichever YAML file `LTUT_CONFIG` points at (`config.yaml` by default) into typed dataclasses, resolving any `${VAR_NAME}` value against the environment at load time — API keys and other secrets never sit in a committed file. Swapping the LLM backend (a stated Goal) means pointing `LTUT_CONFIG` at a different file, not editing code.
+
+**Supporting scripts are separate from runtime.** `scripts/check_ollama_model.py` and `scripts/generate_language.py` are one-off admin CLIs a user runs directly — neither is imported by `ui/cli.py` or `ui/app.py`. The former handles the local-model cold start (pulling the base model, then running `ollama create` for the custom Modelfile-based model); the latter drives `lang/generate.py`'s self-correcting LLM chain to flesh out a new target language's content maps.
 
 **`WritingSessionContent` schema evolution.** Layer 1a Steps 1–4 populate `mistakes`, `recommendations`, `comment`, `corrected_text`. Steps 5–6 extend the schema: add `text_level_estimate`, enrich each mistake with `severity` (`critical`/`expected`/`minor`), replace `recommendations` with `tips` (sorted by distance from user level), replace `comment` with `session_summary`. Schema changes are additive; no breaking changes to storage. (An earlier draft also added a `comparison_note: str | None` stub as a Layer 2b placeholder; Layer 2b took a different shape — an on-demand `/history` command, not a per-session field — so that stub was removed rather than left permanently `None`. See `docs/writing.md`.)

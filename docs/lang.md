@@ -1,4 +1,4 @@
-# LanguageTutor — Language Architecture (`lang/`)
+# Wharf the Language Tutor — Language Architecture (`lang/`)
 
 How target-language content is modeled, validated, and resolved at runtime. This is the
 architecture doc; see `docs/lang_generation.md` for the LLM-driven tool that produces new

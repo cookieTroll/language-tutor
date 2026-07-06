@@ -1,4 +1,4 @@
-# LanguageTutor — Finished Work
+# Wharf the Language Tutor — Finished Work
 
 Items with at least two sign-offs (Validated + optionally Finished). Pulled from `_CHECKLIST.md` as sections complete.
 

@@ -1,6 +1,6 @@
-# LanguageTutor AI Agent
+# Wharf the Language Tutor
 
-LanguageTutor is an AI-powered language tutoring agent focused on personalized **output and writing** practice. It tracks session history, identifies recurring grammatical and vocabulary errors, and routes users to adaptive exercises.
+Wharf the Language Tutor is an AI-powered language tutoring agent focused on personalized **output and writing** practice. It tracks session history, identifies recurring grammatical and vocabulary errors, and routes users to adaptive exercises.
 
 ## Quickstart
 

@@ -1,4 +1,4 @@
-# LanguageTutor — UI Layer (Layer 1c)
+# Wharf the Language Tutor — UI Layer (Layer 1c)
 
 The Flask web app, the CLI, and the `IOHandler` abstraction that lets the exact same
 orchestrator/module code drive either one. See `docs/_contracts.md` for the `IOHandler`

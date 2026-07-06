@@ -1,4 +1,4 @@
-# LanguageTutor — Writing Module & Skills
+# Wharf the Language Tutor — Writing Module & Skills
 
 The writing module is the PoC showpiece. Composed of atomic skills, it handles topic selection, error detection, feedback generation, and correction writing.
 

@@ -1,4 +1,4 @@
-# LanguageTutor — Contracts
+# Wharf the Language Tutor — Contracts
 
 All Protocol definitions and shared dataclasses. Include this document in every LLM coding task — all components depend only on these interfaces, never on concrete implementations.
 

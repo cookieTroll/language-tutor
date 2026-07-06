@@ -1,4 +1,4 @@
--- LanguageTutor SQLite Schema
+-- Wharf the Language Tutor SQLite Schema
 
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id TEXT,

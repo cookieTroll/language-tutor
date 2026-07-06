@@ -1,4 +1,4 @@
-# LanguageTutor — Language Asset Generation
+# Wharf the Language Tutor — Language Asset Generation
 
 How to add support for a new target language, and how the generator works internally.
 

@@ -1,4 +1,4 @@
-# LanguageTutor — Development Checklist
+# Wharf the Language Tutor — Development Checklist
 
 Each item has three progress tracking checkboxes:
 `[Impl]` (Implemented - code made) | `[Val]` (Validated - user sign-off) | `[Fin]` (Finished - second sign-off at stage end)

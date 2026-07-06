@@ -1,4 +1,4 @@
-# LanguageTutor — Grammar Module & Skills
+# Wharf the Language Tutor — Grammar Module & Skills
 
 Layer 2a. Four atomic skills composing a grammar practice session.
 

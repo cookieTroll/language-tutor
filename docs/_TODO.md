@@ -1,4 +1,4 @@
-# LanguageTutor — TODO
+# Wharf the Language Tutor — TODO
 
 Items that arose during design discussion but are deferred decisions, known risks, or future work. Not implementation steps (see `_CHECKLIST.md` for those).
 

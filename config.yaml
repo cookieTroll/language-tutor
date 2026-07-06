@@ -1,4 +1,4 @@
-# LanguageTutor Configuration
+# Wharf the Language Tutor Configuration
 
 # Paths & Directories
 data_root: "data"                      # Root directory for session files, databases, checkpoints, and logs

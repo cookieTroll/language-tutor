@@ -1,4 +1,4 @@
-# LanguageTutor — LLM Backends
+# Wharf the Language Tutor — LLM Backends
 
 All LLM calls go through `BaseLLM`. No skill, module, or orchestrator imports a provider SDK directly. Swap provider by editing the `llm:` block in the active config file (see `PROVIDERS.md`).
 

@@ -1,4 +1,4 @@
-# LanguageTutor — Vocab Module & Skills
+# Wharf the Language Tutor — Vocab Module & Skills
 
 > **Status: not implemented.** Layer 3a was cut — `modules/vocab/` and `skills/drill_vocab/`
 > do not exist in the codebase. This document is a design spec for future work, not a

@@ -1,4 +1,4 @@
-# LanguageTutor — Testing Architecture
+# Wharf the Language Tutor — Testing Architecture
 
 Three tiers, each with a distinct purpose. Tier 1 runs in CI. Tiers 2 and 3 run manually or on a schedule — they cost API calls and should not block commits.
 

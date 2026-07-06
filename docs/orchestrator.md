@@ -1,4 +1,4 @@
-# LanguageTutor — Orchestrator
+# Wharf the Language Tutor — Orchestrator
 
 Top-level agent. The only component that touches storage. Routes between modules, manages session lifecycle, persists all results.
 

@@ -1,4 +1,4 @@
-# Custom Workspace Rules for LanguageTutor
+# Custom Workspace Rules for Wharf the Language Tutor
 
 These rules define workspace-specific guidelines for AI agents working on this project.
 

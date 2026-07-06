@@ -1,4 +1,4 @@
-# LanguageTutor — Layer Manifest
+# Wharf the Language Tutor — Layer Manifest
 
 Machine-readable delivery plan. Read this first in any coding session to know what is in scope for the current layer. Each entry maps to a specific folder and file in the repo.
 
