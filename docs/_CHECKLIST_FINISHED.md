@@ -400,4 +400,21 @@ Items with at least two sign-offs (Validated + optionally Finished). Pulled from
 Czech (`lang/languages/czech.yaml` + maps) was generated with this utility and
 spot-checked at a high level by a native Czech speaker (the author). The remaining
 manual-smoke-test item (an end-to-end grammar session run in the generated language)
-stays tracked in `docs/_CHECKLIST.md` since it isn't fully confirmed yet.
+was later validated by the author — see the Pre-Submission section below.
+
+---
+
+## Pre-Submission (Capstone)
+
+Validated by the author 2026-07-07. Moved wholesale from `_CHECKLIST.md`'s
+Pre-Submission section — see that file's history for the original suggested-order
+rationale.
+
+- [x] [x] [ ] README rewrite/expansion — setup instructions, architecture overview, layer status, known limitations
+- [x] [x] [x] Fix `docs/img/content_pipeline.jpg` when image-gen quota resets (~4h): wire both Skills and Orchestrator arrows from `_Registry` (not from map tiles directly); remove Skills↔Orchestrator connection (runtime relationships live on architecture diagram)
+- [x] [x] [ ] Re-verify `docs/competitive_landscape.md`'s claims before relying on them (the doc's own note: competitor products change, written 2026-07-05) — validated by author's word; no updated date stamp or diff found in the doc itself as of this tick
+- [x] [x] [ ] Confirm the "couple of cents per exercise" `gemini-2.5-flash` figure with an actual per-request token/cost estimate rather than a rounded gut number — validated by author's word; no computed figure found in `docs/_KAGGLE_WRITEUP.md` or elsewhere as of this tick
+- [x] [x] [ ] Kaggle writeup draft against the pre-submission word budget (`docs/_KAGGLE_WRITEUP.md`)
+- [x] [x] [ ] Demo video recorded per the pre-submission beat list (`vids/intro.mp4`)
+- [x] [x] [ ] Manual smoke test: generate a real second language against a live LLM, inspect the output, run one grammar session end-to-end in that language — Czech generated live and spot-checked by a native speaker; author confirms the end-to-end session step is now done, though no new session file was found in the repo as of this tick
+- [x] [x] [ ] Verify code link is accessible

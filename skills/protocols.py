@@ -15,6 +15,10 @@ def call_with_self_correction(
     parse_fn: Callable[[str], T],
     temperature: float = 0.1
 ) -> T:
+    # On a parse/validation failure, the raw (bad) response is fed back to the model as
+    # its own prior turn, plus a user turn describing the error — so retries are a real
+    # self-correction conversation, not just re-asking the same prompt and hoping for a
+    # different sample.
     current_messages = list(messages)
     max_attempts = getattr(llm.config, "max_skill_retries", 3)
     if not isinstance(max_attempts, int):

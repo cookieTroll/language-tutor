@@ -14,13 +14,15 @@ async function submitWriting() {
   document.getElementById('eval-overlay').style.display = 'flex';
   localStorage.removeItem('draftText');
 
-  const lines = text.split('\n');
-  for (const line of [...lines, '']) {
-    await fetch('/api/input/' + sid, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({text: line}),
-    });
-  }
+  // Send the whole text as one message, not line-by-line: the backend's
+  // _collect_input() (modules/writing/agent.py) treats a blank line as "end of
+  // input" once it already has content — meant for CLI users pressing Enter on
+  // an empty line to submit. Splitting pasted text on '\n' fed paragraph-break
+  // blank lines (e.g. a formal letter's salutation/closing) into that same
+  // check, ending collection early and leaking the remaining lines into
+  // whatever prompt came next (follow-up Q&A, then the next screen's input).
+  await sendInput(text);
+  await sendInput('');
 }
 
 function handleEvaluationComplete(payload) {

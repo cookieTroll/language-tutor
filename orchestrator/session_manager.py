@@ -250,6 +250,10 @@ class SessionManager:
                 ))
             return signals
 
+        # error_frequency is aggregated across the user's past sessions of *this*
+        # module only (get_error_frequency's module_filter) — a tag recurring in
+        # grammar sessions doesn't count toward triggering writing's bridge, or vice
+        # versa. No cross-module aggregate memory exists yet; don't conflate the two.
         session_tags = {e.get("error_tag") for e in errors if e.get("error_tag")}
         for tag in session_tags:
             if error_frequency.get(tag, 0) < RECURRING_ERROR_THRESHOLD:

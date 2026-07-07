@@ -180,6 +180,10 @@ class Orchestrator(OrchestratorProtocol):
         try:
             ctx.parameters["checkpoint_path"] = checkpoint_path
 
+            # The memory boundary is enforced right here, by this call signature, not by
+            # convention: module.run() gets ctx/llm/io only, never a storage handle, so a
+            # module physically cannot touch the DB. All persistence happens below, in
+            # finalize_session, after the module returns.
             result, file_content = module.run(ctx, self.llm, self.io)
 
             result.session_id = session_id

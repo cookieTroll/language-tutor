@@ -16,32 +16,13 @@ Finished items live in `_CHECKLIST_FINISHED.md`.
 
 Deadline: **July 7, 11:59 PM PT** = Tuesday July 8, 08:59 AM GMT+2. Target: submit Monday evening.
 
-Suggested order and why:
+Items 1–6 (README, market research & pricing, writeup, video, optional Czech smoke
+test, verify code link) are validated by the author as of 2026-07-07 and moved to
+`docs/_CHECKLIST_FINISHED.md`. Note: the Czech end-to-end grammar session, the
+per-request pricing figure, and the competitive-landscape re-verification are ticked
+on the author's word — no independent repo evidence (computed number, new session
+file, updated doc date) was found for those three specifically as of this tick.
 
-1. **README** — setup instructions, architecture overview, layer status, known
-   limitations. First because it's both a direct rubric line (Documentation, 20 pts)
-   *and* the source material the writeup and video architecture slide should be drawn
-   from — do this before drafting either.
-   - [x] [ ] [ ] README rewrite/expansion
-   - [x] [x] [x] Fix `docs/img/content_pipeline.jpg` when image-gen quota resets (~4h): wire both Skills and Orchestrator arrows from `_Registry` (not from map tiles directly); remove Skills↔Orchestrator connection (runtime relationships live on architecture diagram)
-2. **Market research & pricing** — before the writeup, not after, since the writeup's
-   Deployability section depends on this number existing.
-   - [x] [ ] [ ] Re-verify `docs/competitive_landscape.md`'s claims before relying on them (the doc's own note: competitor products change, written 2026-07-05)
-   - [x] [ ] [ ] Confirm the "couple of cents per exercise" `gemini-2.5-flash` figure with an actual per-request token/cost estimate rather than a rounded gut number; decide where it lands (Deployability section, per `CAPSTONE_READINESS.md` §7's note)
-3. **Kaggle writeup** — architecture decisions, design rationale, testing approach,
-   honest PoC scope statement. Needs README + pricing settled first.
-   - [x] [ ] [ ] Draft against the `CAPSTONE_READINESS.md` §11 word budget
-4. **Demo video** — one complete end-to-end session (≤5 min): startup → recommendation
-   → writing → feedback → file written. Benefits from the writeup's framing being
-   settled first (same "why agents"/architecture story), but can be shot in parallel.
-   - [ ] [ ] [ ] Record per `CAPSTONE_READINESS.md` §10's beat list (bridge trigger is non-negotiable; correction step, close-of-loop, language-generation clip are cuttable in that order)
-5. **Optional, only if 1-4 land with time to spare:** finish the language-generation
-   utility's last open item — run one full grammar session end-to-end in the generated
-   Czech content through the app (not just inspecting the generated files), which
-   further de-risks using it as a video beat.
-   - [x] [ ] [ ] Manual smoke test: generate a real second language against a live LLM, inspect the output, run one grammar session end-to-end in that language — partially done: Czech was generated live and spot-checked at a high level by a native speaker (the author); an actual end-to-end grammar session run in Czech through the app hasn't been confirmed yet
-6. **Verify code link is accessible** — quick check, do right before submitting.
-   - [ ] [ ] [ ] Verify code link is accessible
 7. **Submit** before July 7, 11:59 PM PT (= Tuesday July 8, 08:59 AM GMT+2).
    - [ ] [ ] [ ] Submit
 
@@ -154,5 +135,6 @@ still open.
 
 Development (Sat June 28 – Fri July 4) is done — see `docs/_CHECKLIST_FINISHED.md`. The
 original "development priority order" and cut rule that used to live in this file (Steps
-5–6, Layer 1b, README) are archived there / in git history. See `CAPSTONE_READINESS.md`
-§0 for the live pre-submission reprioritization narrative rather than duplicating it here.
+5–6, Layer 1b, README) are archived there / in git history. The pre-submission
+reprioritization narrative (formerly `CAPSTONE_READINESS.md`, an internal strategy doc
+not meant for the submitted repo) lives in git history rather than the working tree.

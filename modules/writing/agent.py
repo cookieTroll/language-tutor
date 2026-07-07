@@ -16,6 +16,10 @@ from modules.writing.skills import get_writing_skills
 from modules.writing.pipeline import WritingPipeline, PipelineResult
 
 _PRACTICE_REQUEST_RE = re.compile(r"practi[cs]e|exercise|drill", re.IGNORECASE)
+# Loose keyword sniff on the follow-up answer, not a slash-command — lets the user
+# ask for grammar practice in plain language ("can we practice this?") rather than
+# having to type an exact trigger phrase; false positives just re-offer the same
+# suggestion (see _offer_practice_topic's None-check below), so a stray match is cheap.
 
 
 class WritingModule(ModuleProtocol):
